@@ -1,0 +1,55 @@
+[] -> Optional (0|1)
+() -> Group
+{} -> Optional (0+)
+
+stmts ==> stmt; [stmts]
+
+stmt ==> expr | ifExpr | whileExpr | forExpr
+ifExpr ==> 'if(' expr ')' [':' '|' id '|'] stmtBody
+
+
+# Yep, it supports both continuation stmt *and* captures
+whileExpr ==> 'while(' expr ')' [':' '('stmt')'] ['|' id '|'] stmtBody ['else' stmtBody]
+forExpr ==> 'for('expr ')' ['|' id '|'] stmtBody ['else' stmtBody]
+
+# TODO: Should this allow for "naked" ifs?
+stmtBody ==> '{' stmts '}' 
+
+# expr generalized as an array
+# Mostly borrowed from C++'s grammer
+expr[N] ==> expr[N+1] {exprOps[N] expr[N]}
+# TODO: Add +=/etc
+exprOps[0] ==> '='
+exprOps[1] ==> 'or'
+exprOps[2] ==> 'and'
+exprOps[3] ==> '|'
+exprOps[4] ==> '^'
+exprOps[5] ==> '&'
+exprOps[6] ==> '==' | '!='
+exprOps[7] ==> '>'['='] | '<'['=']
+exprOps[8] ==> '>>' | '<<'
+exprOps[9] ==> '+' | '-'
+exprOps[10] ==> '*' | '/' | '%'
+
+#Using M as the highest N goes
+expr[M+1] ==> [unaryOps] postExpr 
+
+unaryOps ==> '-' | '~' | '!'
+
+# Ops that come after
+# +++ and --- act like the prefix operators, using the extra character to show "hurry and do it now"
+postExpr ==> val[postOps]
+
+postOps ==> '++' | '--' | '+++' | '---' | '()' | '[]' | '.' | '.?'
+
+val ==> id | lit | '(' expr ')'
+id ==> (letter | '_') {letter | '_' | digit}
+
+lit ==> boolLit | intLit | floatLit | charLit | stringLit | 'null'
+boolLit ==> 'false' | 'true'
+intLit ==> digit{digit}
+floatLit ==> digit{digit} '.' digit{digit}
+charLit ==> "'" char "'"
+stringLit ==> '"'{char}'"'
+
+
