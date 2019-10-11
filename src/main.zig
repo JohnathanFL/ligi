@@ -2,6 +2,10 @@ const std = @import("std");
 const testing = std.testing;
 const expect = testing.expect;
 
+test "tiny_vec" {
+    _ = @import("tiny_vec.zig");
+}
+
 const Tag = enum {
     Assign, Or, And, Pipe, Xor, BitAnd, Equal, NotEqual, Less, 
     Greater, LessEq, GreaterEq, Shl, Shr, Add, Sub, BitNot, Not, 
