@@ -1,15 +1,21 @@
 const std = @import("std");
 
+const Token = @import("token.zig").Token;
+
 pub const StmtBody = std.ArrayList(Stmt);
 
 pub const Stmt = union(enum) {
   IfStmt: IfStmt,
   WhileStmt: WhileStmt,
   ForStmt: ForStmt,
-  Expr: Call, // If it's just 
+
+  BindStmt: BindStmt,
+  // Anything else is just a call.
+  // Even something like 'i = 1;' or 'i;' get compiled to '`=`(i, 1)' and '`null`(i)', respectively
+  Expr: Call, 
 };
 
-pub const ID = []const u8;
+pub const ID = Token;
 
 pub const IfStmt = struct {
   pub cond: Call,
@@ -31,6 +37,13 @@ pub const ForStmt = struct {
   pub captID: ?ID,
   pub body: StmtBody,
   pub otherwise: StmtBody,
+};
+
+
+pub const BindStmt = struct {
+  pub mut: bool, // var = true, let = false
+  pub id: Token,
+  pub val: *Stmt, // Either undefined (TODO) or 
 };
 
 

@@ -75,7 +75,7 @@ pub const Parser = struct {
 
 test "parser" {
   var input =
-    \\ int i = 0;
+    \\ let i = 0;
     \\ i = 1 + 4 * 5;
     \\ while (true and i > 0) : (--i) {
     \\   print("Hello world!");
