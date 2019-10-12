@@ -8,3 +8,6 @@ test "module tests" {
 
 
 
+pub fn main() anyerror!void {
+  // var a = .{1, 2, 3};
+}

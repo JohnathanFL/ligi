@@ -16,6 +16,8 @@ pub const Tag = Tokens.Tag;
 pub const Lexer = struct {
   input: []const u8,
   line: usize,
+  fileID: usize, // Could be the hash, index, etc
+
   inline fn curChar(self: Lexer) u8 {
     return self.input[0];
   }
@@ -36,6 +38,8 @@ pub const Lexer = struct {
       .tag = tag,
       .lexeme = self.advanceBy(n),
       .val = .DoesntMatter,
+      .file = self.fileID,
+      .line = self.line,
     };
   }
 
@@ -68,11 +72,7 @@ pub const Lexer = struct {
       var i: usize = 0;
       while (isAlNum(self.input[i]) or self.input[i] == '_') : (i += 1) {}
 
-      res = Token{
-        .tag = .Symbol,
-        .lexeme = self.advanceBy(i),
-        .val = .DoesntMatter,
-      };
+      res = self.tokenOfLen(i, .Symbol);
 
       if (eql(u8, res.lexeme, "if")) { // Word operators
         res.tag = .If;
@@ -97,11 +97,7 @@ pub const Lexer = struct {
       // TODO: FloatLit
       while (isDigit(self.input[i])) : (i += 1) {}
 
-      res = Token{
-        .tag = .IntLit,
-        .lexeme = self.advanceBy(i),
-        .val = undefined,
-      };
+      res = self.tokenOfLen(i, .IntLit);
 
       res.val = LexVal{ .IntLit = atoi(res.lexeme) };
     } else { // true operators
@@ -235,6 +231,7 @@ test "lexer" {
   var lexer = Lexer{
     .input = input,
     .line = 0,
+    .fileID = 0,
   };
 
   var tags = [_]Tag{
