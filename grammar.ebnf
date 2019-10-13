@@ -1,0 +1,15 @@
+capture = "|", id, "|";
+tuple = "(", [expr, {",", expr}], ")";
+
+
+expr = ;
+
+(*Following rust's semantics here.*)
+exprList = {expr, ";"}, expr, [";"];
+
+ifStmt = "if", expr, [":", capture], "{", exprList, "}";
+(*while expr capture continuation loopOver*)
+whileStmt = "while", expr, [":", capture], [":", expr], "{", exprList, "}", ["else", "{", exprList, "}"];
+(*Basically just sugar for while on iterables*)
+(*We'll follow the Zig iterate() fn idea for these*)
+forStmt = "for", expr, [":", capture], "{", exprList, "}", ["else", "{", exprList, "}"];

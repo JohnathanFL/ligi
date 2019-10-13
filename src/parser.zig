@@ -15,43 +15,56 @@ pub const Parser = struct {
   alloc: *std.mem.Allocator,
 
 
-  pub fn parse(self: *Parser) !StmtBody {
+  pub fn parse(self: *Parser) !List {
     self.cur = self.lexer.scan();
-    return self.stmtBody();
+    return self.stmtList();
   }
 
-  fn stmtBody(self: *Parser) !StmtBody {
-    var res = StmtBody.init(self.alloc);
-    
+  fn stmtList(self: *Parser) !List {
+    var res = List.init(self.alloc);
+
     while(self.cur) |cur| {
-      try switch(cur.tag) {
-        .If => res.append(Stmt {.IfStmt = try self.ifStmt()}),
-        .While => res.append(Stmt {.WhileStmt = try self.whileStmt()}),
-        .For => res.append(Stmt {.ForStmt = try self.forStmt()}),
-        else => res.append(Stmt {.Expr = try self.call()}),
-      };
+      if(cur.tag == .RBrace) break;
+      // If we're in here, self.cur != null
+      switch(self.cur.?.tag) {
+        .Let, .Var => try res.items.append(Value{.List = try self.letVarExpr()}),
+        else => {
+          try res.items.append(try self.expr());
+        }
+      }
       
     }
 
     return res;
   }
 
-  fn ifStmt(self: *Parser) !IfStmt {
-    return error.NotImplemented;
+  // Merged into one since they're the exact same other than tags
+  fn letVarExpr(self: *Parser) !List {
+    var res = List.init(self.alloc);
+    res.op = Op.fromTag(self.matchOne([_]Tag{.Var, .Let}).tag);
+
+    try res.items.append(Value{.Token = self.match(.Symbol)});
+
+    if(self.opt(.Colon)) { // We've got ourselves a type
+      _ = self.match(.Colon);
+      try res.items.append(Value{.Token = self.match(.Symbol)});
+    } else {
+        try res.items.append(Value.Null);
+    }
+
+    
+    _ = self.match(.Assign);
+
+    try res.items.append(try self.expr());
+    
+    _ = self. match(.Semicolon);
+
+    return res;
   }
 
-  fn whileStmt(self: *Parser) !WhileStmt {
+  fn expr(self: *Parser) !Value {
     return error.NotImplemented;
   }
-
-  fn forStmt(self: *Parser) !ForStmt {
-    return error.NotImplemented;
-  }
-
-  fn call(self: *Parser) !Call {
-    return error.NotImplemented;
-  }
-
 
   fn opt(self: Parser, tag: Tag) bool {
     if(self.cur) |cur| {
@@ -61,13 +74,22 @@ pub const Parser = struct {
     }
   }
 
+  fn matchOne(self: *Parser, tags: []const Tag) Token {
+    for (tags) |tag| {
+      if(self.opt(tag))
+        return self.match(tag);
+    }
+    std.debug.warn("EXPECTED ONE OF {}\n", tags);
+    std.process.exit(1);
+  }
+
   fn match(self: *Parser, tag: Tag) Token {
     if(self.opt(tag)) {
       var res = self.cur.?;
       self.cur = self.lexer.scan();
       return res;
     } else {
-      std.debug.warn("EXPECTED A {}", tag);
+      std.debug.warn("EXPECTED A {}\n", tag);
       std.process.exit(1);
     }
   }

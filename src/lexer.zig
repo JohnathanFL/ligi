@@ -90,6 +90,10 @@ pub const Lexer = struct {
       } else if (eql(u8, res.lexeme, "false")) {
         res.tag = .BoolLit;
         res.val = LexVal{ .BoolLit = false };
+      } else if (eql(u8, res.lexeme, "let")) {
+        res.tag = .Let;
+      } else if (eql(u8, res.lexeme, "var")) {
+        res.tag = .Var;
       }
     } else if (isDigit(self.curChar())) {
       var i: usize = 0;
@@ -182,7 +186,7 @@ pub const Lexer = struct {
         },
 
         ':' => res = self.tokenOfLen(1, .Colon),
-        ';' => res = self.tokenOfLen(1, .SemiColon),
+        ';' => res = self.tokenOfLen(1, .Semicolon),
         '|' => res = self.tokenOfLen(1, .Pipe),
         '(' => res = self.tokenOfLen(1, .LParen),
         ')' => res = self.tokenOfLen(1, .RParen),
@@ -235,11 +239,11 @@ test "lexer" {
   };
 
   var tags = [_]Tag{
-    .Symbol,  .Symbol,  .Assign,  .IntLit,  .SemiColon,
-    .Symbol,  .Assign,  .IntLit,  .Add,   .IntLit, .Mul,   .IntLit,  .SemiColon, 
+    .Symbol,  .Symbol,  .Assign,  .IntLit,  .Semicolon,
+    .Symbol,  .Assign,  .IntLit,  .Add,   .IntLit, .Mul,   .IntLit,  .Semicolon, 
     .While,   .LParen, .BoolLit, .And,     .Symbol,  .Greater, .IntLit, .RParen,  .Colon,   .LParen,  .Dec,   .IntLit, .RParen,  .LBrace,  
-    .Symbol,  .LParen,  .StringLit, .RParen,  .SemiColon, 
-    .Symbol,  .LParen,  .CharLit, .RParen,  .SemiColon,
+    .Symbol,  .LParen,  .StringLit, .RParen,  .Semicolon, 
+    .Symbol,  .LParen,  .CharLit, .RParen,  .Semicolon,
     .RBrace,
   };
 

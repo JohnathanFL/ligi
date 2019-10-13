@@ -1,55 +1,99 @@
 const std = @import("std");
+const Allocator = std.mem.Allocator;
+const ArrayList = std.ArrayList;
+const Tokens = @import("token.zig");
+const Token = Tokens.Token;
+const Tag = Tokens.Tag;
 
-const Token = @import("token.zig").Token;
+pub const Op = union(enum) {
+    // voids are builtins
 
-pub const StmtBody = std.ArrayList(Stmt);
+    // Args: condition, captureToken, execIfTrue, execIfFalse
+    // For example:
+    // if(optVal) |val| {
+    // val = 1;
+    // }
+    // Becomes: (using Unlabeled {} as a List)
+    // {op: If, items: {optVal, Token{"val"}, {`=`, Token{"val"}, Token{1}}, Null}}
+    If: void,
 
-pub const Stmt = union(enum) {
-  IfStmt: IfStmt,
-  WhileStmt: WhileStmt,
-  ForStmt: ForStmt,
+    // Args: condition, captureToken, execContinue, execDuring, execAfter
+    // For example: (Assuming i exists)
+    // while(i < 5) : (++i) {
+    //   print("Hi");
+    // } else {
+    //   print("Finished");
+    // }
+    // Becomes:
+    // {op: While, items: {
+    // {op: `<`, items: {i, 5}},
+    //  Null,
+    //  {op: `++`, items: Token{i}},
+    //  {op: Func(print), items: {Token{"Hi"}}},
+    //  {op: Func(print), items: {Token{"Finished"}}
+    //  }
+    // }
+    While: void,
 
-  BindStmt: BindStmt,
-  // Anything else is just a call.
-  // Even something like 'i = 1;' or 'i;' get compiled to '`=`(i, 1)' and '`null`(i)', respectively
-  Expr: Call, 
+    // Args: list, captureToken, execDuring, execAfter
+    For: void,
+
+    // TODO: Do we need this one at all? The Value.Token ought to do it already.
+    // Take the literal value of the list (i.e a tuple or single value).
+    // Used to execute the full program.
+    Val: void,
+
+    // Make an immutable variable in current scope.
+    // Used for variables AND types and such.
+    // Think Zig's 'const'.
+    // Args: bindToken, type, val
+    Let: void,
+    // Make a mutable variable in current scope
+    // Args: bindToken, type, val
+    Var: void,
+    // Name of the function to execute.
+    // Functions that literally have the '`' characters surrounding them
+    // are operators. (e.g `+`). This way they can be overloaded
+    Func: []const u8,
+
+    pub fn fromTag(tag: Tag) Op {
+        switch(tag) {
+            .Let => return .Let,
+            .Var => return .Let,
+            .While => return .While,
+            .For => return .For,
+            .If => return .If,
+            else => {
+                std.debug.warn("ERROR: Attemped to convert {} to an op!\n", tag);
+                @panic("Invalid conversion.\n");
+            }
+        }
+    }
 };
 
-pub const ID = Token;
+pub const List = struct {
+    op: Op,
+    items: ArrayList(Value),
 
-pub const IfStmt = struct {
-  pub cond: Call,
-  pub captID: ?ID,
-  pub body: StmtBody,
-  pub otherwise: StmtBody,
+    pub fn init(alloc: *Allocator) List {
+        return List{
+            .op = .Var,
+            .items = ArrayList(Value).init(alloc),
+        };
+    }
+
+    pub fn from(alloc: *Allocator, op: Op, items: []const Value) List {
+        var res = init(alloc);
+        res.op = op;
+        res.items.appendSlice(items);
+        return res;
+    }
 };
 
-pub const WhileStmt = struct {
-  pub cond: Call,
-  pub cont: ?*Stmt,
-  pub captID: ?ID,
-  pub body: StmtBody,
-  pub otherwise: StmtBody,
+pub const Value = union(enum) {
+    // If the list is to be taken as is (like tuple (1, 2, 3)),
+    // then list.op == Op.Val
+    List: List,
+    Token: Token,
+    Null: void,
 };
-
-pub const ForStmt = struct {
-  pub range: Call,
-  pub captID: ?ID,
-  pub body: StmtBody,
-  pub otherwise: StmtBody,
-};
-
-
-pub const BindStmt = struct {
-  pub mut: bool, // var = true, let = false
-  pub id: Token,
-  pub val: *Stmt, // Either undefined (TODO) or 
-};
-
-
-pub const Call = struct {
-  // A No-Op (return the args directly) is achieved by a func == null
-  pub func: ?[]const u8,
-  pub args: *Call,
-};
-
