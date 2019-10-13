@@ -1,8 +1,60 @@
+(*
+All ops in order of precedence:
+
+= += -= *= /= |= &= <<= >>= ^=
+or
+and
+|
+^
+&
+== !=
+< <= > >=
+<< >>
++ -
+* / %
+
+- ! ~ ++ -- +++ ---
+
+Field, optional, deref, addr-of, scope, call, index
+. .? .* .addr :: () []
+
+*)
+
+
 capture = "|", id, "|";
 tuple = "(", [expr, {",", expr}], ")";
+(*Same as a tuple, but may only have IDs in it*)
+idTuple = "(", id, {",", id}, ")";
 
 
-expr = ;
+literal = intLit | floatLit | boolLit | charLit | stringLit | nullLit;
+val = id | literal;
+
+accessOp = ".?" | ".*" | ".addr" | tuple | ("[", expr, "]");
+subOp = "." | "::";
+subExpr = val, {subOp, id}, {accessOp};
+
+unaryOp = "-" | "!" | "~" | "++" | "+++" | "--" | "---";
+unaryExpr = [unaryOp], subExpr;
+
+productExpr = unaryExpr, {("*" | "/" | "%"), unaryExpr};
+sumExpr = productExpr, {("+" | "-"), productExpr};
+shiftExpr = sumExpr, {("<<" | ">>"), sumExpr};
+
+relOp = "<" | ">" | "<=" | ">=";
+relExpr = shiftExpr, {relOp, shiftExpr};
+
+equalExpr = relExpr, {("==" | "!="), relExpr};
+bitAndExpr = equalExpr, {"&", equalExpr};
+xorExp = bitAndExpr, {"^", bitAndExpr};
+bitOrExp = xorExpr, {"|", xorExpr};
+andExpr = bitOrExpr, {"and", bitOrExpr};
+orExp = andExpr, {"or", andExpr};
+
+assignOp = ["+" | "-" | "*" | "/" | "|" | "&" | "<<" | ">>" | "^"],"=";
+assignExpr = exp, [assignOp, orExp];
+
+expr = assignExpr;
 
 (*Following rust's semantics here.*)
 exprList = {expr, ";"}, expr, [";"];
