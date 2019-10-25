@@ -16,23 +16,35 @@ and
 - ! ~ ++ -- +++ ---
 
 Field, optional, deref, addr-of, scope, call, index
-. .? .* .addr :: () []
+. :: () []
+
+Note on the dot (member) operator: 
+    All things will have the ".addr" field built in.
+    All optionals will have the ".?" field built in.
+        This will directly access the variable as if it were present. Only checks in debug mode.
+    All errors will have the ".!" field built in.
+    All pointers will have the ".deref" field built in.
 
 *)
 
+(*Because the style has grown on me in EBNF, and it's easier to type then /**/ *)
+comment = "(*", ..., "*)";
 
-capture = "|", id, "|";
+
+(*A single underscore shall be known as the sink variable.*)
+(*Any writes to it are discarded, and it's used as a "don't care"*)
+symbol = ("a".."z"|"A".."Z"), {"a".."z" | "A".."Z" | "0".."9" | "_"} | "_";
 tuple = "(", [expr, {",", expr}], ")";
-(*Same as a tuple, but may only have IDs in it*)
-idTuple = "(", id, {",", id}, ")";
+(*Same as a tuple, but may only have symbols in it*)
+symbolTuple = "(", symbol, {",", symbol}, ")";
 
 
 literal = intLit | floatLit | boolLit | charLit | stringLit | nullLit;
-val = id | literal;
+val = symbol | literal;
 
 accessOp = ".?" | ".*" | ".addr" | tuple | ("[", expr, "]");
 subOp = "." | "::";
-subExpr = val, {subOp, id}, {accessOp};
+subExpr = val, {subOp, symbol}, {accessOp};
 
 unaryOp = "-" | "!" | "~" | "++" | "+++" | "--" | "---";
 unaryExpr = [unaryOp], subExpr;
@@ -54,14 +66,63 @@ orExp = andExpr, {"or", andExpr};
 assignOp = ["+" | "-" | "*" | "/" | "|" | "&" | "<<" | ">>" | "^"],"=";
 assignExpr = exp, [assignOp, orExp];
 
-expr = assignExpr;
+block = "{", {expr}, "}";
 
-(*Following rust's semantics here.*)
-exprList = {expr, ";"}, expr, [";"];
+capture = "|", symbol, "|";
+(*First symbol is a loop counter, second is an actual capture variable.*)
+(*Counter is a usize that starts at 0 and is incremented after each loop.*)
+(*I chose to do it as optional-capture rather than optional-counter because sometimes you may want to count on something*)
+(*that doesn't have a capturable variable*)
+loopCapture = "|", symbol, [symbol], "|";
 
-ifStmt = "if", expr, [":", capture], "{", exprList, "}";
-(*while expr capture continuation loopOver*)
-whileStmt = "while", expr, [":", capture], [":", expr], "{", exprList, "}", ["else", "{", exprList, "}"];
+(*
+Usable as a simple ternary expression, as in:
+let x = if true {"true"} else {"false"};
+
+The "finally" section is always executed IF one of the paths was taken.
+It's almost like an "inverted else".
+*)
+ifCapture = [":", capture];
+ifExpr = "if", expr, ifCapture, block, {"elif", expr, [ifCapture], block}, ["finally", block];
+
+
+(*
+Finally is always executed IF the entire loop executed (i.e no break)
+*)
+whileCont = ":", expr;
+whileStmt = "while", expr, [loopCapture], [whileCont], block, ["finally", block];
 (*Basically just sugar for while on iterables*)
 (*We'll follow the Zig iterate() fn idea for these*)
-forStmt = "for", expr, [":", capture], "{", exprList, "}", ["else", "{", exprList, "}"];
+
+(*Finally is always executed IF the entire loop executed*)
+forCapture = "|", symbol, [symbol], "|" | capture;
+forExpr = "for", expr, [":", forCapture], block, ["finally", block];
+
+bindStmt = ("var" | "let"), symbol, [":", symbol], [assignOp, orExp], ";";
+
+(*Basically following zig's lead on this*)
+(*A "pure" function is compile-time guarenteed not to change anything.*)
+(*Only a function marked "pure" may be used as an operator overload for a type.*)
+(*For overloading +=/etc, a pointer will be passed to lhs*)
+(*fn and purefn are distinct types so interfaces can specify that a lambda must be pure.
+    casting between them will be allowed, but it will serve as a sort of "welp, I warned ya"*)
+lambda = ("purefn", "fn"), "(", {symbol, [":", type]}, ")", type, block;
+(*Therefore, a full function definition looks like:*)
+(*  let add = fn(a: u32, b: u32) u32 {a + b} *)
+
+(*Respectively, optional error ptr slice array*)
+typeModifier = "?" | "!" | "*" | "[]" | "[", val, "]";
+type = {typeModifier}, symbol;
+
+enumMembers = [symbol, ["=", val], {",", enumMembers}];
+enumDef = "enum", ["(", type, ")"], "{", enumMembers, "}";
+
+(*The (expr) is a way of enforcing how large a type is.*)
+(*For example, if you have an interface to a C thingy, you can check at compiletime that the struct is the expected size*)
+structVars = [symbol, ":", type, ["=", expr], [",", structVars]];
+structMembers = structFields, structDefinitions; 
+structDef = "struct", ["(", expr, ")"], "{", structMembers, "}";
+
+
+
+typedef = ("packed", "extern"), (enumDef | structDef | unionDef);
