@@ -1,128 +1,153 @@
-(*
-All ops in order of precedence:
+(: So the following are both perfectly valid:
 
-= += -= *= /= |= &= <<= >>= ^=
-or
-and
-|
-^
-&
-== !=
-< <= > >=
-<< >>
-+ -
-* / %
-
-- ! ~ ++ -- +++ ---
-
-Field, optional, deref, addr-of, scope, call, index
-. :: () []
-
-Note on the dot (member) operator: 
-    All things will have the ".addr" field built in.
-    All optionals will have the ".?" field built in.
-        This will directly access the variable as if it were present. Only checks in debug mode.
-    All errors will have the ".!" field built in.
-    All pointers will have the ".deref" field built in.
-
-*)
-
-(*Because the style has grown on me in EBNF, and it's easier to type then /**/ *)
-comment = "(*", ..., "*)";
+	(= This is a singleline comment
+	(: This
+	is
+	a multiline comment :)
+(= On an unrelated note, don't you think zag comments are the happiest around? =)
+comment = "(:" ... ":)" | "(=" ... \n
 
 
-(*A single underscore shall be known as the sink variable.*)
-(*Any writes to it are discarded, and it's used as a "don't care"*)
-symbol = ("a".."z"|"A".."Z"), {"a".."z" | "A".."Z" | "0".."9" | "_"} | "_";
-tuple = "(", [expr, {",", expr}], ")";
-(*Same as a tuple, but may only have symbols in it*)
-symbolTuple = "(", symbol, {",", symbol}, ")";
+(=A single underscore shall be known as the sink variable.
+(=Any writes to it are discarded, and it's used as a "don't care"
+symbol = ("a".."z"|"A".."Z"), {"a".."z" | "A".."Z" | "0".."9" | "_"} | "_"
+tuple = "(", [expr, {",", expr}], ")"
+(=Same as a tuple, but may only have symbols in it
+symbolTuple = "(", symbol, {",", symbol}, ")"
+
+(= Anything bultin shall be prefixed with an @
+builtin = "@" symbol
+
+(= Instead of interfaces and such, we have concepts.
+keyword = fn | purefn | if | for | while | let | var | break | choose | struct | enum | union | concept | pub
+
+(= These may be used as variable names, but are also intrinsic to variables as fields 
+reservedFields = addr | deref
 
 
-literal = intLit | floatLit | boolLit | charLit | stringLit | nullLit;
-val = symbol | literal;
+literal = intLit | floatLit | boolLit | charLit | stringLit | nullLit
 
-accessOp = ".?" | ".*" | ".addr" | tuple | ("[", expr, "]");
-subOp = "." | "::";
-subExpr = val, {subOp, symbol}, {accessOp};
-
-unaryOp = "-" | "!" | "~" | "++" | "+++" | "--" | "---";
-unaryExpr = [unaryOp], subExpr;
-
-productExpr = unaryExpr, {("*" | "/" | "%"), unaryExpr};
-sumExpr = productExpr, {("+" | "-"), productExpr};
-shiftExpr = sumExpr, {("<<" | ">>"), sumExpr};
-
-relOp = "<" | ">" | "<=" | ">=";
-relExpr = shiftExpr, {relOp, shiftExpr};
-
-equalExpr = relExpr, {("==" | "!="), relExpr};
-bitAndExpr = equalExpr, {"&", equalExpr};
-xorExp = bitAndExpr, {"^", bitAndExpr};
-bitOrExp = xorExpr, {"|", xorExpr};
-andExpr = bitOrExpr, {"and", bitOrExpr};
-orExp = andExpr, {"or", andExpr};
-
-assignOp = ["+" | "-" | "*" | "/" | "|" | "&" | "<<" | ">>" | "^"],"=";
-assignExpr = exp, [assignOp, orExp];
-
-block = "{", {expr}, "}";
-
-capture = "|", symbol, "|";
-(*First symbol is a loop counter, second is an actual capture variable.*)
-(*Counter is a usize that starts at 0 and is incremented after each loop.*)
-(*I chose to do it as optional-capture rather than optional-counter because sometimes you may want to count on something*)
-(*that doesn't have a capturable variable*)
-loopCapture = "|", symbol, [symbol], "|";
-
-(*
-Usable as a simple ternary expression, as in:
-let x = if true {"true"} else {"false"};
-
-The "finally" section is always executed IF one of the paths was taken.
-It's almost like an "inverted else".
-*)
-ifCapture = [":", capture];
-ifExpr = "if", expr, ifCapture, block, {"elif", expr, [ifCapture], block}, ["finally", block];
+(:
+Basic language principles:
 
 
-(*
-Finally is always executed IF the entire loop executed (i.e no break)
-*)
-whileCont = ":", expr;
-whileStmt = "while", expr, [loopCapture], [whileCont], block, ["finally", block];
-(*Basically just sugar for while on iterables*)
-(*We'll follow the Zig iterate() fn idea for these*)
+This language is whitespace insensitive.
 
-(*Finally is always executed IF the entire loop executed*)
-forCapture = "|", symbol, [symbol], "|" | capture;
-forExpr = "for", expr, [":", forCapture], block, ["finally", block];
+Sigils shall be preferred over operators if possible without sacrificing readability
 
-bindStmt = ("var" | "let"), symbol, [":", symbol], [assignOp, orExp], ";";
+An effort will be made to keep programmers correct with programming (pointers/optionals/errors/etc). However...
 
-(*Basically following zig's lead on this*)
-(*A "pure" function is compile-time guarenteed not to change anything.*)
-(*Only a function marked "pure" may be used as an operator overload for a type.*)
-(*For overloading +=/etc, a pointer will be passed to lhs*)
-(*fn and purefn are distinct types so interfaces can specify that a lambda must be pure.
-    casting between them will be allowed, but it will serve as a sort of "welp, I warned ya"*)
-lambda = ("purefn", "fn"), "(", {symbol, [":", type]}, ")", type, block;
-(*Therefore, a full function definition looks like:*)
-(*  let add = fn(a: u32, b: u32) u32 {a + b} *)
+An effort will be made to not baby/corall programmers with language constructs. 
+We shall trust the programmers to not abuse constructs too much and shun those that do.
 
-(*Respectively, optional error ptr slice array*)
-typeModifier = "?" | "!" | "*" | "[]" | "[", val, "]";
-type = {typeModifier}, symbol;
+An effort will be made to make all language constructs use a relatively common grammar:
+	":" shall be known as the delimiter. It shall always be used when delimiting extra options in a stmt
+	"|...|" shall be used to capture things
+	control statements (if, for, while...) shall follow "word expr brace" style. No extra parentheses
+	" `label " defines a label named label. It can mark a stmt or block and allow returning a value from it
+		(or arbitrarily breaking out of it)
 
-enumMembers = [symbol, ["=", val], {",", enumMembers}];
-enumDef = "enum", ["(", type, ")"], "{", enumMembers, "}";
+snake_case, camelCase, and PascalCase shall all be acceptable as the programmer wishes.
+Those using mashedtogethercase, however, shall be burned at the stake.
 
-(*The (expr) is a way of enforcing how large a type is.*)
-(*For example, if you have an interface to a C thingy, you can check at compiletime that the struct is the expected size*)
-structVars = [symbol, ":", type, ["=", expr], [",", structVars]];
-structMembers = structFields, structDefinitions; 
-structDef = "struct", ["(", expr, ")"], "{", structMembers, "}";
+
+:)
+
+(:
+The ziggy-zaggy zenny:
+	- Stop taking things *too* seriously
+	- Trust programmers not to be too crazy, but leave options open for edge cases
+	- The language exists to express the programmer's intent
+	- The programmar's intent is to make a working program as intuitively as possible
+	- What's been should tell you what's coming
+:)
+label = "`"symbol
+
+block = "{" {stmt} "}"
+namedBlock = label block
+anyBlock = namedBlock | block
+
+stmt = bindStmt | ifStmt | forStmt | whileStmt | (expr ";") | block
+
+type = {"?" | "!" | "[]" | "[" expr "]"} ( ("fn" | "purefn") typeTuple type | symbol)
+
+bindStmt = ("let"|"var") symbol [":" type] ["=" expr] ";"
+
+(= Allows capturing an optional, as in `if optVal : |val| {...}` 
+ifCapture = "|" symbol "|"
+
+
+ifStmt = "if" expr [":" ifCapture] block {elif expr [":" ifCapture] block} [else block]
+
+(: 
+If either of these symbols already exist, the capture will be use those variables.
+Thus, you could do something like:
+var count: usize = 0;
+while someValIsTrue : |count| {...}
+print("The count was: {}", count);
+
+Note, however, that if the variable exists and does not have the appropriate type,
+it shall be an error.
+:)
+
+loopCapture = "|" symbol ["," symbol] "|"
+
+(= First expr is evaluated before each loop. Loop only continues if it's true 
+(= Second expr is evaluated after each loop and the value discarded 
+(= Finally blocks only execute if the entire loop finished. 
+(= (i.e we're "finally" getting to it) 
+whileStmt = "while" expr [":" loopCapture] [":" expr] anyblock ["finally" block]
+
+(= First expr is only evaluated once, and is then looped over. 
+(= We'll be following zig's new iterate() fn idea. 
+forStmt = "for" expr [":" loopCapture] anyblock ["finally" block]
+
+(= Used like an extended C++ ternary. You're "choosing" the value you want. 
+(= Evaluated like an if (i.e only the first case that's true gets evaluated/returned) 
+(: Example:
+
+	let b = 15;
+	let bIsTeen = pick { b < 12 => false, else true };
+:)
+chooseExpr = "choose" "{" expr "=>" expr {"," expr "=>" expr} "," "else" expr "}"
 
 
 
-typedef = ("packed", "extern"), (enumDef | structDef | unionDef);
+(= A ternary or a field access (with func call or indexing) or literal or parenthesized expr 
+val = chooseExpr | symbol { "." symbol } { tuple | "[" expr "]" ) | literal | "(" expr ")"
+
+expr = assignExpr
+
+(= All that follows here is expression stuff.
+(= Slog through it if you like, but be warned it's dull.
+
+assignOp = "=" | "+=" | "-=" | "*=" | "/=" | "<<=" | ">>=" | "|=" | "&="
+assignExpr = orExpr {assignOp (orExpr | namedBlock)}
+
+orExpr = andExpr {"or" andExpr}
+andExpr = relExpr {"and" relExpr}
+
+(= Note the === operator is special, in that it returns nothing. It acts like an assert statement.
+relOp = "==" | "!=" | "<" | ">" | "<=" | ">=" | "==="
+relExpr = bitOrExp {relOp bitOrExp}
+
+bitOrExp = bitXorExpr {"|" bitXorExpr}
+bitXorExpr = bitAndExpr {"^" bitAndExpr}
+bitAndExpr = shiftExpr {"&" shiftExpr}
+
+shiftOp = "<<" | ">>" | ">>>"
+(= The [] instead of {} here is no typo. Only 1 shift expr allowed at a time.
+(= More than 1 will just get crazy.
+shiftExpr = arithExpr [shiftOp arithExpr]
+
+arithOp = "+" | "-"
+arithExpr = prodExpr {arithOp prodExpr}
+
+prodOp = "*" | "/" | "%"
+prodExpr = unaryExpr {prodOp unaryExpr}
+
+(= Note that the unary op applies to whatever's there AFTER evaluating dot operators and such
+unaryOp = "-" | "!" | "~" | "++" | "--" | "+++" | "---"
+unaryExpr = [unaryExpr] val
+
+
