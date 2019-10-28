@@ -4,6 +4,7 @@ const isAlNum = std.ascii.isAlNum;
 const isDigit = std.ascii.isDigit;
 const isSpace = std.ascii.isSpace;
 const eql = std.mem.eql;
+const HashMap = std.AutoHashMap;
 
 const testing = std.testing;
 const expect = testing.expect;
@@ -18,11 +19,33 @@ pub const Lexer = struct {
   line: usize,
   fileID: usize, // Could be the hash, index, etc
 
+  const WordPair = struct {word: []const u8, tag: Tag};
+  const word_map = [_]WordPair {
+    WordPair{ .word = "if", .tag = .If },
+    WordPair{ .word = "for", .tag = .For },
+    WordPair{ .word = "while", .tag = .While },
+    WordPair{ .word = "let", .tag = .Let },
+    WordPair{ .word = "var", .tag = .Var },
+    WordPair{ .word = "elif", .tag = .ElIf },
+    WordPair{ .word = "fn", .tag = .Fn },
+    WordPair{ .word = "purefn", .tag = .PureFn },
+    WordPair{ .word = "finally", .tag = .Finally },
+    WordPair{ .word = "enum", .tag = .Enum },
+    WordPair{ .word = "struct", .tag = .Struct },
+    WordPair{ .word = "union", .tag = .Union },
+    WordPair{ .word = "null", .tag = .Null },
+    WordPair{ .word = "match", .tag = .Match },
+  };
+
   inline fn curChar(self: Lexer) u8 {
     return self.input[0];
   }
 
   inline fn advance(self: *Lexer) u8 {
+    if(self.input.len == 1) {
+      self.cur = 0;
+      return 0;
+    }
     var cur = self.curChar();
     self.input = self.input[1..];
     return cur;
@@ -60,12 +83,28 @@ pub const Lexer = struct {
     return eql(u8, str, self.input[0..str.len]);
   }
 
-  pub fn scan(self: *Lexer) ?Token {
+  pub fn scan(self: *Lexer) Token {
     var res: Token = undefined;
 
-    while (isSpace(self.curChar())) : (_ = self.advance()) {
-      if (self.curChar() == '\n')
-        self.line += 1;
+    var done_skipping = false;
+    while (!done_skipping) {
+      done_skipping = true;
+      while (isSpace(self.curChar())) : (_ = self.advance()) {
+       if (self.curChar() == '\n') self.line += 1;
+      }
+      
+      if (self.nextEql("(*")) {
+        done_skipping = false; // Here's a use for a finally block
+        while(!self.nextEql("*)")) self.advance();
+      } else if (self.nextEql("(:")) {
+        done_skipping = false;
+        while(self.curChar() != '\n') self.advance();
+      }
+    }
+    
+    if (self.curChar() == 0) {
+      res.tag = EOF;
+      return res;
     }
 
     if (isAlpha(self.curChar())) {
@@ -74,26 +113,10 @@ pub const Lexer = struct {
 
       res = self.tokenOfLen(i, .Symbol);
 
-      if (eql(u8, res.lexeme, "if")) { // Word operators
-        res.tag = .If;
-      } else if (eql(u8, res.lexeme, "while")) {
-        res.tag = .While;
-      } else if (eql(u8, res.lexeme, "for")) {
-        res.tag = .For;
-      } else if (eql(u8, res.lexeme, "or")) {
-        res.tag = .Or;
-      } else if (eql(u8, res.lexeme, "and")) {
-        res.tag = .And;
-      } else if (eql(u8, res.lexeme, "true")) {
-        res.tag = .BoolLit;
-        res.val = LexVal{ .BoolLit = true };
-      } else if (eql(u8, res.lexeme, "false")) {
-        res.tag = .BoolLit;
-        res.val = LexVal{ .BoolLit = false };
-      } else if (eql(u8, res.lexeme, "let")) {
-        res.tag = .Let;
-      } else if (eql(u8, res.lexeme, "var")) {
-        res.tag = .Var;
+      // Handle reserved keywords
+      for (Lexer.word_map) |pair| {
+        if (eql(u8, res.lexeme, pair.word))
+          res.tag = pair.tag;
       }
     } else if (isDigit(self.curChar())) {
       var i: usize = 0;
@@ -110,6 +133,7 @@ pub const Lexer = struct {
 
           // NOTE: We must compare in descending length
           // Otherwise nextEql("++") is also true for input = "+++"
+          // Note: This relies on being able to have arbitrary lookahead.
           if (self.nextEql("+++")) {
             res = self.tokenOfLen(3, .IncNow);
           } else if (self.nextEql("++")) {
@@ -171,23 +195,21 @@ pub const Lexer = struct {
           }
         },
         '=' => {
-          if (self.nextEql("==")) {
+          if (self.nextEql("===")) {
+            res = self.tokenOfLen(3, .Assert);
+          } else if (self.nextEql("==")) {
             res = self.tokenOfLen(2, .Equal);
           } else {
             res = self.tokenOfLen(1, .Assign);
           }
         },
-        '.' => {
-          if (self.nextEql(".?")) {
-            res = self.tokenOfLen(2, .DotOpt);
-          } else {
-            res = self.tokenOfLen(1, .Dot);
-          }
-        },
-
+        '?' => res = self.tokenOfLen(1, .Opt),
+        '.' => res = self.tokenOfLen(1, .Dot),
+        ',' => res = self.tokenOfLen(1, .Comma),
         ':' => res = self.tokenOfLen(1, .Colon),
         ';' => res = self.tokenOfLen(1, .Semicolon),
         '|' => res = self.tokenOfLen(1, .Pipe),
+        // We took care of comments with skipping whitespace
         '(' => res = self.tokenOfLen(1, .LParen),
         ')' => res = self.tokenOfLen(1, .RParen),
         '[' => res = self.tokenOfLen(1, .LBracket),
@@ -224,12 +246,18 @@ pub const Lexer = struct {
 
 test "lexer" {
   var input =
-    \\ int i = 0;
+    \\ let i: u32 = 0;
     \\ i = 1 + 4 * 5;
-    \\ while (true and i > 0) : (--i) {
-    \\   print("Hello world!");
-    \\   print('\n');
+    \\ let a: ?i32 = 10;
+    \\ var count: usize = 0;
+    \\ while a : |count, val| {
+    \\   print("a is {}\n", val);
+    \\   a -= 1;
+    \\   if a == 0 {
+    \\    a = null;
+    \\   }
     \\ }
+    \\ print("we looped {} times!", count);
   ;
 
   var lexer = Lexer{
@@ -239,12 +267,18 @@ test "lexer" {
   };
 
   var tags = [_]Tag{
-    .Symbol,  .Symbol,  .Assign,  .IntLit,  .Semicolon,
-    .Symbol,  .Assign,  .IntLit,  .Add,   .IntLit, .Mul,   .IntLit,  .Semicolon, 
-    .While,   .LParen, .BoolLit, .And,     .Symbol,  .Greater, .IntLit, .RParen,  .Colon,   .LParen,  .Dec,   .IntLit, .RParen,  .LBrace,  
-    .Symbol,  .LParen,  .StringLit, .RParen,  .Semicolon, 
-    .Symbol,  .LParen,  .CharLit, .RParen,  .Semicolon,
-    .RBrace,
+    .Let, .Symbol, .Colon, .Symbol, .Assign, .IntLit, .Semicolon,
+    .Symbol, .Assign, .IntLit, .Add, .IntLit, .Mul, .IntLit, .Semicolon,
+    .Let, .Symbol, .Colon, .Opt, .Symbol, .Assign, .IntLit, .Semicolon,
+    .Var, .Symbol, .Colon, .Symbol, .Assign, .IntLit, .Semicolon,
+    .While, .Symbol, .Colon, .Pipe, .Symbol, .Comma, .Symbol, .Pipe, .LBrace,
+      .Symbol, .LParen, .StringLit, .Symbol, .RParen, .Semicolon,
+      .Symbol, .SubAssign, .IntLit, .Semicolon,
+      .If, .Symbol, .Equal, .IntLit, .LBrace,
+        .Symbol, .Equal, .Null, .Semicolon,
+      .LBrace,
+    .LBrace,
+    .Symbol, .LParen, .StringLit, .Symbol, .RParen, .Semicolon
   };
 
   //   std.debug.warn("\n");

@@ -19,7 +19,7 @@ symbolTuple = "(", symbol, {",", symbol}, ")"
 builtin = "@" symbol
 
 (= Instead of interfaces and such, we have concepts.
-keyword = fn | purefn | if | for | while | let | var | break | choose | struct | enum | union | concept | pub
+keyword = fn | purefn | if | for | while | let | var | break | match | struct | enum | union | concept | pub
 
 (= These may be used as variable names, but are also intrinsic to variables as fields 
 reservedFields = addr | deref
@@ -40,8 +40,23 @@ An effort will be made to keep programmers correct with programming (pointers/op
 An effort will be made to not baby/corall programmers with language constructs. 
 We shall trust the programmers to not abuse constructs too much and shun those that do.
 
-An effort will be made to make all language constructs use a relatively common grammar:
+Code should flow, both in reading and writing.
+
+Where possible, a language construct should have only one way of using it.
+	For example, we use "case" instead of an if stmt for ternary stuff
+	Promotes readability
+	
+
+Where possible, language constructs should follow a common syntax with only the initial keyword changing:
+	This will promote code-reuse in the parser.
+	All places that can bind a variable use the same parser module (let/var/caputures/arguments/etc)
+	All control structures shall support a "finally" block.
+		Iteration structures shall execute a finally block if the loop terminated normally.
+		Selection structures shall excecute a finally block if one of the options was taken.
+		In the case of a match stmt, it's (probably) useless but will be supported for consistency
 	":" shall be known as the delimiter. It shall always be used when delimiting extra options in a stmt
+		Loops shall follow the form <loop_keyword> expr [: caputure] [:continuation] block [finally block]
+		If/Elif shall follow the form <if_keyword> expr [: capture] block (repeat) [finally block]
 	"|...|" shall be used to capture things
 	control statements (if, for, while...) shall follow "word expr brace" style. No extra parentheses
 	" `label " defines a label named label. It can mark a stmt or block and allow returning a value from it
@@ -60,6 +75,7 @@ The ziggy-zaggy zenny:
 	- The language exists to express the programmer's intent
 	- The programmar's intent is to make a working program as intuitively as possible
 	- What's been should tell you what's coming
+	- Code should flow, both in reading and writing.
 :)
 label = "`"symbol
 
@@ -102,25 +118,34 @@ whileStmt = "while" expr [":" loopCapture] [":" expr] anyblock ["finally" block]
 (= We'll be following zig's new iterate() fn idea. 
 forStmt = "for" expr [":" loopCapture] anyblock ["finally" block]
 
-(= Used like an extended C++ ternary. You're "choosing" the value you want. 
+(= Used like an extended C++ ternary. You're picking which case is true 
 (= Evaluated like an if (i.e only the first case that's true gets evaluated/returned) 
 (: Example:
 
 	let b = 15;
-	let bIsTeen = pick { b < 12 => false, else true };
+	let bIsTeen = case { b < 12 => false, else => true };
 :)
-chooseExpr = "choose" "{" expr "=>" expr {"," expr "=>" expr} "," "else" expr "}"
+(= Read it like "bIsTeen is, in the case of b < 12, false. Otherwise, it is true."
+caseExpr = "case" "{" expr "=>" expr {"," expr "=>" expr} "," "else" "=>" expr "}"
 
 
 
-(= A ternary or a field access (with func call or indexing) or literal or parenthesized expr 
-val = chooseExpr | symbol { "." symbol } { tuple | "[" expr "]" ) | literal | "(" expr ")"
+(= A ternary or a field access (with func call or indexing) or literal or a tuple of values
+(= Note: You may note there's no explicit (expr) ability here. This is because a single item
+(= tuple will be implicitly convertible to .n0's type. In fact, I plan on doing this in parser.
+val = caseExpr | accessExpr
+
+baseVal = (symbol | literal | tuple)
+(= a  value with an optional series of fields, function calls, or indexes
+accessExpr = (symbol | literal | tuple) { "." symbol | tuple | "[" expr "]" } 
+
 
 expr = assignExpr
 
 (= All that follows here is expression stuff.
 (= Slog through it if you like, but be warned it's dull.
 
+(= All assignOps return the end result.
 assignOp = "=" | "+=" | "-=" | "*=" | "/=" | "<<=" | ">>=" | "|=" | "&="
 assignExpr = orExpr {assignOp (orExpr | namedBlock)}
 
@@ -147,6 +172,8 @@ prodOp = "*" | "/" | "%"
 prodExpr = unaryExpr {prodOp unaryExpr}
 
 (= Note that the unary op applies to whatever's there AFTER evaluating dot operators and such
+(= Note that we have [] instead of {}. Only one unary op may be used at a time.
+(= Multiple unary ops must be applied with parenthesis
 unaryOp = "-" | "!" | "~" | "++" | "--" | "+++" | "---"
 unaryExpr = [unaryExpr] val
 
