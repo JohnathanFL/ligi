@@ -1,14 +1,18 @@
 pub const Tag = enum(u8) {
+    Label, // `xxxx
     Case,
     Implies, // => 
     Add, // +
     AddAssign, // +=
     And,
+    AShr, // >>>
     Assert, // ===
     Assign, // =
     BitAnd, // &
+    BitAndAssign, // &=
     BitNot, // ~
-    BitOr,
+    BitOr, // |
+    BitOrAssign, // |=
     CaseOf, // caseof 
     Colon,
     Comma,
@@ -17,7 +21,8 @@ pub const Tag = enum(u8) {
     Div, // /
     DivAssign, // /=
     Dot, // .
-    ElIf, // elif    
+    ElIf, // elif
+    Else,
     Enum,
     EOF, // When the lexer reaches the end of the stream
     Equal, // ==
@@ -35,6 +40,7 @@ pub const Tag = enum(u8) {
     LessEq, // <=
     Let, // Immutable
     LParen,
+    Mod, // %
     Mul, // *
     MulAssign, // *=
     Not, // !
@@ -48,7 +54,9 @@ pub const Tag = enum(u8) {
     RParen,
     Semicolon,
     Shl, // <<
+    ShlAssign, // <<=
     Shr, // >>
+    ShrAssign, // >>=
     Struct,
     Sub, // -
     SubAssign, // -=
@@ -65,53 +73,9 @@ pub const Tag = enum(u8) {
     StringLit,
     NullLit, // null
 
-    // Sorted be Binary-Unary, then by precedence
-    const all_ops = [_]Tag {
-      .Assign, // =
-      .AddAssign, // +=
-      .DivAssign, // /=
-      .MulAssign, // *=
-      .SubAssign, // -=
 
-      .Or,
-
-      .And,
-
-      .Assert, // ===
-      .Equal, // ==
-      .NotEqual, // !=
-      .Greater, // >
-      .GreaterEq, // >=
-      .Less, // <
-      .LessEq, // <=
-
-      
-      .BitOr, // |
-      .Xor, // ^
-      .BitAnd, // &
-
-  
-      .Shl, // <<
-      .Shr, // >>
-      .AShr, // >>>
-
-      .Add, // +
-      .Sub, // -
-
-      .Mul,
-      .Div,
-      .Mod,
-           
-      // UNARY OPERATORS
-      .Sub, 
-      .Not, // !
-      .Inc, // ++ // Equivalent to i++
-      .IncNow, // +++ // Equivalent to ++i    
-      .Dec, // -- // Equivalent to i--
-      .DecNow, // --- // Equivalent to --i    
-    };
-    const unary_ops = [_]Tag {
-      .Not, .BinNot, .Sub, .Inc, .Dec, .IncNow, .DecNow
+    pub const unary_ops = [_]Tag {
+      .Not, .BitNot, .Sub, .Inc, .Dec, .IncNow, .DecNow
     };
 
     const greatest_binary_precedence = 9;
@@ -120,8 +84,8 @@ pub const Tag = enum(u8) {
     pub fn precedence(self: Tag) u32 {
       return switch (self) {
         .Assign, .AddAssign, .SubAssign, .MulAssign, 
-        .DivAssign, .ShlAssign, .ShrAssign, .OrAssign, 
-        .AndAssign => 0,
+        .DivAssign, .ShlAssign, .ShrAssign, .BitOrAssign, 
+        .BitAndAssign => 0,
         
         .Or => 1,
         .And => 2,
@@ -140,34 +104,37 @@ pub const Tag = enum(u8) {
       };
     }
 
-    pub fn opsOfPrecedence(comptime prec: u32) []const Tag {
-      comptime if(prec > 9) @compileError("No precedence higher than 9!");      
+    // Sorted by precedence 0-...
+    pub const binary_ops = [_][]const Tag{
 
-      return switch (prec) {
-        0 => [_]Tag {
+        [_]Tag {
           .Assign, .AddAssign, .SubAssign, .MulAssign, 
-          .DivAssign, .ShlAssign, .ShrAssign, .OrAssign, 
-          .AndAssign 
+          .DivAssign, .ShlAssign, .ShrAssign, .BitOrAssign, .BitAndAssign,
         },
         
-        1 => [_]Tag {.Or},
-        2 => [_]Tag {.And},
+        [_]Tag {.Or},
+        [_]Tag {.And},
         
-        3 => [_]Tag {.Equal, .NotEqual, .Less, .Greater, 
+        [_]Tag {.Equal, .NotEqual, .Less, .Greater, 
         .LessEq, .GreaterEq, .Assert},
 
-        4 => [_]Tag {.BitOr},
-        5 => [_]Tag {.BitXor},
-        6 => [_]Tag {.bitAnd},
-        7 => [_]Tag {.Shl, .Shr, .AShr},
-        8 => [_]Tag {.Add, .Sub},
-        9 => [_]Tag {.Mul, .Div, .Mod},
-        
-        else => [_]Tag{},
+        [_]Tag {.BitOr},
+        [_]Tag {.Xor},
+        [_]Tag {.BitAnd},
+        [_]Tag {.Shl, .Shr, .AShr},
+        [_]Tag {.Add, .Sub},
+        [_]Tag {.Mul, .Div, .Mod},
+    };
+    
+    pub fn matching(self: Tag) ?Tag {
+      return switch (self) {
+        .LBrace => .RBrace,
+        .LParen => .RParen,
+        .LBracket => .RBracket,
+        else => null,
       };
-
     }
-
+  
     pub fn isLit(self: Tag) bool {
         return @enumToInt(self) & 0b10000000 != 0;
     }

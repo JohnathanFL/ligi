@@ -1,7 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
-const HashMap = std.AutoHashMap;
+const StringHashMap = std.StringHashMap;
 const Tokens = @import("token.zig");
 const Token = Tokens.Token;
 const Tag = Tokens.Tag;
@@ -48,7 +48,7 @@ pub const Value = union(enum) {
 pub const Stmt = union(enum) {
   expr: Expr,
   loopStmt: LoopStmt,
-  ifStmt: IfExpr,
+  ifStmt: IfStmt,
   bindStmt: BindStmt,
   block: Block
 };
@@ -56,15 +56,16 @@ pub const Stmt = union(enum) {
 // val is what can be returned by the block.
 // defaults to void
 pub const Block = struct {
+  parent: ?*Block = null,
   label: ?[]const u8,
-  symbols: HashMap([]const u8, *BindExpr),
+  symbols: StringHashMap(*BindStmt),
   stmts: ArrayList(*Stmt),
 
   pub fn init(alloc: *Allocator) *Block {
-    var res = alloc.create(Block);
+    var res = alloc.create(Block) catch unreachable;
     res.label = null;
-    res.stmts = ArrayList(*Stmts).init(alloc);
-    res.symbols = HashMap([]const u8, *BindExpr).init(alloc);
+    res.stmts = ArrayList(*Stmt).init(alloc);
+    res.symbols = StringHashMap(*BindStmt).init(alloc);
     return res;
   }
 };
@@ -85,8 +86,8 @@ pub const IfStmt = struct {
   finally: ?*Block,
 
   pub fn init(alloc: *Allocator) *Stmt {
-    var res = alloc.create(Stmt);
-    res.* = Stmt{.ifStmt = alloc.create(IfStmt)};
+    var res = try alloc.create(Stmt);
+    res.* = Stmt{.ifStmt = try alloc.create(IfStmt)};
     res.ifStmt.* = IfStmt {
       .conds = ArrayList(IfCondBlock).init(alloc),
       .finally = null,

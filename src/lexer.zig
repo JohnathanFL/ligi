@@ -34,7 +34,7 @@ pub const Lexer = struct {
     WordPair{ .word = "struct", .tag = .Struct },
     WordPair{ .word = "union", .tag = .Union },
     WordPair{ .word = "null", .tag = .Null },
-    WordPair{ .word = "match", .tag = .Match },
+    WordPair{ .word = "case", .tag = .Case },
   };
 
   inline fn curChar(self: Lexer) u8 {
@@ -43,7 +43,6 @@ pub const Lexer = struct {
 
   inline fn advance(self: *Lexer) u8 {
     if(self.input.len == 1) {
-      self.cur = 0;
       return 0;
     }
     var cur = self.curChar();
@@ -95,15 +94,15 @@ pub const Lexer = struct {
       
       if (self.nextEql("(*")) {
         done_skipping = false; // Here's a use for a finally block
-        while(!self.nextEql("*)")) self.advance();
+        while(!self.nextEql("*)")) _ = self.advance();
       } else if (self.nextEql("(:")) {
         done_skipping = false;
-        while(self.curChar() != '\n') self.advance();
+        while(self.curChar() != '\n') _ = self.advance();
       }
     }
     
     if (self.curChar() == 0) {
-      res.tag = EOF;
+      res.tag = .EOF;
       return res;
     }
 
@@ -208,7 +207,7 @@ pub const Lexer = struct {
         ',' => res = self.tokenOfLen(1, .Comma),
         ':' => res = self.tokenOfLen(1, .Colon),
         ';' => res = self.tokenOfLen(1, .Semicolon),
-        '|' => res = self.tokenOfLen(1, .Pipe),
+        '|' => res = self.tokenOfLen(1, .BitOr),
         // We took care of comments with skipping whitespace
         '(' => res = self.tokenOfLen(1, .LParen),
         ')' => res = self.tokenOfLen(1, .RParen),
@@ -233,6 +232,11 @@ pub const Lexer = struct {
           i += 1; // To include the '"'
 
           res = self.tokenOfLen(i, .CharLit);
+        },
+        '`' => {
+          var i: usize = 1;
+          while (isAlNum(self.input[i])) : (i += 1) {}
+          res = self.tokenOfLen(i, .Label);
         },
 
         else => {
@@ -271,7 +275,7 @@ test "lexer" {
     .Symbol, .Assign, .IntLit, .Add, .IntLit, .Mul, .IntLit, .Semicolon,
     .Let, .Symbol, .Colon, .Opt, .Symbol, .Assign, .IntLit, .Semicolon,
     .Var, .Symbol, .Colon, .Symbol, .Assign, .IntLit, .Semicolon,
-    .While, .Symbol, .Colon, .Pipe, .Symbol, .Comma, .Symbol, .Pipe, .LBrace,
+    .While, .Symbol, .Colon, .BitOr, .Symbol, .Comma, .Symbol, .BitOr, .LBrace,
       .Symbol, .LParen, .StringLit, .Symbol, .RParen, .Semicolon,
       .Symbol, .SubAssign, .IntLit, .Semicolon,
       .If, .Symbol, .Equal, .IntLit, .LBrace,
@@ -285,7 +289,7 @@ test "lexer" {
 
   var prevLine = lexer.line;
   for (tags) |tag| {
-    var cur = lexer.scan().?;
+    var cur = lexer.scan();
     if (lexer.line != prevLine) {
       //   std.debug.warn("\n");
       prevLine = lexer.line;
