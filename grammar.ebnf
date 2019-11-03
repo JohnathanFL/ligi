@@ -1,27 +1,26 @@
 (: So the following are both perfectly valid:
+	(: This is a singleline comment
+	let x = (: This is an inline comment :) 1;
+	(: This is in the comment
+	this is invalid. No multiline comments :)
+(: On an unrelated note, don't you think zag comments are the happiest around? :)
+comment = "(:" ... ( ":)" | \n )
 
-	(= This is a singleline comment
-	(: This
-	is
-	a multiline comment :)
-(= On an unrelated note, don't you think zag comments are the happiest around? =)
-comment = "(:" ... ":)" | "(=" ... \n
 
-
-(=A single underscore shall be known as the sink variable.
-(=Any writes to it are discarded, and it's used as a "don't care"
+(:A single underscore shall be known as the sink variable.
+(:Any writes to it are discarded, and it's used as a "don't care"
 symbol = ("a".."z"|"A".."Z"), {"a".."z" | "A".."Z" | "0".."9" | "_"} | "_"
 tuple = "(", [expr, {",", expr}], ")"
-(=Same as a tuple, but may only have symbols in it
+(:Same as a tuple, but may only have symbols in it
 symbolTuple = "(", symbol, {",", symbol}, ")"
 
-(= Anything bultin shall be prefixed with an @
+(: Anything bultin shall be prefixed with an @
 builtin = "@" symbol
 
-(= Instead of interfaces and such, we have concepts.
+(: Instead of interfaces and such, we have concepts.
 keyword = fn | purefn | if | for | while | let | var | break | match | struct | enum | union | concept | pub
 
-(= These may be used as variable names, but are also intrinsic to variables as fields 
+(: These may be used as variable names, but are also intrinsic to variables as fields 
 reservedFields = addr | deref
 
 
@@ -85,15 +84,15 @@ anyBlock = namedBlock | block
 
 stmt = bindStmt | ifStmt | forStmt | whileStmt | (expr ";") | block
 
-(= The bindStmt after the typeTuple is how I'll do result locations.
-(= The user will choose a new binding for the result, then write to it.
-(= In this way, there will be no `return x` statement, only the break keyword,
-(= with its optional scope specifier, which can be the name of the function 
+(: The bindStmt after the typeTuple is how I'll do result locations.
+(: The user will choose a new binding for the result, then write to it.
+(: In this way, there will be no `return x` statement, only the break keyword,
+(: with its optional scope specifier, which can be the name of the function 
 type = {"?" | "!" | "[]" | "[" expr "]"} ( ("fn" | "purefn") typeTuple bindStmt | symbol)
 
 bindStmt = ("let"|"var") symbol [":" type] ["=" expr] ";"
 
-(= Allows capturing an optional, as in `if optVal : |val| {...}` 
+(: Allows capturing an optional, as in `if optVal : |val| {...}` 
 ifCapture = "|" symbol "|"
 
 
@@ -112,51 +111,51 @@ it shall be an error.
 
 loopCapture = "|" symbol ["," symbol] "|"
 
-(= First expr is evaluated before each loop. Loop only continues if it's true 
-(= Second expr is evaluated after each loop and the value discarded 
-(= Finally blocks only execute if the entire loop finished. 
-(= (i.e we're "finally" getting to it) 
+(: First expr is evaluated before each loop. Loop only continues if it's true 
+(: Second expr is evaluated after each loop and the value discarded 
+(: Finally blocks only execute if the entire loop finished. 
+(: (i.e we're "finally" getting to it) 
 whileStmt = "while" expr [":" loopCapture] [":" expr] anyblock ["finally" block]
 
-(= First expr is only evaluated once, and is then looped over. 
-(= We'll be following zig's new iterate() fn idea. 
+(: First expr is only evaluated once, and is then looped over. 
+(: We'll be following zig's new iterate() fn idea. 
 forStmt = "for" expr [":" loopCapture] anyblock ["finally" block]
 
-(= Used like an extended C++ ternary. You're picking which case is true 
-(= Evaluated like an if (i.e only the first case that's true gets evaluated/returned) 
+(: Used like an extended C++ ternary. You're picking which case is true 
+(: Evaluated like an if (i.e only the first case that's true gets evaluated/returned) 
 (: Example:
 
 	let b = 15;
 	let bIsTeen = case { b < 12 => false, else => true };
 :)
-(= Read it like "bIsTeen is, in the case of b < 12, false. Otherwise, it is true."
+(: Read it like "bIsTeen is, in the case of b < 12, false. Otherwise, it is true."
 caseExpr = "case" "{" expr "=>" expr {"," expr "=>" expr} "," "else" "=>" expr "}"
 
 
 
-(= A ternary or a field access (with func call or indexing) or literal or a tuple of values
-(= Note: You may note there's no explicit (expr) ability here. This is because a single item
-(= tuple will be implicitly convertible to .n0's type. In fact, I plan on doing this in parser.
+(: A ternary or a field access (with func call or indexing) or literal or a tuple of values
+(: Note: You may note there's no explicit (expr) ability here. This is because a single item
+(: tuple will be implicitly convertible to .n0's type. In fact, I plan on doing this in parser.
 val = caseExpr | accessExpr
 
 baseVal = (symbol | literal | tuple)
-(= a  value with an optional series of fields, function calls, or indexes
+(: a  value with an optional series of fields, function calls, or indexes
 accessExpr = (symbol | literal | tuple) { "." symbol | tuple | "[" expr "]" } 
 
 
 expr = assignExpr
 
-(= All that follows here is expression stuff.
-(= Slog through it if you like, but be warned it's dull.
+(: All that follows here is expression stuff.
+(: Slog through it if you like, but be warned it's dull.
 
-(= All assignOps return the end result.
+(: All assignOps return the end result.
 assignOp = "=" | "+=" | "-=" | "*=" | "/=" | "<<=" | ">>=" | "|=" | "&="
 assignExpr = orExpr {assignOp (orExpr | namedBlock)}
 
 orExpr = andExpr {"or" andExpr}
 andExpr = relExpr {"and" relExpr}
 
-(= Note the === operator is special, in that it returns nothing. It acts like an assert statement.
+(: Note the === operator is special, in that it returns nothing. It acts like an assert statement.
 relOp = "==" | "!=" | "<" | ">" | "<=" | ">=" | "==="
 relExpr = bitOrExp {relOp bitOrExp}
 
@@ -165,8 +164,8 @@ bitXorExpr = bitAndExpr {"^" bitAndExpr}
 bitAndExpr = shiftExpr {"&" shiftExpr}
 
 shiftOp = "<<" | ">>" | ">>>"
-(= The [] instead of {} here is no typo. Only 1 shift expr allowed at a time.
-(= More than 1 will just get crazy.
+(: The [] instead of {} here is no typo. Only 1 shift expr allowed at a time.
+(: More than 1 will just get crazy.
 shiftExpr = arithExpr [shiftOp arithExpr]
 
 arithOp = "+" | "-"
@@ -175,9 +174,9 @@ arithExpr = prodExpr {arithOp prodExpr}
 prodOp = "*" | "/" | "%"
 prodExpr = unaryExpr {prodOp unaryExpr}
 
-(= Note that the unary op applies to whatever's there AFTER evaluating dot operators and such
-(= Note that we have [] instead of {}. Only one unary op may be used at a time.
-(= Multiple unary ops must be applied with parenthesis
+(: Note that the unary op applies to whatever's there AFTER evaluating dot operators and such
+(: Note that we have [] instead of {}. Only one unary op may be used at a time.
+(: Multiple unary ops must be applied with parenthesis
 unaryOp = "-" | "!" | "~" | "++" | "--" | "+++" | "---"
 unaryExpr = [unaryExpr] val
 
