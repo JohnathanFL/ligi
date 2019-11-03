@@ -16,8 +16,8 @@ pub const Tag = Tokens.Tag;
 
 pub const Lexer = struct {
   input: []const u8,
-  line: usize,
-  fileID: usize, // Could be the hash, index, etc
+  line: usize, col: usize = 0, // TODO
+  file_id: usize, // Could be the hash, index, etc
 
   const WordPair = struct {word: []const u8, tag: Tag};
   const word_map = [_]WordPair {
@@ -38,11 +38,12 @@ pub const Lexer = struct {
   };
 
   inline fn curChar(self: Lexer) u8 {
+    if(self.input.len == 0) return 0;
     return self.input[0];
   }
 
   inline fn advance(self: *Lexer) u8 {
-    if(self.input.len == 1) {
+    if(self.input.len == 0) {
       return 0;
     }
     var cur = self.curChar();
@@ -50,6 +51,7 @@ pub const Lexer = struct {
     return cur;
   }
   inline fn advanceBy(self: *Lexer, n: usize) []const u8 {
+    if (self.input.len < n) return "No way Hose";
     var res = self.input[0..n];
     self.input = self.input[n..];
     return res;
@@ -60,7 +62,7 @@ pub const Lexer = struct {
       .tag = tag,
       .lexeme = self.advanceBy(n),
       .val = .DoesntMatter,
-      .file = self.fileID,
+      .file = self.file_id,
       .line = self.line,
     };
   }
@@ -267,7 +269,7 @@ test "lexer" {
   var lexer = Lexer{
     .input = input,
     .line = 0,
-    .fileID = 0,
+    .file_id = 0,
   };
 
   var tags = [_]Tag{
@@ -276,24 +278,25 @@ test "lexer" {
     .Let, .Symbol, .Colon, .Opt, .Symbol, .Assign, .IntLit, .Semicolon,
     .Var, .Symbol, .Colon, .Symbol, .Assign, .IntLit, .Semicolon,
     .While, .Symbol, .Colon, .BitOr, .Symbol, .Comma, .Symbol, .BitOr, .LBrace,
-      .Symbol, .LParen, .StringLit, .Symbol, .RParen, .Semicolon,
+      .Symbol, .LParen, .StringLit, .Comma, .Symbol, .RParen, .Semicolon,
       .Symbol, .SubAssign, .IntLit, .Semicolon,
       .If, .Symbol, .Equal, .IntLit, .LBrace,
-        .Symbol, .Equal, .Null, .Semicolon,
-      .LBrace,
-    .LBrace,
-    .Symbol, .LParen, .StringLit, .Symbol, .RParen, .Semicolon
+        .Symbol, .Assign, .Null, .Semicolon,
+      .RBrace,
+    .RBrace,
+    .Symbol, .LParen, .StringLit,.Comma, .Symbol, .RParen, .Semicolon
   };
 
-  //   std.debug.warn("\n");
+  //std.debug.warn("\n");
 
   var prevLine = lexer.line;
   for (tags) |tag| {
     var cur = lexer.scan();
     if (lexer.line != prevLine) {
-      //   std.debug.warn("\n");
+      //std.debug.warn("\n");
       prevLine = lexer.line;
     }
-    // std.debug.warn("{} ", cur.tag);
+    //std.debug.warn("{} ", cur.tag);
+    expect(tag == cur.tag);
   }
 }

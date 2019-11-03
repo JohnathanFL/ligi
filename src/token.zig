@@ -1,4 +1,6 @@
 pub const Tag = enum(u8) {
+    Void,
+    Concept, 
     Label, // `xxxx
     Case,
     Implies, // => 
@@ -94,8 +96,8 @@ pub const Tag = enum(u8) {
         .LessEq, .GreaterEq, .Assert => 3,
 
         .BitOr => 4,
-        .BitXor => 5,
-        .bitAnd => 6,
+        .Xor => 5,
+        .BitAnd => 6,
         .Shl, .Shr, .AShr => 7,
         .Add, .Sub => 8,
         .Mul, .Div, .Mod => 9,
@@ -141,17 +143,17 @@ pub const Tag = enum(u8) {
 };
 
 pub const LexVal = union(enum) {
-    pub IntLit: i128,
-    pub CharLit: u8,
-    pub BoolLit: bool,
-    pub DoesntMatter: void, // StringLit: just use the lexeme ya dolt
+    IntLit: i128,
+    CharLit: u8,
+    BoolLit: bool,
+    DoesntMatter: void, // StringLit: just use the lexeme ya dolt
     // NullLit: whadd'ya think?
 };
 
 pub const Token = struct {
-    pub lexeme: []const u8,
-    pub val: LexVal = .DoesntMatter,
-    pub tag: Tag,
-    pub file: usize,
-    pub line: usize,
+    lexeme: []const u8,
+    val: LexVal = .DoesntMatter,
+    tag: Tag,
+    file: usize,
+    line: usize,
 };
