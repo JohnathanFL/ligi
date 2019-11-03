@@ -85,7 +85,11 @@ anyBlock = namedBlock | block
 
 stmt = bindStmt | ifStmt | forStmt | whileStmt | (expr ";") | block
 
-type = {"?" | "!" | "[]" | "[" expr "]"} ( ("fn" | "purefn") typeTuple type | symbol)
+(= The bindStmt after the typeTuple is how I'll do result locations.
+(= The user will choose a new binding for the result, then write to it.
+(= In this way, there will be no `return x` statement, only the break keyword,
+(= with its optional scope specifier, which can be the name of the function 
+type = {"?" | "!" | "[]" | "[" expr "]"} ( ("fn" | "purefn") typeTuple bindStmt | symbol)
 
 bindStmt = ("let"|"var") symbol [":" type] ["=" expr] ";"
 
