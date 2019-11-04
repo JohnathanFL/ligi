@@ -94,12 +94,11 @@ pub const Lexer = struct {
        if (self.curChar() == '\n') self.line += 1;
       }
       
-      if (self.nextEql("(*")) {
-        done_skipping = false; // Here's a use for a finally block
-        while(!self.nextEql("*)")) _ = self.advance();
-      } else if (self.nextEql("(:")) {
+      if (self.nextEql("(:")) {
+        _ = self.advanceBy(2);
         done_skipping = false;
-        while(self.curChar() != '\n') _ = self.advance();
+        while(!self.nextEql(":)") and !self.nextEql("\n")) : (_ = self.advance()) {}
+        if(self.nextEql(":)")) _ = self.advanceBy(2);
       }
     }
     
@@ -252,8 +251,9 @@ pub const Lexer = struct {
 
 test "lexer" {
   var input =
+    \\ (: This is a comment that shouldn't be seen
     \\ let i: u32 = 0;
-    \\ i = 1 + 4 * 5;
+    \\ i = 1 + 4 * (: mul by 5 to test inline comments :) 5;
     \\ let a: ?i32 = 10;
     \\ var count: usize = 0;
     \\ while a : |count, val| {

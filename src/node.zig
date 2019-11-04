@@ -152,7 +152,7 @@ pub const Expr = union(enum) {
   Symbol: Token,
   Case: Case,
   Tuple: ArrayList(*Expr),
-  pub fn newLiteral(tok: Token, alloc: *Allocator) *Expr {
+  pub fn fromLiteral(tok: Token, alloc: *Allocator) *Expr {
     var res = alloc.create(Expr) catch unreachable;
     res.* = Expr {
       .Literal = tok,
@@ -160,7 +160,7 @@ pub const Expr = union(enum) {
     return res;
   }
 
-  pub fn newSymbol(tok: Token, alloc: *Allocator) *Expr {
+  pub fn fromSymbol(tok: Token, alloc: *Allocator) *Expr {
 
     var res = alloc.create(Expr) catch unreachable;
     res.* = Expr {
@@ -179,11 +179,18 @@ pub const Expr = union(enum) {
   }
 };
 
+// All operators are implemented as calls.
+// Examples:
+//  a + b => Call('+', 'a', 'b')
+//  a.b => Call('.', 'a', 'b')
+//  a(b, c, d) => Call('()', 'a', 'b', 'c', 'd')
+//  a.b(c) => Call('()', Call('.', 'a', 'b'), 'c')
+// I somewhat hope this more lispy style will allow for easier macro systems.
 pub const Call = struct {
-  func: Token,
+  func: []const u8,
   args: ArrayList(*Expr),
   
-  pub fn new(func: Token, alloc: *Allocator) *Expr {
+  pub fn new(func: []const u8, alloc: *Allocator) *Expr {
     var res = alloc.create(Expr) catch unreachable;
     res.* = Expr {
       .Call = Call {
@@ -269,4 +276,58 @@ pub const StructDef = void; // TODO
 pub const UnionDef = void; // TODO
 pub const ConceptDef = void; // TODO
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// PrettyPrinter for the AST
+///////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+pub const PrettyPrinter = struct {
+  level: usize = 0,
+  print: fn([]const u8)void,  
+
+  fn indent(self: PrettyPrinter) void {
+    var i: usize = 0;
+    while (i < level) : (i += 1) { self.print("    "); }
+  }
+  
+  pub fn prettyPrint(block: *Block, print: fn([]const u8)void) void {
+    var printer = PrettyPrinter { .level = 0, .print = print };
+    printer.printBlock(block);
+  }
+
+  pub fn printBlock(self: *PrettyPrinter, block: *Block) void {
+    self.print("Block {\n");
+    self.level += 1;
+
+    for (block.stmts.toSlice()) |stmt| {
+      self.printStmt(stmt);
+    }
+
+    self.level -= 1;
+    self.indent();
+    self.print("}\n");
+  }
+
+  pub fn printStmt(self: *PrettyPrinter, stmt: *Stmt) void {
+    switch (stmt.*) {
+      .If => |s| {
+        self.indent();
+        self.print("if ( ");
+        self.printExpr(s.cond);
+        self.print(" ) ");
+      },
+      .Loop => |s| {
+
+      },
+      .Bind => |s| {
+
+      },
+      .Block => |s| {
+
+      },
+      .Expr => |s| {
+
+      },
+    }
+  }
+}

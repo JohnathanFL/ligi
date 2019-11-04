@@ -1,11 +1,15 @@
-(: So the following are both perfectly valid:
+(: Comments:
 	(: This is a singleline comment
 	let x = (: This is an inline comment :) 1;
 	(: This is in the comment
-	this is invalid. No multiline comments :)
+	this is outside and invalid invalid. No multiline comments :)
 (: On an unrelated note, don't you think zag comments are the happiest around? :)
 comment = "(:" ... ( ":)" | \n )
 
+(: Doc comment style. Normal comments are a note ( '(' ) delimited from the compiler ( ':' )
+(: Doc comments are a note ( '(' ) assigned a function by the compiler ( '=' )
+(: Note: doc comments currently don't support inlining. This is to disambiguate what they refer to.
+doc_comment = "(="...\n
 
 (:A single underscore shall be known as the sink variable.
 (:Any writes to it are discarded, and it's used as a "don't care"

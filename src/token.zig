@@ -75,6 +75,9 @@ pub const Tag = enum(u8) {
     StringLit,
     NullLit, // null
 
+    pub const access_ops = [_]Tag {
+      .Dot, .LBracket, .LParen
+    };
 
     pub const unary_ops = [_]Tag {
       .Not, .BitNot, .Sub, .Inc, .Dec, .IncNow, .DecNow

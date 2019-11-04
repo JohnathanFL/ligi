@@ -119,6 +119,119 @@ pub const Parser = struct {
   }
 
   fn expr(self: *Parser) ParseError!*Expr {
+    return self.binExprLevel(0);
+  }
+
+  fn binExprLevel(self: *Parser, level: usize) ParseError!*Expr {
+    if (level == Tag.binary_ops.len) return try self.unaryExpr();
+
+    var res = try self.binExprLevel(level + 1);
+    if(self.optOne(Tag.binary_ops[level])) {
+      const lhs = res;
+      res = Call.new(self.cur.lexeme, self.alloc);
+      res.Call.pushArg(lhs);
+
+      var prev_op = self.cur.tag;
+      while(self.tryMatchOne(Tag.binary_ops[level])) |op| {
+        const rhs = try self.binExprLevel(level + 1);
+
+        if (op.tag != prev_op) {
+          // Need to rotate the tree to preserve left->right
+          // For example:
+          // a/b*c should be (lisp style) (* (/ a b) c), but a direct left->right translation will give
+          // (/ a (* b c)). To rectify this, when we change between ops of the same precedence, we make the
+          // old tree become the new leftmost part of the new tree with the new op
+          var newRes = Call.new(op.lexeme, self.alloc);
+          newRes.Call.pushArg(res);
+          newRes.Call.pushArg(rhs);
+        } else {
+          res.Call.pushArg(rhs);
+        }
+        prev_op = op.tag;
+      }
+    }
+    return res;
+  }
+
+  // We don't allow a unary expression before a case expression
+  // It would just look ugly:
+  // let x = -case{true => 1, else => 0};
+  fn val(self: *Parser) ParseError!*Expr {
+    return switch(self.cur.tag) {
+      .Case => return try self.caseExpr(),
+      else => return try self.unaryExpr(),
+    };
+  }
+
+  fn caseExpr(self: *Parser) ParseError!*Expr {
+    return error.NotImplemented;
+  }
+
+  fn unaryExpr(self: *Parser) ParseError!*Expr {
+    var res: *Expr = undefined;
+    if (self.tryMatchOne(Tag.unary_ops)) |op| {
+      res = Call.new(op.lexeme, self.alloc);
+      res.Call.pushArg(try self.accessExpr());
+    } else {
+      res = try self.accessExpr();
+    }
+
+    return res;
+  }
+
+  fn accessExpr(self: *Parser) ParseError!*Expr {
+    // Note: This implies that even a literal like 1 can have field access:
+    // let x = 1.foobar;
+    // or even function calls:
+    // let x = 1(true);
+    // This does, however, make parsing struct literals a little nicer
+    var res = try self.baseVal();
+
+    if (self.optOne(Tag.access_ops)) {
+      while(self.tryMatchOne(Tag.access_ops)) |op| {
+        const old_res = res;
+        switch (op.tag) {
+          .Dot => {
+            res = Call.new(op.lexeme, self.alloc);
+            res.Call.pushArg(old_res);
+            res.Call.pushArg(try self.baseVal());
+          },
+          .LParen, .LBracket => {
+            // Note: this implies that you can do things like array[0, 1]            
+            // It also technically implies you could do array[]
+            // I'm thinking that should be handled as a typechecker-level error (bad code style)
+            const closer = if(op.tag == .LParen) Tag.RParen else Tag.RBracket;
+
+            // TODO: Should we rename the () function as `call` instead?
+            res = Call.new(if (op.tag == .LParen) "()" else "[]", self.alloc);
+            res.Call.pushArg(old_res);
+            while(!self.opt(closer)) {
+              res.Call.pushArg(try self.expr());
+              if(!self.opt(closer)) try self.match(.Comma);
+            }
+            try self.match(closer);
+          },
+          else => unreachable,
+        }
+      }
+    }
+
+    return res;
+  }
+
+  fn baseVal(self: *Parser) ParseError!*Expr {
+    return switch (self.cur.tag) {
+      .Symbol => Expr.fromSymbol(self.matchGet(.Symbol) catch unreachable, self.alloc),
+
+      .IntLit, .BoolLit, 
+      .FloatLit, .StringLit, 
+      .CharLit  => Expr.fromLiteral(self.tryMatchOne([_]Tag{.IntLit, .BoolLit, .FloatLit, .StringLit, .CharLit}).?, self.alloc),
+      .LParen => try self.tupleExpr(),
+      else => return error.UnexpectedToken,
+    };
+  }
+
+  fn tupleExpr(self: *Parser) ParseError!*Expr {
     return error.NotImplemented;
   }
 
@@ -217,9 +330,16 @@ pub const Parser = struct {
   }
 };
 
+fn adapter(msg: []const u8) void {
+  std.debug.warn("{}", msg);
+}
+
 test "parser" {
   var input =
     \\ let i;
+    \\ var j;
+    \\ let x = 1;
+    \\ let y = x.foo(b);
   ;
 
   var lexer = Lexer{
@@ -231,5 +351,5 @@ test "parser" {
   var arena = std.heap.ArenaAllocator.init(std.heap.direct_allocator);
  
   var body = try Parser.parse(lexer, &arena.allocator);
-  std.debug.warn("\n\n{}\n\n", body.stmts.toSlice()[0]); 
+  PrettyPrinter.prettyPrint(body);
 }
