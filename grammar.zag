@@ -1,0 +1,405 @@
+(= Purpose: A simple tutorial for the zag language, as well as a playground for testing ideas for zag
+(= ColumnLimit: hard 120
+(= Indent: 2
+(= Names: camelCase
+(= Functions: snake_case
+(= Types: PascalCase
+
+(: Welcome to Zag: The readable language (hopefully)
+(: Zag places an emphasis on sigils over operators where possible
+
+
+(: The above doc comment ( '(=' ) is required to be in the root compilation unit of every project
+(: It defines the project's purpose/indentation width/naming conventions.
+(: I hope to eventually allow for interop between projects with different naming conventions
+(: by having the compiler convert at compile time, but for now it's just nice for people reading your code
+
+(: All comments are single line
+(: Comments can, however, be terminated before the newline :)
+
+(: Constants are declared with let
+(: General form: let <varname>[: <type>] = <init_expr>;
+(: init_expr is not optional.
+let x: usize = 0;
+(: The type can also be omitted
+let x = 0;
+(: Obviously, these can't be reassigned
+x = 1; (: ERROR
+(: This may change in the future if all assignments are designated as being at compile time
+
+
+(: Variables are declared with var
+var y = 0;
+(: initialization can be deferred with undef
+var y = undef; (: Attempting to read this is an error until it's reassigned
+(: Variables can be reassigned
+y = 1;
+
+(: Types consist of 0+ modifiers followed by a base type and are read left->right
+(: The below is an optional pointer to a slice of arrays of 5 booleans
+(: Slices are defined with []T. They have:
+  (: A layout of {ptr: *T, len: usize} (Guaranteed, so you _could_ cast something to a slice)
+  (: Built in .len: usize field
+  (: Built in .ptr: *T field. This points to the first member of the slice and is useful for passing slices to C code
+  (: A built in iterate[_mut] method
+(: Optionals are defined with ?T. They have:
+  (: A layout of {has: u8, val: T}
+  (: The null literal.
+  (: Built in .has:u8 field.
+  (: Built in .val:T field.
+  (: Note that accesses to .val are guarded with checks to has in all modes but ReleaseFast
+(: Arrays are defined with [N]T, where N may be _. They have:
+  (: A layout of {T1, T2, ..., T[N-1]}
+    (: Because the layout is just the values directly, you can safely pass a ptr to an array to C code
+  (: A built in static variable len: usize. This is not included in the data is it can easily be inferred.
+  (: A built in iterate[_mut] method
+(: You may note that the above sections make it sound like slices are basically glorified structs.
+(: That's because they _are_ glorified structs, with a little syntactic sugar on top.
+(: Also, although you _can_ use the pseudo-reserved field names for your own purposes, it's mildly discouraged.
+(: If you do choose to use them, at least make sure they follow the same purpose, eh?
+var x: ?*[][5]bool = undefined;
+
+(: Optionals may be either the type to the right of the ? or null
+var x: ?*void = null;
+x = y.addr;
+(: Optionals may be "dereferenced" with .val
+var z: *void = x.val;
+(: And you may check if they're present with .has
+var truthy = x.has;
+
+(: Zag doesn't use & and * for pointers. Instead, we use addr and deref:
+(: This pattern of built-in fields in variables will continue later.
+var addrOfY = y.addr;
+(: === is the built-in assertion operator. If it's not true at runtime (or can be disproven at compile-time)
+(: then it emits a panic (or a compile error) with the values of both sides.
+y === addrOfY.deref;
+
+(: Zag supports all your typical arithmetic ops
+y = 1 * 2 + 3 - 4 / 5 % 6
+(: And bit-ops
+var z = ~0b00100 | 0b00010 & 0b00000;
+(: And relational ops
+var truthy = z == 0;
+truthy = z != 0;
+truthy = z > 0;
+...
+(: And logical ops
+(: xor is true only if one of them is true.
+(: ! is the only logical op that isn't a sigil because I think it visually binds to its value better
+  (: This may change eventually
+truthy = truthy or truthy and truthy xor truthy; 
+
+(: Conditional assignments are supported through case
+var oneOfThem = case { truthy => 1, (: Else is required :) else => 42 };
+
+(: Blocks can be labeled and broken from with a value
+(: Only valid with this sort of block. (no breaking from a loop with a value)
+let x = `block {
+  break `block 1;
+};
+(: I'm also considering a way of replacing break <label> <val> with a binding at the beginning of the statement.
+(: Maybe something like this:
+let x = `blockRes:usize {
+  (: blockRes could have a special 'breaking' type that breaks to the label of the same name
+  (: whenever it's assigned to. This seems a little unreadable though.
+  blockRes = 1;
+};
+
+
+
+
+(: Case doesn't work for all branches. For major branches, we have if/elif/else/finally
+(: elif/else/finally are all optional
+var x = undef;
+if 1 > 0 {
+  x = "Hey";
+} elif 1 < 0 { 
+  x = "This can't be right";
+} finally { (: A finally block is always executed if any of the branches was taken.
+      (: Obviously this is useless if you had an else, and that is an error.
+  printf("We set x to {}\n", x);
+}
+
+(: If statements also work with optionals
+var opty: ?usize = 42;
+if opty : |theAnswer| {
+    theAnswer === 42;
+} else {
+    (: What's wrong with the world?
+}
+(: Optionals may also be more directly dereferenced using .has/.val:
+if opty.has and opty.val == 42 {
+    printf("All is right\n");
+elif opty : |trueAnswer| {
+    printf("Something ain't right. The answer shouldn't be {}\n", trueAnswer);
+}
+
+
+(: Array literals use []
+var array = [1, 2, 3, 4, 5];
+
+(: Ain't no goto here
+(: If you wanna loop, use for/while/loop
+
+(: for loop: Read as "for each of array's indices and elements"
+(: array is the iterable to be iterated over
+(: i is the index of the current element, and is required, although a _ can be substituted if you don't need it.
+(: x is the current element at array[i], and is optional.
+  (: x could also be written *x, in which case it is a pointer to the original x
+(: Also: Labels.
+  (: Labels are written as `(\w|\d)+ and are used to mark the block they immediately precede
+  (: The remainder of a labeled block may be skipped by using break `<name>, otherwise break simply breaks
+  (: the closest block.
+for array : |i, x| `forArray {
+  break `forArray; 
+} finally { (: Executed if the loop wasn't broken out of
+}
+
+(: while loop: Read as "while truthy isn't null, capturing the loop count and x's unwrapped value, ...
+(: I'd reccomend not doing such long continuation expressions, but whatever.
+var x: ?usize = 10;
+while x : |i, x| : x = case { x - 1 == 0 => null, else => x - 1 } {
+  break; (: You don't need a label to break
+} finally { (: As usual, this is for if we weren't broken out of
+
+}
+
+(: loop loop: Loop the loop with the loop. Never exits on its own. Requires a label.
+loop `mainLoop {
+  break `mainLoop;
+}
+
+
+
+(: Functions are also defined with lets
+(: Zag is a return-elision first language. All return values have their own variable
+(: You can also return <val>, but that will just expand out to res = <val>; return;
+(= This is a doc-comment describing this function
+(= Doc-comments are designed to be readable by both humans and doc generators.
+(= The format is either '(= <long desc>' or '(= Key: <Describe key>'
+(= Arg a: This describes parameter a
+(= Arg b: this describes parameter b
+(= Arg c: this is a compilation error, as there is no argument or result named 'c'
+(= Pre: This tells what must be true before you run
+(= Post: This tells what *will* be true after you run.
+(= Author: This tells you who to burn at the stake.
+(= Date: This tells you how young and dumb they were when they wrote this.
+let add = fn(a: usize, b: usize) res: usize {
+  res = a + b;
+};
+
+(: Functions can also be 'pure', meaning that can never change outside state
+let add = purefn(a: usize, b: usize) res: usize {
+  res = a + b;
+  truthy = false; (: ERROR
+};
+(: In contrast to the lets, this would be a function pointer assigned to an anonymous function
+(: This example would use an adder for the first invocation, then a subtracter for the second, then add for all after
+(: This is only an example. I'd reccomend not doing this in real life.
+var foo = fn(a: usize, b: usize) res: usize {
+  res = a + b;
+  foo = fn(a: usize, b: usize) res: usize {
+    res = a - b;
+    foo = add;
+  }
+}
+
+(: Structs can be declared in kind
+let Point = struct {
+  (= This is a doc-comment describing x's function
+  (= This is a constant, static variable in Point's namespace
+  let bar = 1;
+  (= This is a static variable (read: global) in Point's namespace
+  var foo = 2;
+
+  (= The "field" keyword denotes something that's specific to each instance of Point
+  (= Note that everything in a struct def follows the same syntactic style as any other block.
+  (= I even may make field valid in functions, which would define a variable accessible at
+  (= func_name.fieldName.
+  (= Initialization is optional, but if it ain't initialized here it must be when Point is made
+  field x: usize;
+  (= Field types are never optional
+  field y: usize = 1;
+
+  (= Add two points together.
+  (= This can be called as a.add(b) or Point.add(a, b)
+  (= Additionally, because this is a purefn, it's eligible to be an overload
+  (= for an arithmetic operator (more on that later)
+  let add = purefn(lhs: Point, rhs: Point) res: Point {
+    (: By default, all of res's fields are undefined.
+    (: Thus, not assigning to one of them is a compile error on return
+    res.x = lhs.x + rhs.x;
+    res.y = lhs.y + rhs.y;
+  };
+
+  (= Discussed below
+  let addEq = fn(lhs: *Point, rhs: Point) void {
+    lhs.x += rhs.x;
+    lhs.y += rhs.y;
+  };
+};
+(: Note that this entire file is, in fact, another struct.
+(: Instantiating a file-level struct (as well as field-level fields), however, is planned to be an error.
+
+(: Struct literals use {}
+(: You can't specify the type on the right side, in order to keep the parser a bit simpler
+  (: (i.e the parser doesn't need to choose between '= symbol' and '= typename {...'
+var p: Point = {.x = 0, .y = 1};
+
+(: This specifies that for this scope, 'Point.add' shall be considered when attempting to resolve
+(: '+'s overloads. Note that .overload is a built-in method of all functions.
+(: Attempting to overload an arithmetic operator with a non-purefn is a compile error.
+Point.add.overload('+');
+
+(: This specifies an overload in this scope for += on Point
+(: Note that addEq isn't a purefn. Operators which logically have to change state (like +=, -=, etc)
+(: are allowed to be non-pure
+Point.addEq.overload('+=');
+
+
+(: Enums are declared similarly to structs
+(: Enum syntax is still under heavy construction, but I'm planning on making them like rust's enums
+(: The current syntax here means Options is an enum whose tag fits in 1 byte (u8) with those 4 possible values.
+(: Additionally, if the tag is MSAA or NumMods, the structure also contains a usize, so the total size of the structure
+(: (no matter what) is always 9 bytes on 64-bit machines (1 for tag + 8 for max of all possible values)
+(: Enums have:
+  (: A built in field tag: <tag_type> that allows direct access to the tag
+  (: A built in field ptr: [N]u8 that points to the beginning of the data, where N is the max size of all possible vals
+let Options = enum: u8 {
+  (: rather than the typical Symbol, Symbol, Symbol syntax, Zag uses "enum Symbol [contained type] [ = tag val];"
+  (: If there are no contained values, then the enum is guaranteed to be the same size as its tag type
+  (: If there's no tag val assigned, the enums start at 0 and increment from there.
+  (: When a tag val is assigned, all future tag vals increment from that.
+  enum Fullscreen;
+  enum Borderless;
+  enum MSAA: usize;
+  enum NumMods: usize;
+
+  (: Enums can also have functions/static vars/etc
+  (: This is called like any other method
+  let need_big_size = purefn(self: Options) res: bool {
+    switch self { .Fullscreen => return true, .Borderless => return true, else => return false};
+  };
+};
+
+(: Since enums will be like rust's enums (unions), there's no need for tagged unions
+
+
+(: Generics are done like in Zig: Through functions
+(: Note, however, that the comptime needs to be type-side
+(: Note that I declare this as a purefn. You *could* do this as a normal fn, but purefn is always preferred where possible
+(: just in case the compiler could benefit from knowing all context
+(: TODO: Replace this with an example of a multi-dimensional data structure to showcase a[n,m,o] syntax
+let ArrayList = purefn(T: comptime type) res: type {
+  res = struct {
+    field data: []T;
+    (: Note that although len is a builtin field of slices, we can use it here.
+    (: If you try to override a builtin field, it will be an error, but only if that type should have it.
+    (: Note: Although this is a rather sensitive variable from a "mess-with-it-and-crash" standpoint, Zag will still
+    (: have no variable level pub specifier
+    field len: usize = 0;
+
+    (: Introducing: @This
+    (: @This is a builtin variable available at any scope. The @ is used for any builtin variable/function that can't
+    (: otherwise be differentiated from other variables (since .addr/etc are easily resolved from their scope)
+    let init = purefn(initSize: usize) self: @This {
+      self.data = malloc(initSize, T);
+      self.len = initSize;
+    };
+
+    let at = purefn(self: @This, i: usize) res: T {
+      res = self.data[i];
+    };
+
+    (: Overloading indexing for this new type
+    @This.at.overload('[]');
+  };
+};
+
+
+
+(: CONCEPTS
+(: Concepts are zag's answer to generic arguments. (And are very WIP)
+(: Each time an argument of a new type is passed to a function that takes that argument
+(: as a concept, Zag creates a new overloaded function for that type after it makes sure that
+(: that type fits the concept.
+(: Comparison is done on the types of all fields in the concept, and it is a compile error
+(: for anything in the concept to have a default value.
+let StackOfUSize = concept {
+  field len: usize;
+
+  let push: fn(*Stack, usize)void;
+  let pop: fn(*Stack)usize;
+
+
+  (: The compiler will look for a function named
+  (: "concept" and attempt to run it at compile time to see if it works.
+  (: If it panics, then the concept doesn't fit.
+  let concept = fn(s: StackOfUSize) void {
+    (: Make sure the given type supports stack semantics
+    s.push(0);
+    s.push(1);
+    s.push(2);
+    s.pop() === 2;
+    s.pop() === 1;
+    s.pop() === 0;
+  };
+
+  (: You can't specify overloads in concepts.
+  (: When someone uses a concept-ed object, they'll have to
+  (: manually declare the overloads when they need them.
+};
+
+let manip_stack = fn(s: StackOfUSize)void {
+  s.push()
+};
+
+(: Concepts can also be generalized with comptime arguments:
+let GenericStack = fn(T: comptime type) res: type {
+  res = concept {
+    field len: usize;
+
+    let push: fn(*@This, T) void;
+    let pop: fn(*Stack) usize;
+  };
+};
+
+
+(: Advanced iteration
+
+(: for iteration on custom types is done under the hood by calling the iterate and iterate_mut methods from a type:
+
+(: All for iteration for something like |i, x| checks the following concept:
+let Iterable = purefn(T: comptime type) res: type {
+  res = concept {
+    let iterate: fn(*@This, fn(T)void)void;
+  };
+};
+(: The actual function call gets optimized out
+
+
+(: All for iteration for something like |i, *x| checks the following concept:
+let MutIterable = purefn(T: comptime type) res: type {
+  res = concept {
+    let iterate_mut: fn(*@This, fn(*T)void)void;
+  };
+};
+
+(: As a side effect, this also you could just directly call foo.iterate(my_foreach_func) if you wanted to and
+(: skip for loops alltogether
+
+(: Advanced optionals (This is only a maybe at this point. It may be too permissive)
+(: Since optionals are basically a glorified struct {field has; field val}, you can do things like:
+let Foo = struct {
+  field has: bool;
+  field val: Bar;
+
+  (: ...
+  (: a bunch of assorted functions/other stuff you want Foo to have
+  (: ...
+};
+
+var f = .Foo{ .has = 1, .val = something };
+if f : |v| {
+  v === something;
+}
