@@ -1,5 +1,6 @@
 const std = @import("std");
 const ArrayList = std.ArrayList;
+const SegmentedList = std.SegmentedList;
 const Allocator = std.mem.Allocator;
 const StringHashMap = std.StringHashMap;
 
@@ -8,15 +9,18 @@ const Token = Tokens.Token;
 const Tag = Tokens.Tag;
 
 pub const Block = struct {
-    interpret: enum {  
-      Struct,
-      Enum,
-      /// Zag's answer to generic interfaces
-      Concept,
-      /// Don't interpret it at all
-      Stream,
-      /// Completely normal mode: Just run each statement inside at runtime.
-      Block
+    interpret: enum {
+        Struct,
+        Enum,
+
+        /// Zag's answer to generic interfaces
+        Concept,
+
+        /// Don't interpret it at all
+        Stream,
+
+        /// Completely normal mode: Just run each statement inside at runtime.
+        Block,
     },
     stmts: ArrayList(*Stmt),
     label: ?Token,
@@ -39,8 +43,8 @@ pub const Expr = union(enum) {
 
 pub const If = struct {
     arms: ArrayList(struct {
-      cond: *Expr,
-      then: *Block,
+        cond: *Expr,
+        then: *Block,
     }),
     default: ?*Block,
     finally: ?*Block,
@@ -50,7 +54,7 @@ pub const Loop = struct {
     interpret: enum {
         Infinite,
         For,
-        While
+        While,
     },
     capture: struct {
         index: ?Token,
@@ -72,11 +76,16 @@ pub const Bind = struct {
     },
     loc: Token,
     ty: ?*Type,
+
     /// If interpret === Let,Var, then default != null
     default: ?*Expr,
 };
 
+/// All operators are also compiled down to a call.
 pub const Call = struct {
+    /// Are we eligible for overloads?
+    operator: bool,
+    /// What are we calling?
     func: Token,
     /// Since the majority of these are likely to be binary/unary expressions or function calls with
     /// few args, prealloc 2 just in case.
