@@ -171,20 +171,21 @@ if 1 > 0 {
 (: If statements also work with optionals
 var opty: ?usize = 42;
 if opty : |theAnswer| {
-    theAnswer === 42;
+  theAnswer === 42;
 } else {
-    (: What's wrong with the world?
+  (: What's wrong with the world?
 }
 (: Optionals may also be more directly dereferenced using .has/.val:
 if opty.has and opty.val == 42 {
-    printf("All is right\n");
+  printf("All is right\n");
 elif opty : |trueAnswer| {
-    printf("Something ain't right. The answer shouldn't be {}\n", trueAnswer);
+  printf("Something ain't right. The answer shouldn't be {}\n", trueAnswer);
 }
 
 
 (: Array literals use []
-var array = [1, 2, 3, 4, 5];
+(: If you need to specify the type contained within, use :type: syntax at the beginning
+var array = [:u32: 1, 2, 3, 4, 5];
 
 (: Ain't no goto here
 (: If you wanna loop, use for/while/loop
@@ -204,8 +205,6 @@ for array : |_, x| `forArray {
 }
 
 
-
-
 (: while loop: Read as "while truthy isn't null, capturing the loop count and x's unwrapped value, ...
 (: I'd reccomend not doing such long continuation expressions, but whatever.
 var x: ?usize = 10;
@@ -216,7 +215,7 @@ while x : |i, x| : x = case { x - 1 == 0 => null, else => x - 1 } {
 }
 
 (: loop loop: Loop the loop with the loop. Never exits on its own. Requires a label.
-loop `mainLoop {
+loop : |i| `mainLoop {
   break `mainLoop;
 }
 
@@ -292,16 +291,26 @@ let Point = struct {
 (: Note that this entire file is, in fact, another struct.
 (: Instantiating a file-level struct (as well as field-level fields), however, is planned to be an error.
 
-(: Struct literals use [] too, but they have named fields inside
-(: You can't specify the type on the right side, in order to keep the parser a bit simpler
-  (: (i.e the parser doesn't need to choose between '= symbol' and '= typename {...'
-var p: Point = [.x = 0, .y = 1];
+(: You can also make a struct that has no padding whatsoever
+(: Note that in contrast to zig, we don't say "packed struct", we just say "packed"
+let Point = packed {
+  field x: usize;
+  field y: usize;
+};
 
+
+(: Struct literals use [] too, but they have named fields inside
+var p: Point = [.x = 0, .y = 1];
+(: If you want to specify the type on the right side (like when nesting in a giant list), you can use :Type: syntax again
+var p = [:Point: .x = 0, .y = 1];
+(: This syntax, by contrast, declares p to be of type struct:<line>:<col>. It has nothing to do with Point.
+(: Be careful of this. I plan to make this a warning.
+var p = [.x = 0, .y = 1];
 
 (: This specifies that for this scope, 'Point.add' shall be considered when attempting to resolve
 (: '+'s overloads. Note that .overload is a built-in method of all functions.
 (: Attempting to overload an arithmetic operator with a non-purefn is a compile error.
-Point.add.overload('+');
+@overloads['+'] += Point.add;
 
 (: This specifies an overload in this scope for += on Point
 (: Note that addEq isn't a purefn. Operators which logically have to change state (like +=, -=, etc)
@@ -336,6 +345,9 @@ let Options = enum: u8 {
 };
 
 (: Since enums will be like rust's enums (unions), there's no need for tagged unions
+(: You may have noticed that we can't exactly have an "extern enum" for direct C-compatability.
+(: This is because you would just do enum: c_int or something similar to guarentee size.
+(: Zag already follows C semantics for numbering (default start at 0, count up)
 
 
 (: Generics are done like in Zig: Through functions
@@ -388,15 +400,13 @@ let StackOfUSize = concept {
   (: The compiler will look for a function named
   (: "concept" and attempt to run it at compile time to see if it works.
   (: If it panics, then the concept doesn't fit.
-  let concept = fn(s: StackOfUSize) void {
     (: Make sure the given type supports stack semantics
-    s.push(0);
-    s.push(1);
-    s.push(2);
-    s.pop() === 2;
-    s.pop() === 1;
-    s.pop() === 0;
-  };
+  s.push(0);
+  s.push(1);
+  s.push(2);
+  s.pop() === 2;
+  s.pop() === 1;
+  s.pop() === 0;
 
   (: You can't specify overloads in concepts.
   (: When someone uses a concept-ed object, they'll have to
@@ -404,7 +414,7 @@ let StackOfUSize = concept {
 };
 
 let manip_stack = fn(s: StackOfUSize)void {
-  s.push()
+  s.push();
 };
 
 (: Concepts can also be generalized with comptime arguments:
@@ -523,6 +533,10 @@ let Point2 = struct {
 (: section of the new struct that holds the old struct.
 (: Note again: ZAG HAS NO VTABLES OR ANYTHING LIKE THAT. If you want those, you'll have to do it in userspace.
 let Point3 = Point2 + struct {
+  (: Memory layout before this point is _exactly_ the same as Point2
+  (: This also means that if you have a packed + a normal struct, the beginning portion is still packed.
+  (: This is one of those things were I choose to trust the programmer to not be stupid. I'll likely be a comp warn.
+
   field z: f32;
 
   (: Because declarations in blocks shadow each other, this new let binding of add overrides the old Point2 add
@@ -556,3 +570,22 @@ let CustomPoint3 = Point3 + struct {
 (: B = A ++ struct {...}, how do you know which foo gets called? Thus, I'm somewhat arbitrarily restricting this
 (: to prevent some future headaches.
 (: Note: The above may change in the future. A simple compiler warning may suffice to make sure the programmer knows
+
+
+
+(: Macros
+(: Since we've already seen that we can just treat blocks of code like data unto itself, why can't we pass blocks around directly?
+(: Answer: WE CAN
+
+let daBlock = block {
+  x += 1;
+  if x + 5 == y {
+    printf("Hey there\n");
+  }
+};
+(: This defines a block of code. Literally.
+(: It does _not_ get typechecked as is, and is merely parsed into an AST.
+
+(: Doing this will dump the block's contents directly into that position.
+
+@expand(daBlock);
