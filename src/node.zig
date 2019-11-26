@@ -90,6 +90,7 @@ pub const Call = struct {
     /// Since the majority of these are likely to be binary/unary expressions or function calls with
     /// few args, prealloc 2 just in case.
     args: SegmentedList(2, *Expr),
+
 };
 
 /// TODO: Case could really use a better name
@@ -99,4 +100,6 @@ pub const Case = struct {
         val: *Expr,
     }),
     default: *Expr,
+
+    pub const Default = Case {.arms = undefined, .default = undefined};
 };
