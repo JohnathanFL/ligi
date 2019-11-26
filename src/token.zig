@@ -1,9 +1,4 @@
 pub const Tag = enum(u8) {
-    Void,
-    Concept, 
-    Label, // `xxxx
-    Case,
-    Implies, // => 
     Add, // +
     AddAssign, // +=
     And,
@@ -15,9 +10,12 @@ pub const Tag = enum(u8) {
     BitNot, // ~
     BitOr, // |
     BitOrAssign, // |=
+    BitXor, // ^
+    Case,
     CaseOf, // caseof 
     Colon,
     Comma,
+    Concept, 
     Dec, // -- // Equivalent to i--
     DecNow, // --- // Equivalent to --i
     Div, // /
@@ -34,8 +32,10 @@ pub const Tag = enum(u8) {
     Greater, // >
     GreaterEq, // >=
     If,
+    Implies, // => 
     Inc, // ++ // Equivalent to i++
     IncNow, // +++ // Equivalent to ++i
+    Label, // `xxxx
     LBrace,
     LBracket,
     Less, // <
@@ -48,8 +48,9 @@ pub const Tag = enum(u8) {
     Not, // !
     NotEqual, // !=
     Null,
-    Opt, // ?
+    Optional, // ?
     Or,
+    Ptr, // *
     PureFn, // purefn
     RBrace,
     RBracket,
@@ -65,8 +66,14 @@ pub const Tag = enum(u8) {
     Symbol,
     Union,
     Var, // Mutable
+    Void,
     While,
-    Xor, // ^      
+    Xor, // xor
+    Block,
+    Concept,
+    Field,
+
+    
     // All lits have the highest bit set
     IntLit = 0b10000000,
     BoolLit,
@@ -145,18 +152,20 @@ pub const Tag = enum(u8) {
     }
 };
 
-pub const LexVal = union(enum) {
-    IntLit: i128,
-    CharLit: u8,
-    BoolLit: bool,
-    DoesntMatter: void, // StringLit: just use the lexeme ya dolt
-    // NullLit: whadd'ya think?
+/// These are the only 3 (currently) that could benefit from pre-parsing their values.
+/// chars/strs need escape characters interpreted, and bools only have 2 to begin with.
+pub const LexVal = union {
+    charVal: u8,
+    boolVal: bool,
+    strVal: []const u8,
 };
 
 pub const Token = struct {
     lexeme: []const u8,
-    val: LexVal = .DoesntMatter,
+    /// Only used if tag == CharLit, BoolLit, StringLit
+    val: LexVal = undefined,
     tag: Tag,
     file: usize,
     line: usize,
+    col: usize,
 };
