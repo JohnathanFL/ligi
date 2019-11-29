@@ -11,7 +11,6 @@ const expect = testing.expect;
 
 const Tokens = @import("token.zig");
 pub const Token = Tokens.Token;
-pub const LexVal = Tokens.LexVal;
 pub const Tag = Tokens.Tag;
 
 pub const Lexer = struct {
@@ -25,20 +24,34 @@ pub const Lexer = struct {
         tag: Tag,
     };
     const word_map = [_]WordPair{
-        WordPair{ .word = "if", .tag = .If },
-        WordPair{ .word = "for", .tag = .For },
-        WordPair{ .word = "while", .tag = .While },
-        WordPair{ .word = "let", .tag = .Let },
-        WordPair{ .word = "var", .tag = .Var },
-        WordPair{ .word = "elif", .tag = .ElIf },
-        WordPair{ .word = "fn", .tag = .Fn },
-        WordPair{ .word = "purefn", .tag = .PureFn },
-        WordPair{ .word = "finally", .tag = .Finally },
-        WordPair{ .word = "enum", .tag = .Enum },
-        WordPair{ .word = "struct", .tag = .Struct },
-        WordPair{ .word = "union", .tag = .Union },
-        WordPair{ .word = "null", .tag = .Null },
-        WordPair{ .word = "case", .tag = .Case },
+        .{ .word = "and", .tag = .And },
+        .{ .word = "block", .tag = .Block },
+        .{ .word = "break", .tag = .Break },
+        .{ .word = "caseof", .tag = .CaseOf },
+        .{ .word = "comptime", .tag = .Comptime },
+        .{ .word = "concept", .tag = .Concept },
+        .{ .word = "const", .tag = .Const },
+        .{ .word = "elif", .tag = .ElIf },
+        .{ .word = "else", .tag = .Else },
+        .{ .word = "enum", .tag = .Enum },
+        .{ .word = "field", .tag = .Field },
+        .{ .word = "field", .tag = .Field },
+        .{ .word = "finally", .tag = .Finally },
+        .{ .word = "fn", .tag = .Fn },
+        .{ .word = "for", .tag = .For },
+        .{ .word = "if", .tag = .If },
+        .{ .word = "let", .tag = .Let },
+        .{ .word = "loop", .tag = .Loop },
+        .{ .word = "null", .tag = .NullLit },
+        .{ .word = "or", .tag = .Or },
+        .{ .word = "purefn", .tag = .PureFn },
+        .{ .word = "return", .tag = .Return },
+        .{ .word = "struct", .tag = .Struct },
+        .{ .word = "undef", .tag = .Undef },
+        .{ .word = "var", .tag = .Var },
+        .{ .word = "while", .tag = .While },
+        .{ .word = "xor", .tag = .Xor },
+        .{ .word = "_", .tag = .NoLoc },
     };
 
     inline fn curChar(self: Lexer) u8 {
@@ -65,9 +78,9 @@ pub const Lexer = struct {
         return Token{
             .tag = tag,
             .lexeme = self.advanceBy(n),
-            .val = .DoesntMatter,
             .file = self.file_id,
             .line = self.line,
+            .col = 0, // TODO
         };
     }
 
@@ -103,6 +116,11 @@ pub const Lexer = struct {
                 done_skipping = false;
                 while (!self.nextEql(":)") and !self.nextEql("\n")) : (_ = self.advance()) {}
                 if (self.nextEql(":)")) _ = self.advanceBy(2);
+            } else if (self.nextEql("(=")) {
+                _ = self.advanceBy(2);
+                done_skipping = false;
+                // Note: Eventually we'll want to parse doc comments as tokens. This can wait for another day, however.(:
+                while (!self.nextEql("\n")) : (_ = self.advance()) {}
             }
         }
 
@@ -111,8 +129,10 @@ pub const Lexer = struct {
             return res;
         }
 
-        if (isAlpha(self.curChar())) {
-            var i: usize = 0;
+        // @ begins a compiler variable.
+        // underscores are perfectly usable by the user.
+        if (isAlpha(self.curChar()) or self.curChar() == '@' or self.curChar() == '_') {
+            var i: usize = 1;
             while (isAlNum(self.input[i]) or self.input[i] == '_') : (i += 1) {}
 
             res = self.tokenOfLen(i, .Symbol);
@@ -129,8 +149,6 @@ pub const Lexer = struct {
             while (isDigit(self.input[i])) : (i += 1) {}
 
             res = self.tokenOfLen(i, .IntLit);
-
-            res.val = LexVal{ .IntLit = atoi(res.lexeme) };
         } else { // true operators
             switch (self.curChar()) {
                 '+' => {
@@ -207,7 +225,7 @@ pub const Lexer = struct {
                         res = self.tokenOfLen(1, .Assign);
                     }
                 },
-                '?' => res = self.tokenOfLen(1, .Opt),
+                '?' => res = self.tokenOfLen(1, .Optional),
                 '.' => res = self.tokenOfLen(1, .Dot),
                 ',' => res = self.tokenOfLen(1, .Comma),
                 ':' => res = self.tokenOfLen(1, .Colon),
@@ -220,6 +238,9 @@ pub const Lexer = struct {
                 ']' => res = self.tokenOfLen(1, .RBracket),
                 '{' => res = self.tokenOfLen(1, .LBrace),
                 '}' => res = self.tokenOfLen(1, .RBrace),
+                '%' => res = self.tokenOfLen(1, .Mod),
+                '~' => res = self.tokenOfLen(1, .BitNot),
+                '&' => res = self.tokenOfLen(1, .BitAnd),
 
                 // TODO: Escape codes
                 '"' => {
@@ -279,13 +300,13 @@ test "lexer" {
     var tags = [_]Tag{
         .Let,       .Symbol,    .Colon,     .Symbol,    .Assign,    .IntLit,    .Semicolon,
         .Symbol,    .Assign,    .IntLit,    .Add,       .IntLit,    .Mul,       .IntLit,
-        .Semicolon, .Let,       .Symbol,    .Colon,     .Opt,       .Symbol,    .Assign,
+        .Semicolon, .Let,       .Symbol,    .Colon,     .Optional,  .Symbol,    .Assign,
         .IntLit,    .Semicolon, .Var,       .Symbol,    .Colon,     .Symbol,    .Assign,
         .IntLit,    .Semicolon, .While,     .Symbol,    .Colon,     .BitOr,     .Symbol,
         .Comma,     .Symbol,    .BitOr,     .LBrace,    .Symbol,    .LParen,    .StringLit,
         .Comma,     .Symbol,    .RParen,    .Semicolon, .Symbol,    .SubAssign, .IntLit,
         .Semicolon, .If,        .Symbol,    .Equal,     .IntLit,    .LBrace,    .Symbol,
-        .Assign,    .Null,      .Semicolon, .RBrace,    .RBrace,    .Symbol,    .LParen,
+        .Assign,    .NullLit,   .Semicolon, .RBrace,    .RBrace,    .Symbol,    .LParen,
         .StringLit, .Comma,     .Symbol,    .RParen,    .Semicolon,
     };
 

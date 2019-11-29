@@ -1,4 +1,5 @@
 pub const Tag = enum(u8) {
+
     Add, // +
     AddAssign, // +=
     And,
@@ -11,11 +12,14 @@ pub const Tag = enum(u8) {
     BitOr, // |
     BitOrAssign, // |=
     BitXor, // ^
-    Case,
+    Block,
+    Break,
     CaseOf, // caseof 
     Colon,
     Comma,
+    Comptime,
     Concept, 
+    Const, // 'const'
     Dec, // -- // Equivalent to i--
     DecNow, // --- // Equivalent to --i
     Div, // /
@@ -26,6 +30,7 @@ pub const Tag = enum(u8) {
     Enum,
     EOF, // When the lexer reaches the end of the stream
     Equal, // ==
+    Field,
     Finally, // finally
     Fn, // fn
     For,
@@ -41,19 +46,20 @@ pub const Tag = enum(u8) {
     Less, // <
     LessEq, // <=
     Let, // Immutable
+    Loop,
     LParen,
     Mod, // %
     Mul, // *
     MulAssign, // *=
+    NoLoc, // _
     Not, // !
     NotEqual, // !=
-    Null,
     Optional, // ?
     Or,
-    Ptr, // *
     PureFn, // purefn
     RBrace,
     RBracket,
+    Return,
     RParen,
     Semicolon,
     Shl, // <<
@@ -64,15 +70,11 @@ pub const Tag = enum(u8) {
     Sub, // -
     SubAssign, // -=
     Symbol,
-    Union,
+    Undef,
     Var, // Mutable
     Void,
     While,
     Xor, // xor
-    Block,
-    Concept,
-    Field,
-
     
     // All lits have the highest bit set
     IntLit = 0b10000000,
@@ -99,14 +101,14 @@ pub const Tag = enum(u8) {
         .DivAssign, .ShlAssign, .ShrAssign, .BitOrAssign, 
         .BitAndAssign => 0,
         
-        .Or => 1,
+        .Or, .Xor => 1,
         .And => 2,
         
         .Equal, .NotEqual, .Less, .Greater, 
         .LessEq, .GreaterEq, .Assert => 3,
 
         .BitOr => 4,
-        .Xor => 5,
+        .BitXor => 5,
         .BitAnd => 6,
         .Shl, .Shr, .AShr => 7,
         .Add, .Sub => 8,
