@@ -65,12 +65,14 @@ pub const Lexer = struct {
         }
         var cur = self.curChar();
         self.input = self.input[1..];
+        self.col += 1;
         return cur;
     }
     inline fn advanceBy(self: *Lexer, n: usize) []const u8 {
         if (self.input.len < n) return "No way Hose";
         var res = self.input[0..n];
         self.input = self.input[n..];
+        self.col += n;
         return res;
     }
 
@@ -78,9 +80,11 @@ pub const Lexer = struct {
         return Token{
             .tag = tag,
             .lexeme = self.advanceBy(n),
-            .file = self.file_id,
-            .line = self.line,
-            .col = 0, // TODO
+            .pos = .{
+                .file = self.file_id,
+                .line = self.line,
+                .col = self.col,
+            },
         };
     }
 
@@ -108,7 +112,11 @@ pub const Lexer = struct {
         while (!done_skipping) {
             done_skipping = true;
             while (isSpace(self.curChar())) : (_ = self.advance()) {
-                if (self.curChar() == '\n') self.line += 1;
+                self.col += 1;
+                if (self.curChar() == '\n') {
+                    self.line += 1;
+                    self.col = 1;
+                }
             }
 
             if (self.nextEql("(:")) {

@@ -94,6 +94,7 @@ pub const Parser = struct {
             .cur = lexer.scan(),
             .lexer = lexer,
             .alloc = alloc,
+            .cur_block = null,
             .storages = .{
                 .alloc = alloc,
                 .blocks = SegmentedList(Block, prealloc).init(alloc),
@@ -136,6 +137,8 @@ pub const Parser = struct {
     };
     fn parseBlock(self: *Parser, comptime style: BlockStyle) ParseError!*Block {
         var block = self.storages.new(Block);
+        block.parent = self.cur_block;
+        self.cur_block = block;
 
         if (style != .Naked) {
             if (style == .NeedReinterpret) {
@@ -148,7 +151,7 @@ pub const Parser = struct {
                 } else if (self.tryMatch(.Concept)) |_| {
                     block.interpret = .Concept;
                 } else {
-                    printf("\nExpected a block prefix at line {}", self.cur.line);
+                    printf("\nExpected a block prefix at line {}", self.cur.pos.line);
                 }
             }
             // Note: This implies that all blocks, even structs/etc, may be labeled (in AST)
@@ -157,7 +160,14 @@ pub const Parser = struct {
             if (self.tryMatch(.Label)) |label| {
                 block.label = label;
             }
-            try self.match(.LBrace);
+            const b = try self.matchGet(.LBrace);
+            block.pos = b.pos;
+        } else {
+            block.pos = .{
+                .file = self.lexer.file_id,
+                .line = self.lexer.line,
+                .col = self.lexer.col,
+            };
         }
 
         const end_tag = if (style != .Naked) Tag.RBrace else Tag.EOF;
@@ -167,6 +177,7 @@ pub const Parser = struct {
 
         if (style != .Naked) try self.match(.RBrace);
 
+        self.cur_block = block.parent;
         return block;
     }
 
@@ -215,7 +226,8 @@ pub const Parser = struct {
     fn parseIf(self: *Parser) ParseError!*If {
         var ifStmt = self.storages.new(If);
 
-        try self.match(.If);
+        const opener = try self.matchGet(.If);
+        ifStmt.pos = opener.pos;
 
         // We always have at least one arm
         {
@@ -263,7 +275,9 @@ pub const Parser = struct {
     fn parseLoop(self: *Parser) ParseError!*Loop {
         var loop = self.storages.new(Loop);
 
-        switch ((try self.matchGetOne([_]Tag{ .Loop, .While, .For })).tag) {
+        const opener = try self.matchGetOne([_]Tag{ .Loop, .While, .For });
+        loop.pos = opener.pos;
+        switch (opener.tag) {
             .Loop => loop.interpret = .Infinite,
             .While => loop.interpret = .While,
             .For => loop.interpret = .For,
@@ -317,13 +331,13 @@ pub const Parser = struct {
         MayDefault,
     };
     fn parseBind(self: *Parser, comptime needs_specifier: NeedSpec, comptime parse_ty: NeedTy, comptime may_default: NeedDefault) ParseError!*Bind {
-        const specifiers = [_]Tag {
-            .Let, .Var, .Enum, .Field
+        const specifiers = [_]Tag{
+            .Let, .Var, .Enum, .Field,
         };
-        
+
         var bind = self.storages.new(Bind);
 
-        printf("Next: {}", self.cur.tag);
+        //printf("Next: {}", self.cur.tag);
         if (needs_specifier != .NeverSpecifier) {
             if (self.tryMatchOne(specifiers)) |spec| {
                 bind.interpret = Bind.Interpret.fromTag(spec.tag);
@@ -347,13 +361,15 @@ pub const Parser = struct {
         return bind;
     }
 
-
     fn parseExpr(self: *Parser) ParseError!*Expr {
         // Note: This means that you can't write 0 + if cond:...
         // You must write 0 + (if cond: ...).
         // This is to remove ambiguity in the case of if cond: val else val2 + 0
-        if (self.opt(.If)) { return try self.parseIfExpr(); }
-        else { return try self.parseBinExprLevel(0); }
+        if (self.opt(.If)) {
+            return try self.parseIfExpr();
+        } else {
+            return try self.parseBinExprLevel(0);
+        }
     }
 
     fn parseIfExpr(self: *Parser) ParseError!*Expr {
@@ -492,9 +508,7 @@ pub const Parser = struct {
                         .lexeme = if (op.tag == .LBracket) "[]" else "()",
                         .val = undefined,
                         .tag = .Symbol,
-                        .file = op.file,
-                        .line = op.line,
-                        .col = op.col,
+                        .pos = op.pos,
                     }, [_]*Expr{});
 
                     while (!self.opt(closer)) {
@@ -583,9 +597,12 @@ pub const Parser = struct {
 
         try self.match(.RParen);
 
-        // TODO: Would .MayDefault be good? May let people eliminate lines of code.
-        res.ret = try self.parseBind(.NeverSpecifier, .MayType, .NeverDefault);
-
+        if (self.tryMatch(.Void)) |_| {
+            res.ret = null;
+        } else {
+            // TODO: Would .MayDefault be good? May let people eliminate lines of code.
+            res.ret = try self.parseBind(.NeverSpecifier, .MayType, .NeverDefault);
+        }
         // Labeling a function block will be a type error.
         res.body = try self.parseBlock(.Braced);
         return res;
@@ -638,6 +655,7 @@ pub const Parser = struct {
             res.* = .{
                 .base = .{
                     .fnDecl = .{
+                        .pos = opener.pos,
                         .pure = false,
                         .args = ArrayList(*Type).init(self.alloc),
                         .ret = undefined,
@@ -655,25 +673,25 @@ pub const Parser = struct {
             try self.match(.RParen);
 
             res.base.fnDecl.ret = try self.parseType();
-        } else if (self.tryMatch(.Optional)) |_| {
-            res.* = .{ .mod = .{ .mod = .optional, .next = try self.parseType() } };
-        } else if (self.tryMatch(.Mul)) |_| {
-            res.* = .{ .mod = .{ .mod = .ptr, .next = try self.parseType() } };
-        } else if (self.tryMatch(.Const)) |_| {
-            res.* = .{ .mod = .{ .mod = .constant, .next = try self.parseType() } };
-        } else if (self.tryMatch(.Comptime)) |_| {
-            res.* = .{ .mod = .{ .mod = .compiletime, .next = try self.parseType() } };
-        } else if (self.tryMatch(.LBracket)) |_| {
+        } else if (self.tryMatch(.Optional)) |o| {
+            res.* = .{ .mod = .{ .pos = o.pos, .mod = .optional, .next = try self.parseType() } };
+        } else if (self.tryMatch(.Mul)) |p| {
+            res.* = .{ .mod = .{ .pos = p.pos, .mod = .ptr, .next = try self.parseType() } };
+        } else if (self.tryMatch(.Const)) |c| {
+            res.* = .{ .mod = .{ .pos = c.pos, .mod = .constant, .next = try self.parseType() } };
+        } else if (self.tryMatch(.Comptime)) |c| {
+            res.* = .{ .mod = .{ .pos = c.pos, .mod = .compiletime, .next = try self.parseType() } };
+        } else if (self.tryMatch(.LBracket)) |b| {
             // Slice or array?
             if (self.tryMatch(.RBracket)) |_| {
                 // Slice.
-                res.* = .{ .mod = .{ .mod = .slice, .next = try self.parseType() } };
+                res.* = .{ .mod = .{ .pos = b.pos, .mod = .slice, .next = try self.parseType() } };
             } else {
                 // Array.
                 // Typechecking will ensure this is constant.
                 const size = try self.parseExpr();
                 try self.match(.RBracket);
-                res.* = .{ .mod = .{ .mod = .{ .array = size }, .next = try self.parseType() } };
+                res.* = .{ .mod = .{ .pos = b.pos, .mod = .{ .array = size }, .next = try self.parseType() } };
             }
         } else {
             return error.Expected;
@@ -695,7 +713,7 @@ pub const Parser = struct {
 
     fn tryMatch(self: *Parser, tag: Tag) ?Token {
         if (self.cur.tag == tag) {
-            printf("\n\tMatched {} ({})", self.cur.tag, self.cur.lexeme);
+            //printf("\n\tMatched {} ({})", self.cur.tag, self.cur.lexeme);
             return self.advance();
         }
         return null;
@@ -741,59 +759,8 @@ pub const Parser = struct {
     }
 };
 
-fn adapter(msg: []const u8) void {
-    std.debug.warn("{}", msg);
-}
-
-test "basic parser" {
-    var input =
-        \\ (: Commenty
-        \\ let i = undef ;
-        \\ var j = undef;
-        \\ let i = (: Inliney comment :) undef;
-        \\ let x = 1;
-        \\ let y: usize = x;
-        \\ let opty: ?usize = 0;
-        \\ let pointy: *usize = undef;
-        \\ let slicey: []usize = undef;
-        \\ let pointy: *usize = y.addr;
-        \\ let usizy: usize = pointy.deref;
-        \\ let truthy = true;
-        \\ if truthy {
-        \\ j = 1;
-        \\ }
-        \\
-        \\ if truthy {}
-        \\ elif truthy {}
-        \\ else {}
-        \\ finally {}
-        \\
-        \\ let Foo = struct {
-        \\      field x: usize;
-        \\      field y: bool;
-        \\      let z = 1;
-        \\  };
-        \\ {}
-        \\ `label {}
-    ;
-
-    var lexer = Lexer{
-        .input = input,
-        .line = 1, // We'll go ahead and 1-index the line numbers
-        .file_id = 0,
-    };
-
-    var arena = std.heap.ArenaAllocator.init(std.heap.direct_allocator);
-    defer arena.deinit();
-
-    var parser = Parser.init(&lexer, &arena.allocator);
-    var body = parser.parse() catch {
-        printf("\nFailed to parse basic on line {}. Cur is {}", lexer.line, parser.cur);
-        @panic("Failed to parse");
-    };
-}
-
 test "grammar.zag" {
+    // The tutorial shall be used as the official "if it's here, it needs to work" test.
     var input = @embedFile("grammar.zag");
     var lexer = Lexer{
         .input = input,
@@ -809,4 +776,11 @@ test "grammar.zag" {
         //printf("\nRemaining: \n{}", lexer.input);
         @panic("");
     };
+
+    //printf("\n{p}\n", body);
+
+    //var printer = PrettyPrinter {.counter = 1};
+    //printf("\n\ndigraph G{{");
+    //printer.visitBlock(body);
+    //printf("}}\n\n");
 }

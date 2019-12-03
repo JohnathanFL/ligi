@@ -162,12 +162,44 @@ pub const LexVal = union {
     strVal: []const u8,
 };
 
+pub const FilePos = struct {
+    /// Root file of a project is 0. Each file afterwards is incremented in depth first order.
+    file: usize,
+    line: usize,
+    col: usize,
+
+    pub fn init(self: *FilePos, file: usize, line: usize, col: usize) void {
+        self.file = file;
+        self.line = line;
+        self.col = col;
+    }
+
+    pub fn new(file: usize, line: usize, col: usize) FilePos {
+        var self: FilePos = undefined;
+        self.file = file;
+        self.line = line;
+        self.col = col;
+        return self;
+    }
+
+    pub fn sameFile(lhs: FilePos, rhs: FilePos) bool {
+      return lhs.file == rhs.file;
+    }
+
+    pub fn after(lhs: FilePos, rhs: FilePos) bool {
+        return (lhs.line > rhs.line)
+        or (lhs.line == rhs.line and lhs.col > rhs.col);
+    }
+
+    pub fn before(lhs: FilePos, rhs: FilePos) bool {
+        return !lhs.after(rhs);
+    }
+};
+
 pub const Token = struct {
     lexeme: []const u8,
     /// Only used if tag == CharLit, BoolLit, StringLit
     val: LexVal = undefined,
     tag: Tag,
-    file: usize,
-    line: usize,
-    col: usize,
+    pos: FilePos,
 };

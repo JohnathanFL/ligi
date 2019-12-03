@@ -108,7 +108,9 @@ y = 1;
 (: That's because they _are_ glorified structs, with a little syntactic sugar on top.
 (: Also, although you _can_ use the pseudo-reserved field names for your own purposes, it's mildly discouraged.
 (: If you do choose to use them, at least make sure they follow the same purpose, eh?
-var x: ?*[][5]bool = undef;
+
+(: This means that 'x' now means a mutable, compiletime known optional pointer to a constant slice of arrays of 5 boolean
+var x: comptime ?*const[][5]bool = undef;
 
 (: Optionals may be either the type to the right of the ? or null
 var x: ?*void = null;
@@ -234,6 +236,7 @@ loop : |i| `mainLoop {
 (= Arg a: This describes parameter a
 (= Arg b: this describes parameter b
 (= Arg c: this is a compilation error, as there is no argument or result named 'c'
+(= Return: This tells you what gets returned
 (= Pre: This tells what must be true before you run
 (= Post: This tells what *will* be true after you run.
 (= Author: This tells you who to burn at the stake.
@@ -247,6 +250,12 @@ let add = purefn(a: usize, b: usize) res: usize {
   res = a + b;
   truthy = false; (: ERROR
 };
+
+(: Functions don't have to return a value. You can replace the entire return bind with 'void'.
+let foo = purefn(a: usize) void {
+  printf("{}", a);
+};
+
 (: In contrast to the lets, this would be a function pointer assigned to an anonymous function
 (: This example would use an adder for the first invocation, then a subtracter for the second, then add for all after
 (: This is only an example. I'd reccomend not doing this in real life.
@@ -314,13 +323,18 @@ var p = [.x = 0, .y = 1];
 (: This specifies that for this scope, 'Point.add' shall be considered when attempting to resolve
 (: '+'s overloads. Note that .overload is a built-in method of all functions.
 (: Attempting to overload an arithmetic operator with a non-purefn is a compile error.
-@overloads['+'] += Point.add;
+(: Internally, @overloads is literally just a var comptime hashmap of str -> vector(bind) that's local to this scope.
+(: @bind is a builtin function that gets the Bind node for a variable.
+(: Read as "the overloads for '+' have added to it the binding named Point.add
+@overloads['+'] += @bind(Point.add);
 
 (: This specifies an overload in this scope for += on Point
 (: Note that addEq isn't a purefn. Operators which logically have to change state (like +=, -=, etc)
 (: are allowed to be non-pure
-Point.addEq.overload('+=');
+@overloads['+='] += @bind(Point.add);
 
+(: Note that you can't just rebind @variables as they're reserved compiler internals:
+(: TYPECHECKER ERROR: :) (: let @overloads = 1;
 
 (: Enums are declared similarly to structs
 (: Enum syntax is still under heavy construction, but I'm planning on making them like rust's enums
@@ -602,8 +616,25 @@ let daBlock = block {
   }
 };
 (: This defines a block of code. Literally.
-(: It does _not_ get typechecked as is, and is merely parsed into an AST.
+(: It does _not_ get typechecked as is (or even put into the symbol tables), and is merely parsed into an AST.
+(: Thus as long as the code within is _syntactically correct_, the project will compile just fine.
+(: It is planned that the entire compiler's AST setup will be available as a builtin library, so you can
+(: then get a block's AST and do operations on it:
+let glslZagCode = block {
+  let version = "430";
 
-(: Doing this will dump the block's contents directly into that position.
+  let VertOut = struct {
+    field pos: Vec4;
+    field color: Vec4;
+  };
+  let vertexMain = purefn(vertPos: Vec3, viewMat: Mat4x4) out: VertOut {
+    (: ...
+  };
 
-@expand(daBlock);
+  let fragMain = purefn(color: Vec4) out: Vec4 {
+    (: ...
+  };
+};
+(: glslZagCode could then be passed to a function at compile time (or maybe even run time) and compiled into SPIR-V
+(: there, thus allowing you to write shaders "directly" in Zag.
+
