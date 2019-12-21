@@ -12,3 +12,4 @@ bin           = @["zag"]
 # Dependencies
 
 requires "nim >= 1.0.4"
+requires "gara >= 0.2.0"

@@ -19,7 +19,6 @@
 (: All comments are single line
 (: Comments can, however, be terminated before the newline :)
 
-
 (: Language basics
   (: Whitespace insensitve
   (: Braced C-style
@@ -149,6 +148,7 @@ truthy = truthy or truthy and truthy xor truthy;
 (: from a lack of a better word than if/elif. case and caseof were considered, but found lacking.
 (:var oneOfThem = if x > 1: 1 elif x < 1: -1 else 0;
 (: You can also capture in if expressions (with the same semantics as other captures):
+var oneOfThem = if opty.has: 1 else 0;
 var oneOfThem = if opty: |val| val + 1 else 0;
 var oneOfThem = if opty: |var val| val.someMutatingFunc() else 0;
 
@@ -326,12 +326,12 @@ var p = [.x = 0, .y = 1];
 (: Internally, @overloads is literally just a var comptime hashmap of str -> vector(bind) that's local to this scope.
 (: @bind is a builtin function that gets the Bind node for a variable.
 (: Read as "the overloads for '+' have added to it the binding named Point.add
-@overloads['+'] += @bind(Point.add);
+@overloads["+"] += @bind(Point.add);
 
 (: This specifies an overload in this scope for += on Point
 (: Note that addEq isn't a purefn. Operators which logically have to change state (like +=, -=, etc)
 (: are allowed to be non-pure
-@overloads['+='] += @bind(Point.add);
+@overloads["+="] += @bind(Point.add);
 
 (: Note that you can't just rebind @variables as they're reserved compiler internals:
 (: TYPECHECKER ERROR: :) (: let @overloads = 1;
