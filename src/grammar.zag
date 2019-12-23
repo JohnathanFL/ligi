@@ -19,7 +19,6 @@
 (: All comments are single line
 (: Comments can, however, be terminated before the newline :)
 
-
 (: Language basics
   (: Whitespace insensitve
   (: Braced C-style
@@ -149,6 +148,7 @@ truthy = truthy or truthy and truthy xor truthy;
 (: from a lack of a better word than if/elif. case and caseof were considered, but found lacking.
 (:var oneOfThem = if x > 1: 1 elif x < 1: -1 else 0;
 (: You can also capture in if expressions (with the same semantics as other captures):
+var oneOfThem = if opty.has: 1 else 0;
 var oneOfThem = if opty: |val| val + 1 else 0;
 var oneOfThem = if opty: |var val| val.someMutatingFunc() else 0;
 
@@ -326,12 +326,12 @@ var p = [.x = 0, .y = 1];
 (: Internally, @overloads is literally just a var comptime hashmap of str -> vector(bind) that's local to this scope.
 (: @bind is a builtin function that gets the Bind node for a variable.
 (: Read as "the overloads for '+' have added to it the binding named Point.add
-@overloads['+'] += @bind(Point.add);
+@overloads["+"] += @bind(Point.add);
 
 (: This specifies an overload in this scope for += on Point
 (: Note that addEq isn't a purefn. Operators which logically have to change state (like +=, -=, etc)
 (: are allowed to be non-pure
-@overloads['+='] += @bind(Point.add);
+@overloads["+="] += @bind(Point.add);
 
 (: Note that you can't just rebind @variables as they're reserved compiler internals:
 (: TYPECHECKER ERROR: :) (: let @overloads = 1;
@@ -383,33 +383,27 @@ let Options = enum {
 (: Note, however, that the comptime needs to be type-side
 (: Note that I declare this as a purefn. You *could* do this as a normal fn, but purefn is always preferred where possible
 (: just in case the compiler could benefit from knowing all context
-(: TODO: Replace this with an example of a multi-dimensional data structure to showcase a[n,m,o] syntax
-let ArrayList = purefn(T: comptime type) res: type {
-  res = struct {
-    field data: []T;
-    (: Note that although len is a builtin field of slices, we can use it here.
-    (: If you try to override a builtin field, it will be an error, but only if that type should have it.
-    (: Note: Although this is a rather sensitive variable from a "mess-with-it-and-crash" standpoint, Zag will still
-    (: have no variable level pub specifier
-    field len: usize = 0;
-
-    (: Introducing: @This
-    (: @This is a builtin variable available at any scope. The @ is used for any builtin variable/function that can't
-    (: otherwise be differentiated from other variables (since .addr/etc are easily resolved from their scope)
-    let init = purefn(initSize: usize) self: @This {
-      self.data = malloc(initSize, T);
-      self.len = initSize;
-    };
-
-    let at = purefn(self: @This, i: usize) res: T {
-      res = self.data[i];
-    };
-
-    (: Overloading indexing for this new type
-    @This.at.overload('[]');
+let MultiArray = fn(n: comptime usize, m: comptime usize) res: type {
+  field data: [n][m]u32;
+  let at = purefn(self: MultiArray, n: usize, m: usize) res: u32 {
+    res = self.data[n][m];
   };
+  
+  @overloads["[]"] += @This.at;
 };
 
+(: Note that 'at' takes multiple arguments.
+(: This means you can now do the following:
+let m = [
+  :MultiArray(2, 2):
+  .data = [
+    [0, 1],
+    [2, 3]
+  ]
+];
+m[0, 1] === 1;
+m[1, 1] === 3;
+(: (Note the above also shows the preferred way of formatting multiline struct literals)
 
 
 (: CONCEPTS
@@ -638,3 +632,149 @@ let glslZagCode = block {
 (: glslZagCode could then be passed to a function at compile time (or maybe even run time) and compiled into SPIR-V
 (: there, thus allowing you to write shaders "directly" in Zag.
 
+
+(: Tuples
+(: Tuples are essentially structs without any names.
+(: They're defined with the (t0,t1,...) syntax:
+let tuple: (u32, u32, u32) = (0, 0, 0);
+(: You can also use let (s0,s1...) syntax to unpack a tuple:
+let (t0, t1, t2) = tuple;
+(: Note that all three of the above values are now constant because it's a let expression.
+(: Similarly, all three values below are mutable:
+var (t0, t1, t2) = tuple;
+(: Thus, while Rust allows stuff to the effect of:
+(: ERROR let (var t0, t1, t2) = tuple;
+(: Zag doesn't. This is because I feel defining constants and variables in the same statement is somewhat confusing.
+(: You can instead do:
+var t0 = tuple.0;
+let (_, t1, t2) = tuple;
+(: ...where _ means we don't care about that element.
+
+(: Tuple addition
+(: Since we can add two structs p and q together and get struct pq, why not tuples?
+let Vector3 = (f32, f32, f32);
+let Quaternion = Vector3 + (u32);
+Quaternion === (f32, f32, f32, u32);
+(: You may see the above and ask "well how does the compiler tell the difference between '(u32)' and 'u32'?
+(: Answer: '(anything)' is already a tuple. However, a single element tuple is implicitly coercible to its
+(: element type. Thus, any time we see '(' (outside funcs), we know we're starting a tuple.
+
+(: Tuple operators
+(: An operator is defined for a tuple t iff all types contained within have that operator defined.
+let x = (0, 1, 2);
+let y = (2, 1, 0);
+let z = x + y;
+z === (2, 2, 2);
+(: You cannot overload this functionality in the same way you cannot overload operators for primitives.
+(: Tuples are considered to be primitives. If you need to be able to overload an operator, use a struct/enum.
+(: (or @distinct)
+
+(: Note that this is planned to exploit SIMD. Thus, the above x+y would use SIMD instructions if possible
+
+
+(: Tuples and cyclic types
+(: Say you want to make a structure like so:
+let Foo = struct {
+  field friend: *Bar;
+};
+
+let Bar = struct {
+  field friend: *Foo;
+};
+(: Unfortunately, because declarations are still being parsed top-down, this doesn't work.
+(: Foo simply doesn't know what a 'Bar' is.
+(: Because Zag allows shadowing, it's a little trickier for the compiler (and the human) to know
+(: which Bar is being referenced.
+
+(: You *could* do something like this:
+let Foo1 = purefn(T: comptime type) res: type {
+  res = struct {
+    field friend: *T;
+  };
+};
+let Bar = struct {
+  field friend: *Foo1(Bar);
+};
+let Foo = Foo1(Bar);
+(: ...but that's pretty ugly, ain't it?
+
+(: Luckily, Zag has a solution: tuples!
+let (Foo, Bar) = {
+  Foo = struct {
+    field friend: *Bar;
+  };
+  Bar = struct {
+    field friend: *Foo;
+  };
+};
+
+(: Note that we could also specify their types as such:
+(: (This may change in the future. I may move it to let (tuple): (types) syntax)
+let (Foo: comptime type, Bar: comptime type) = {
+};
+
+(: Although Foo and Bar are constant, you can still assign to them there because it's technically within their assignment statement.
+(: Also, although the assignment statement's block doesn't break with any value, the compiler sees
+(: "well Mr. Programmer assigned a value to both of them inside, so I guess I can let it slide", and lets you continue.
+(: You could also directly break the block with a tuple and create the structs inside, but that feels a bit ugly, eh?
+(: This also helps encourage grouping tightly coupled stuff like this together
+
+
+(: Explanations
+
+(: Types
+(: The only built in types are the u##, i##, f{32,64,128}, bool, and char types
+(: Technically, you could then consider a pointer to be an extension of a usize,
+(: as a pointer is just a number. Thus, those are also the only reserved identifiers,
+(: beyond those that start with a '@' and the keywords themselves.
+
+(: Type expressions
+(: ? and the unary * (as used in type expressions) are just normal old operators.
+
+(: Properties
+(: Zag allows you to use C# style properties. I mainly included these because I felt that
+(: they arose logically from the deref/addr stuff. Some may say that hidden function calls
+(: are bad, but in this case I'd say the programmer's freedom is more important.
+(: If the hidden calls are truly a problem, they'll be discovered and replaced.
+(: ? is defined as such:
+let optional = purefn(t: comptime type) res: comptime type {
+  if not @isPtr(t) {
+    res = struct {
+      field has: bool;
+      field val: t;
+    };
+  } else {
+    res = struct {
+      field val: t;
+      let isValid = purefn(self: @This) res: bool {
+        (: @as shall be both a global function ( @as(type, val) ) and a method of any object ( val.@as(type))
+        (: This one cannot be overridden. It only allows you to cast things. No special overriding for weirdness
+        return self.@as(usize) != 0;
+      };
+      (: This is how you declare a C# style property
+      (: (syntax tentative)
+      (: A property bind statement has 3 things:
+        (: A name (obviously)
+        (: a type that it gets/sets
+        (: a compound literal with at least one of a getter or a setter
+      property has: bool = [.get = @This.isValid, .set = null];
+      (: If one of them is null, you can also choose to omit it:
+      (: property has: bool = [.get = @This.isValid];
+    };
+
+    (: Thus a ?*usize compiles down to nothing more than a pointer, as the .has is
+    (: abstracted away.
+  }
+};
+(: For obvious reasons, the following isn't *actually* how the compiler handles a pointer
+(: it's just an example to showcase Zag's properties.
+let ptr = purefn(t: comptime type) res: comptime type {
+  field val: usize; (: The pointer itself
+  let get = purefn(self: @This) res: t {
+    (: Some weirdness to dereference the pointer and put it in res
+  };
+  let set = purefn(self: @This, newVal: t) void {
+    (: Some weirdness to dereference the pointer and set it to newVal
+  };
+  property deref: t = [.get = get, .set = set];
+};
