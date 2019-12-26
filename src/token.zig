@@ -1,5 +1,4 @@
 pub const Tag = enum(u8) {
-
     Add, // +
     AddAssign, // +=
     And,
@@ -37,9 +36,11 @@ pub const Tag = enum(u8) {
     Greater, // >
     GreaterEq, // >=
     If,
-    Implies, // => 
+    Implies, // =>
+    In,
     Inc, // ++ // Equivalent to i++
     IncNow, // +++ // Equivalent to ++i
+    Inline,
     Label, // `xxxx
     LBrace,
     LBracket,
@@ -52,11 +53,13 @@ pub const Tag = enum(u8) {
     Mul, // *
     MulAssign, // *=
     NoLoc, // _
-    Not, // !
+    Not, // not
     NotEqual, // !=
     Optional, // ?
     Or,
-    PureFn, // purefn
+    Packed,
+    Property,
+    Pure,
     RBrace,
     RBracket,
     Return,
@@ -70,6 +73,7 @@ pub const Tag = enum(u8) {
     Sub, // -
     SubAssign, // -=
     Symbol,
+    TypeDef,
     Undef,
     Var, // Mutable
     Void,

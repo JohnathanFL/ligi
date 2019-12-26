@@ -40,13 +40,19 @@ pub const Lexer = struct {
         .{ .word = "fn", .tag = .Fn },
         .{ .word = "for", .tag = .For },
         .{ .word = "if", .tag = .If },
+        .{ .word = "in", .tag = .In },
+        .{ .word = "inline", .tag = .Inline },
         .{ .word = "let", .tag = .Let },
         .{ .word = "loop", .tag = .Loop },
+        .{ .word = "not", .tag = .Not },
         .{ .word = "null", .tag = .NullLit },
         .{ .word = "or", .tag = .Or },
-        .{ .word = "purefn", .tag = .PureFn },
+        .{ .word = "packed", .tag = .Packed },
+        .{ .word = "property", .tag = .Property },
+        .{ .word = "pure", .tag = .Pure},
         .{ .word = "return", .tag = .Return },
         .{ .word = "struct", .tag = .Struct },
+        .{ .word = "typedef", .tag = .TypeDef },
         .{ .word = "undef", .tag = .Undef },
         .{ .word = "var", .tag = .Var },
         .{ .word = "while", .tag = .While },
@@ -221,7 +227,7 @@ pub const Lexer = struct {
                     if (self.nextEql("!=")) {
                         res = self.tokenOfLen(2, .NotEqual);
                     } else {
-                        res = self.tokenOfLen(1, .Not);
+                        // TODO: Handle an unknown token
                     }
                 },
                 '=' => {

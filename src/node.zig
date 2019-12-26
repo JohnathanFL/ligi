@@ -148,12 +148,15 @@ pub const Bind = struct {
         Var,
         Field,
         Enum,
+        Property,
+        Alias, // TODO
         pub fn fromTag(tag: Tag) @This() {
             return switch (tag) {
                 .Let => .Let,
                 .Var => .Var,
                 .Field => .Field,
                 .Enum => .Enum,
+                .Property => .Property,
                 else => @panic("fromTag with non specifier!"),
             };
         }
@@ -289,33 +292,25 @@ pub const Fn = struct {
 // Type types
 //=================================================================================================
 
-pub const BaseType = union(enum) {
-    fnDecl: struct {
-        pos: FilePos,
-        pure: bool,
-        args: ArrayList(*Type),
-        ret: *Type,
-    },
-    symbol: Token,
-};
-
 pub const Type = union(enum) {
-    base: BaseType,
-    mod: struct {
-        pos: FilePos,
-        mod: union(enum) {
-            optional: void,
-            ptr: void,
-            constant: void,
-            slice: void,
-            array: *Expr,
-
-            /// Force any expression assigned to this to be resolved at comptime.
-            compiletime: void,
-        },
-        next: *Type,
+    /// Only pre-evaluator stage
+    expr: *Expr,
+    structType: struct {
+        isPacked: bool,
+        isExtern: bool,
+        statics: ArrayList(*Bind),
+        fields: ArrayList(*Bind),
+        discriminators: ArrayList(*Bind),
+        /// Only needed if discriminators.len > 0
+        tagType: ?*Type,
     },
-
+    fnType: struct {
+        isExtern: bool,
+        isInline: bool,
+        args: ArrayList(*Bind),
+        returnVal: ?*Bind,
+    },
+    // Concepts will just use structs. The 'concept' keyword will just be a sugar
     pub fn init(alloc: *std.mem.Allocator) @This() {
         return .{
             .base = .{

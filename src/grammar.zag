@@ -22,9 +22,46 @@
 (: Language basics
   (: Whitespace insensitve
   (: Braced C-style
+  (: Left->Right, not right->left. Pointer to a u32 is *u32, not u32*
   (: Sigils are better than operators
     (: (C) *&data -> (Zag) data.addr.deref
     (: (Zig) optional.? -> (Zag) optional.val (and optional.has)
+  (: Code is data, to be manipulated like all other data.
+    (: Struct/Enum/Concept definitions may be concatenated together like strings
+    (: unary * and ? are operators which create new types when evaluated
+    (: Types are created by using a 'typedef' block, which is then evaluated almost like a script
+  (: Bind bind all the things.
+    (: Currently 5 types of binds:
+      (: let: Create an immutable binding
+      (: var: Create a mutable binding
+      (: field: Define a field in a struct
+      (: enum: Define a possible state of an enum
+      (: property: Define a C# style property (reading it calls its .get, writing calls its .set)
+    (: All binds follow the same pattern: <bind-type> <bind-location>[: <optional type expression] [= <optional init expression]
+      (: Some bind types (such as property) may introduce restructions such as required types/inits, but are still essentially the same.
+    (: let/var bindings may be shadowed by subsequent bindings.
+      (: This does not remove the old memory. It merely makes it inaccessible.
+      (: It may be made an error to shadow at the top level.
+      (: Other bindings are not shadowable because I feel it would lead to too much insanity. This may change.
+        (: For example, shadowing field/enum values would lead to untouchable members.
+  (: Operators may be overloaded, but functions may not.
+    (: binding a function with the same name twice just shadows the old one.
+  (: Compilation looks like this:
+    (: Lexer
+    (: Parser
+    (: Typechecker (Assign a type to all expressions)
+    (: Evaluator (Evaluate anything that can be at comptime, like types and such)
+      (: This may get smashed into the typechecker
+    (: Compilation (to LLVM IR)
+
+  (: Built in datatypes:
+    (: bool: Your basic boolean
+    (: u{1..=128}: An unsigned integer, using from 1 to 128 bits for its size
+    (: i{i..=128}: A signed integer, same as above.
+    (: char: A *4 byte* character. Zag shall follow Rust in making chars unicode by default.
+      (: Standard ASCII chars can still be cast back to a u8 if need be
+
+  (: Whitespace insensitve
   (: Code is data
     (: Generics are done with functions that take/return types
     (: Types can be programmatically constructed to suit the programmer
@@ -246,7 +283,7 @@ let add = fn(a: usize, b: usize) res: usize {
 };
 
 (: Functions can also be 'pure', meaning that can never change outside state
-let add = purefn(a: usize, b: usize) res: usize {
+let add = pure fn(a: usize, b: usize) res: usize {
   res = a + b;
   truthy = false; (: ERROR
 };
@@ -281,7 +318,7 @@ let Point = struct {
   (= func_name.fieldName.
   (= Initialization is optional, but if it ain't initialized here it must be when Point is made
   field x: usize;
-  (= Field types are never optional
+  (= Field types are never optional.
   field y: usize = 1;
 
   (= Add two points together.
@@ -296,7 +333,7 @@ let Point = struct {
   };
 
   (= Discussed below
-  let addEq = fn(lhs: *Point, rhs: Point) void {
+  let addEq = fn(var lhs: Point, rhs: Point) void {
     lhs.x += rhs.x;
     lhs.y += rhs.y;
   };
@@ -305,11 +342,17 @@ let Point = struct {
 (: Instantiating a file-level struct (as well as field-level fields), however, is planned to be an error.
 
 (: You can also make a struct that has no padding whatsoever
-(: Note that in contrast to zig, we don't say "packed struct", we just say "packed"
-(: let Point = packed {
-(:  field x: usize;
-(:  field y: usize;
-(: };
+(: 'packed' is another unary operator that changes its rhs to be packed.
+let Point = packed struct {
+  field x: usize;
+  field y: usize;
+};
+
+(: You can also guarantee a C ABI layout:
+let Point = extern struct {
+  field x: usize;
+  field y: usize;
+};
 
 
 (: Struct literals use [] too, but they have named fields inside
@@ -751,12 +794,14 @@ let optional = purefn(t: comptime type) res: comptime type {
         (: This one cannot be overridden. It only allows you to cast things. No special overriding for weirdness
         return self.@as(usize) != 0;
       };
-      (: This is how you declare a C# style property
-      (: (syntax tentative)
-      (: A property bind statement has 3 things:
-        (: A name (obviously)
-        (: a type that it gets/sets
-        (: a compound literal with at least one of a getter or a setter
+      (= This is how you declare a C# style property
+      (= (syntax tentative)
+      (= A property bind statement has 3 things:
+        (= A name (obviously)
+        (= a type that it gets/sets
+        (= a compound literal with at least one of a getter or a setter
+      (= After the evaluator runs, any instance of optional.has is replaced with the appropriate
+      (= function calls to .get/.set. 
       property has: bool = [.get = @This.isValid, .set = null];
       (: If one of them is null, you can also choose to omit it:
       (: property has: bool = [.get = @This.isValid];
@@ -778,3 +823,164 @@ let ptr = purefn(t: comptime type) res: comptime type {
   };
   property deref: t = [.get = get, .set = set];
 };
+
+
+
+(: Untyped arguments
+(: You can pass an argument of an an arbitrary type using the 'any' type
+(: This is essentially zig's 'var' type.
+(: Note that this type must be known by compile-time
+(: (No duck-typing)
+let genericFunc = purefn(arg: any) void {
+  if @typeOf(arg) == usize {
+    printf("Arg was a usize");
+  } elif @typeOf(arg) == char {
+    printf("Arg was a char");
+  }
+};
+
+genericFunc(0.@as(usize)); (: Prints "Arg was a usize"
+genericFunc('0'); (: Prints "Arg was a char"
+
+(: Note that this function actually gets compiled into 2 separate functions,
+(: one for each different argument type
+
+(: Note that you can't take an array of arbitrary types:
+let genericFunc = purefn(args: []any) void {};
+(: ERROR :) (: genericFunc(['0', 0, true]);
+(: If you want to do something like this, just take a single 'any' and pass a tuple
+let genericFunc = purefn(args: any) void {
+  (: @isTuple is another compiler builtin func
+  (: Using asserts at the beginning to test preconditions is recommended
+  (: (they aren't present in fast release mode)
+  @isTuple(@typeOf(any)) === true;
+  printf("The type of args.1 was {}", @typeName(any.1));
+};
+genericFunc(0, '0'); (: Prints "The type of args.1 was char"
+
+(: Case study: printf
+(: We could also use an anonymous struct to implement printf with named args:
+let printf = fn(format: comptime []char, args: any) void {
+  @isStruct(args) === true;
+  (: Extract the arg names from format into an argName
+  (: Print the first part of the format string
+  (: foo.@dot("bar") takes a comptime []char and evaluates to foo.bar
+  (: It's most useful for programmatically working with structs
+  print(args.@dot(argName));
+};
+
+
+(: Ranges
+(: Ranges use the familiar .. or ..= syntax:
+(: All ranges are inclusive on the left bound
+(: .. produces an exclusive (on the right bound) range
+for 0..10 : |iter, i| {
+  printf("{} ", i); (: Prints 0 1 2 3 4 5 6 7 8 9
+}
+
+(: Obviously, using both the loop counter and i is redundant, as they're the same
+(: ..= produces an inclusive (on the right bound) range
+for 0..=10 : |i| {
+  printf("{} ", i); (: Prints 0 1 2 3 4 5 6 7 8 9 10
+}
+
+(: A range without a right bound is endless and uses a '_' as the right bound
+for 0.._ : |i| {
+  printf("{}", i); (: Keeps printing until an overflow
+}
+
+(: Ranged types:
+(: One can use a range as a type by simply using the range itself
+(: A range is always a usize if the starting bound is >=0, and isize if starting bound is <0
+(: Of course, since it's an overloadable operator, these rules may not be true for user defined overloads.
+var x: 0..2 = 0;
+(: These types are checked at runtime (and compiletime if possible) to make sure they're inside
+(: the specified range. These checks are disabled in ReleaseFast
+(: ERROR :) (: x = 3;
+
+(: You can also use this as a faster way to document function parameters
+let func = purefn(n: 0..5) void {};
+(: ERROR: 'n must be in range 0..5' :) (: func(6);
+
+(: If you wish to take a range as an argument, use the irange and urange types (signed and unsigned, respectively):
+let func = fn(r: urange) void {
+  var counter = 0; (: As a note, this deduces to a usize by default
+  for r {
+    counter += 1;
+  }
+  printf("{}", counter);
+};
+func(0..10); (: Prints '10'
+func(0..0); (: Prints '0'
+func(0..=10); (: Prints '11'
+(: ERROR: Expected an unsigned range :) (: func(-10..0);
+(: A {i,u}range's memory layout is as follows:
+let _irange = struct {
+  (: Replace isize with usize for uranges
+  field start: isize;
+  field end: isize; (: If unspecified, defaults to isize.@max
+};
+
+(: Note that the .. operator produces a 'comptime {i,u}range' when used on comptime arguments.
+(: A range *must* be comptime in order to be used as a type. Thus the following is an error:
+var myRange: urange = 0..20;
+(: ERROR: Non-comptime range type :) (: var x: myRange = 0;
+
+(: Instead, the following must be used:
+let myRange: comptime urange = 0..20; (: Type optional here
+var x: myRange = 0;
+(: I may lift this restriction in the future, as it would be pretty handy to store runtime-range checked vars...
+
+(: To check for range membership, use the 'in' operator:
+if 0 in 0..20 {
+  printf("Logic still applies!");
+} else {
+  printf("What?");
+}
+(: Note that the 'in' operator may also be overloaded for use with your own types.
+(: That ought to make custom set/map types much more readable.
+
+(: Note that you can still use runtime-ranges with in:
+var x = 10;
+var y = 20;
+var z = stdin.parse(usize);
+if z in x..y {
+  printf("You entered a number in 10..20, exclusive!");
+}
+(: Thus no more of that annoying 'z < y && z > x' crap.
+
+
+(: Sets (May be removed in favor of a userspace implementation)
+(: Zag also allows for nim-style bitsets:
+var s: set char = ['a', 'b', 'c']; (: Arrays may be coerced to a set of their element type
+if 'a' in s {
+  (: ...
+}
+(: Note that just like nim, this uses 1 bit for each possible value.
+(: Thus:
+@sizeOf(s) === 256 / 8; (: === 32, so beware of the memory cost of these
+
+
+(: Notes/brainstorming:
+(: Would it be best to just merge struct/enum/concept into one thing?
+(: That would allow having enum/field in the same decl like so:
+let TestType = typedef {
+  (: Both of these would be accessible at any time
+  field x: bool;
+  field y: bool;
+  (: Only one of these two would be present in memory
+  enum case1: usize;
+  enum case2: usize;
+
+  let eq = pure fn(lhs, rhs: @This) res: bool { return false };
+};
+
+(: We'd have to reserve .tag for use with this:
+var t: TestType;
+if t.tag == .case1 {}
+(: Otherwise we have an abiguity between things if the user overloads ==:
+@overloads['=='] += TestType.eq;
+if t == .case1 {} (: Are we checking enum tag or calling eq?
+(: Alternative: Use an operator like '$':
+(: if $t == .case1 {}
+(: This is pretty ugly though, so I'd rather not.
