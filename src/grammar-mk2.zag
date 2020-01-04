@@ -1,0 +1,344 @@
+(: This will be a rewrite of grammar.zag
+(: Most of the old document still stands, but I'l like to have a clean slate
+(: to reexamine everything.
+
+
+(: Zag is:
+  (: Whitespace insensitve
+  (: C-Style (Braces)
+  (: Homoiconic (Treats its own code as data to be manipulated as the programmer pleases)
+
+(: Zig strives to follow these principles:
+  (: Being too rigid just gets in the way.
+    (: Zag provides as many facilities to the programmer as possible to let them change things up if needed.
+    (: Eventually, we just have to trust that the programmer won't be a *complete* moron
+  (: The language exists to express the intent of the programmer
+    (: Logically readable. Things should follow a programmer's intuition.
+      (: Unfortunately this is essentially *my* first intuition, so I acknowledge it may not fit everyone.
+  (: Code should flow in reading and writing
+    (: Lots of keywords that let expressions read like English
+    (: Using keyword operators to manipulate statements/etc so entire statements read like English
+
+(: The core of Zag is the bind statement
+(: The bind statement always takes the form (using [] for optional): [bind_type] location [: type ] [= init_expr]
+
+(: You bind a constant value with 'let'
+let x = 0;
+(: You can specify a type with ': type' syntax
+(: Also, Zag allows binding shadowing for let and var bindings,
+(: so this new x is both completely valid and a completely new memory location
+let x: usize = 0;
+
+(: You create a mutable binding with 'var'
+var x = 0;
+x = 1;
+(: You can ignore the initializer for a var, but you have to provide at least a type or an init
+var x = 0; (: Valid, we infer that its type is a usize
+var x: usize; (: Valid. However any reads to x before it is written to is an error (uninitialized memory)
+
+(: Operators
+(: Zag has all the standard arithmetic and relational operators which behave exactly as you expect:
+  (: + - * / % == != < > <= >=
+  (: Additionally, Zag has the spaceship operator: <=> (returns an enum of Less, Greater, or Equal)
+(: Zag also introduces the '===', or assertion, operator:
+true === true; (: Runs fine
+(: PANIC: 'false' is not the same as 'true' :) (: false === true;
+(: === is intended to be used throughout code to perform sanity checks.
+(: It is only present in compiled code for modes other than ReleaseFast.
+
+(: Zag also has 4 logical operators: 'not', 'and', 'or', and 'xor'
+false === true and true xor not false; (: Evaluates as (true and true) xor (false)
+false === true and true xor true; (: Xor behaves as you'd expect: Only true iff one of the arguments is true
+
+(: Zag has the standard bit twiddlers:
+let x = 1 & 2 | 3 ^ ~12; (: 1 and 2 or 3 xor (not 12)
+
+(: Zag also uses the .. and ..= range operators
+if 2 in -1..2 {(: Nope :)}
+if 2 in -1..=2{(: Yep :)}
+
+
+(: Tuples
+(: Zag has tuples. They use () syntax as you'd expect.
+let x = (1, 2, 3);
+(: Now's also a good time to note that all of Zag's types are just expressions which evaluate to 'comptime type'.
+(: Thus we can do this:
+@typeOf(x) === (usize, usize, usize);
+
+(: Tuples may be unpacked in a bind statement:
+let (x0, x1, x2) = x;
+(: Or you can use .0, .1, etc syntax:
+let x0 = x.0;
+
+(: Control flow
+
+(: If statements are 'if expr block {elif expr block} [else block] [finally block]'
+(: Zag introduces the 'finally' block:
+if x == 10 {
+elif x == 12 { (: We can have 0 or more elifs
+} else { (: else is optional
+} finally { (: as is finally
+(: Only executed if either the if or the elif is executed.
+}
+
+(: Loops are one of 'while', 'for', or 'loop'
+
+(: Infinite loop. The |counter| captures the current loop number and is optional
+loop |counter| {
+}
+
+(: Range based loop
+for 0..10 : |counter, i| {} (: ': |counter, i|' is optional. 'i' is the current value of the iterator
+(: Conditional loop
+while x != 20 : |counter| {} (: ': |counter|' is again optional. If the expression was an optional, you could also capture its value
+
+(: Note that you can also inline a for/while loop (if possible, anyway)
+inline for 0..10 : |counter| {someFunc(counter);}
+(: Gets translated directly into someFunc(0); someFunc(1); someFunc(2);...someFunc(9);
+
+var x = 0;
+inline while x < 10 {
+  someFunc(x);
+  x += 1;
+}
+(: Note that this is only possible if the compiler is able to statically determine how the loop will work *every* time
+(: Here it works because x is a known value every time the loop is run and it is obviously always incremented each run.
+(: If we tried to set x to the result of a non-pure function (before or during the loop) it would break the inlining
+(: and error out.
+
+(: Also note that we just used an operator on a "statement" (while/for). Logically, this would require a semicolon
+(: to end the expression. However, Zag is intelligent about that. Once Zag encounters a statement-object
+(: such as if/while/for/loop/etc, it will terminate the entire expression without looking for a ';'
+(: Note that we usually only use unary operators with statement-objects, so it's really just a parsing detail.
+(: You shouldn't need to think about it.
+
+(: Functions are declared with 'fn(param1:param1type,...) [result location]: result type {body}
+(: "pure" here is a unary operator that specifies that if this function is called with the same arguments,
+(: it must *always* return the same result. In other words, no IO/global vars/etc
+(: Note that the argument and result are both just more bind statements.
+
+let fib = pure fn(n: usize) usize {
+  (: Zag has no ternaries. Instead, we use 'when expr: expr {elif expr: expr} else expr'
+  (: 'when' was chosen instead of 'if' to eliminate ambiguity between if expressions and statements
+  (: (if we encountered 'if' at the beginning of a line, is it an expression or statement?)
+  (: Else is mandatory in when expressions
+  return when n in 1..=2: 1 else fib(n - 1) + fib(n - 2);
+};
+
+(: You can also bind a variable for the result location
+let fib = pure fn(n: usize) res: usize {
+  if n in 1..=2 {
+    res = 1;
+  } else {
+    res = fib(n-1) + fib(n-2);
+  }
+  (: A 'return res' is implicit here
+};
+
+(: You can specify that a function should always be inlined with the 'inline' operator
+(: Note that you can also declare multiple bindings of the same type with a0,a1,an: type syntax. (Works for any binding)
+let add = pure inline fn(a, b: usize) res: usize { res = a + b; };
+(: Note that you can also specify that all functions in a tree of calls must be inlined using the inline operator
+let add = pure fn(a, b: usize) res: usize { res = a + b };
+let x = inline add(add(x, y), y);
+(: 'inline' is interpreted as a unary operator that applies to the outer add.
+(: When the evaluator walks the tree, it expands the *entire* subtree below any inline operators (if possible. Otherwise it errors)
+(: Thus the above is expanded out to:
+let x = x + y + y;
+
+(: Type declarations are either 'struct' or 'enum'
+
+let Foo = struct {
+  (: Fields are declared with a 'field' bind statement
+  field x: usize;
+  field y: usize = 0; (: You can default a member variable
+  (: Static member variables are declared with let/var as normal
+  let static1 = 0;
+  var static2 = 1;
+  (: Methods are just static member variables
+  (: If the first argument is of the same type as the enclosing struct, you can use foo.func() syntax
+  (: @This is a special compiler variable that refers to the current type we're inside (Foo)
+  let add = fn(me, other: @This) res: usize { res = me.x + other.x; };
+  (: C# style properties are declared with 'property'. More on that later.
+};
+(: Struct literals are done with '[:optional_type: .member1 = expr, .memberN = expr, ...]' syntax
+(: If the :type: is omitted, the compiler will attempt to cast it into the type of the result location
+(: If the result location has no specified type, it will simply make a new anonymous struct. Hence: 
+var foo = [.x = 1, .y = 1];
+@typeOf(foo) !== Foo; (: Note this also introduces the not-assertion operator. Works as you'd expect.
+(: the typeOf foo is something like 'struct_FILE_LINE_COL'
+var foo = [:Foo: .x = 1, .y = 1];
+@typeOf(foo) === Foo;
+(: Now that we specified it inside the literal, it's fine. We could also do this:
+var foo: Foo = [.x = 1, .y = 1];
+(: and the compiler will see that the struct literal and result type both have all the same fields.
+(: Note that if you have fewer fields in the literal than the result location, it can still cast:
+var foo: Foo = [.x = 1];
+(: However foo.y will be treated as if it was uninitialized if it has no default (i.e reading from it is an error)
+
+foo.x = 1;
+foo.func();
+(: You can also overload operators by adding the appropriate function to the current scope's @overload table:
+(: .Add here is an enum literal. It works exactly like Zig's
+(: The @overload table itself only has += overloaded. In other words, you can only add overloads to the current scope, not remove.
+@overload[.Add] += Foo.add;
+(: It should also be noted that arithmetic/logical operators such as .Add/.Sub/etc require pure-ness
+(: This is a compromise on the "flexibility" directive we mentioned for the sake of readability.
+
+(: Enums are declared by replacing 'struct' with 'enum' and 'field' with 'enum'
+(: Zag's enums work like Rust's enums, meaning they're essentially tagged unions
+(: Here's an example of how you might implement a simple binary tree
+let Node = enum {
+  (: The evaluator will use the compiler-var @tagType to determine what holds the enum's tag
+  @tagType = u8;
+  enum Leaf: usize; (: Where a usize is the leaf's payload
+  (: Note that you can declare a new struct where a type expression is expected.
+  (: This is because all types are always parsed as full expressions
+  enum Parent: struct {
+    field left: Node;
+    field right: Node;
+  };
+};
+
+
+(: You can, of course, use them like normal C enums as well:
+let MSAA = enum {
+  (: tagType is still optional
+  @tagType = u8;
+  enum x2;
+  enum x4;
+  enum x8;
+  enum x16;
+  (: Since none of these have a payload specified (i.e no type in the bind),
+  @sizeOf(@This) === @sizeOf(@tagType);
+  (: (in other words, it's just a normal integer enum)
+
+  (: Also worth noting above is that we were able to put arbitrary code to be evaluated inside the enum definition.
+  (: The evaluator will always evaluate comptime known expressions in advance, so since the sizeOf any type
+  (: is comptime known, the above assertion will still trigger during compiletime and tell us if the size doesn't match
+};
+
+
+(: Concepts are Zag's answer to generics (well, Nim's answer that we lifted. Shhh)
+(: This also shows how you can create a new type with a function
+(: Note that we can ignore the 'comptime' qualifier for the type 'type', as it is already implicitly compiletime.
+let StackConcept = pure fn(elementType: comptime type) res: type {
+  res = concept {
+    let init: fn() @This;
+    let push: fn(self: @This, elem: elementType)void;
+    let pop: fn(self: @This) elementType;
+
+    (: After the compiler checks that all fields and methods match, it can also run the user function '@match' to
+    (: do better checking.
+    (: Here we use it to ensure that the type we're passing has the semantics of a Stack.
+    (: It is assumed that the function will panic (usually through ===) if the type does not match
+    @match = pure fn(matchingType: type) void {
+      var s = matchingType.init();
+      (: Declare an array of 3 randomly initialized elements
+      var elems = [:[3]elementType: undef, undef, undef];
+      s.push(elems[0]);
+      s.push(elems[1]);
+      s.push(elems[2]);
+      (: Assure that the matchingType follows the LIFO stack concept
+      s.pop() === elems[2];
+      s.pop() === elems[1];
+      s.pop() === elems[0];
+    };
+  };
+};
+
+(: ...and this is a concrete struct
+let MyVec2 = struct {
+  field x: f32;
+  field y: f32;
+
+  let add = pure fn(lhs, rhs: @This) res: @This {
+    res = [
+      .x = lhs.x + rhs.x,
+      .y = lhs.y + rhs.y,
+    ];
+  };
+};
+(: ...that conforms to the Vec2Concept:
+Vec2Concept <= MyVec2 === true; (: Note we use <= as a 'subset of' operator. (i.e MyVec2 contains all of Vec2Concept)
+(: <= is just overloaded for types to use the @matches method that's builtin to all types, so you can use that if <= is ugly to you
+Vec2Concept.@matches(MyVec2) === true;
+
+(: We can use this mechanism to take perfectly generic arguments without having to specify their type:
+let printVec2 = fn(vec: any) void {
+  Vec2Concept <= @typeOf(vec) === true; (: Make sure our generic arg has all the fields we use in this function
+  printf("<x: {}, y: {}>", vec.x, vec.y);
+};
+(: Note that the 1s here are being widened to floats. This is permissible in Zag. Only narrowing conversions are banned.
+var vec = [:MyVec2: .x = 1, .y = 1];
+printVec2(vec); (: Vec2Concept <= MyVec2, assertion passes and the function compiles.
+var foo: Foo;
+(: printVec2(foo); (: ERROR: 'Vec2Concept' is not a subset of 'Foo'
+(: Thus we are able to pass generic arguments while statically assuring that they match
+
+
+(: Type arithmetic
+(: We've gone on and on about how types are just expressions, so why can't we add types together?
+(: Answer: We can!
+let Vec2 = struct {
+  field x: f32;
+  field y: f32;
+  let add = pure fn(lhs, rhs: @This) @This { return [.x = lhs.x + rhs.x, .y = lhs.y + rhs.y]; };
+};
+let Vec3 = Vec2 + struct {
+  field z: f32;
+  let add = pure fn(lhs, rhs: @This) res: @This {
+    (: a 'downCast' lets you cast a struct 'down' to another type with a matching layout
+    (: In this case, it extracts the .x and .y of the Vec3s and pass them to the old Vec2 add function
+    (: The .addr trickery here is to show that a Vec3's memory layout matches a Vec2 (at least in the beginning)
+    res.addr.@as(*Vec2).deref = @downCast(Vec2, lhs) + @downCast(Vec2, rhs);
+    res.z = lhs.z + rhs.z;
+    (: Obviously this example would be better done by manually writing all the additions.
+    (: It's only intended to show you Zag's capabilities
+  };
+};
+
+(: Vec3's memory layout now looks like:
+  (: Vec2's memory layout
+  (: f32
+(: Additionally, Vec3.add shadows the Vec2.add
+(: This is *essentially* inheritance, but not quite. The Zag way is composition over inheritance.
+(: Type arithmetic is basically just there to reduce how much you need to reinvent the wheel.
+(: Make a few useful 'base classes' then add them to other classes to reduce rewriting.
+
+(: Note that you can also use a macro'd block to add common operations without worrying about typechecking:
+let CommonStuff= block {
+  (: Note that 'yadda' doesn't exist at all yet.
+  let someCommonAction = fn(var self: @This) void {
+    self.yadda += 1;
+  };
+};
+
+let MyStruct = struct {
+  field yadda: usize;
+};
+let MyStruct = MyStruct + CommonStuff; (: Only now is 'someCommonAction' typechecked
+
+(: Interestingly, you can do the same with functions. This is where the result location really starts to shine.
+
+let Vec2 = struct {
+  field x: usize;
+  field y: usize;
+  let add = pure fn(lhs, rhs: @This) res: @This {
+    res.x = lhs.x + rhs.x;
+    res.y + lhs.y + rhs.y;
+  };
+};
+let Vec3 = Vec3 + struct {
+  field z: usize;
+  (: .@asBlock is a 'member' of functions that gives you access to its body's AST
+  (: (i.e it's like you wrote block { ... } instead of fn(...) { ... }
+  let add = Vec2.add.@asBlock + pure fn(lhs, rhs: @This) res: @This {
+    res.z = lhs.z + rhs.z;
+  };
+  (: Thus we have avoided rewriting the same lhs.x + rhs.x/etc by just taking the code from the old function and putting it in here
+  (: Although you can add functions directly, that only works if their arg/result types are the same,
+  (: and obviously fn(Vec2, Vec2)Vec2 !== fn(Vec3, Vec3)Vec3. Thus we use @asBlock to
+  (: directly rip the function body out and paste it into the Vec3 adder without worrying about typechecking
+  (: Although I admit this is a feature that may be prone to misuse, I still feel it's useful enough to have.
+};

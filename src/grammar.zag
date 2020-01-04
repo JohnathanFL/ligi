@@ -278,8 +278,18 @@ loop : |i| `mainLoop {
 (= Post: This tells what *will* be true after you run.
 (= Author: This tells you who to burn at the stake.
 (= Date: This tells you how young and dumb they were when they wrote this.
+let add = fn(a: usize, b: usize) usize {
+  (: Without a binding for the return value, we can't do
+  (: return location elision (or whatever it's called)
+  (: and we require a return statement
+  return a + b;
+};
+
+(: You may also use a return value:
 let add = fn(a: usize, b: usize) res: usize {
   res = a + b;
+  (: return is implicit
+  (: It will be a typechecker error if res is never written to.
 };
 
 (: Functions can also be 'pure', meaning that can never change outside state

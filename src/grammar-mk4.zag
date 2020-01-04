@@ -1,0 +1,163 @@
+(: Surprise: Yet another iteration!
+
+(: Summary of everything so far:
+  (: No shadowing of variables of the same scope.
+  (: Semicolons now optional.
+  (: Compiletime-known lets may refer to each other (mutually recursive types)
+  (: You may declare multiple variables of different types in a single bind statement
+  (: All variables in a bind statement are initialized to the same value
+  (: Tuples may be unpacked in a bind statement.
+  (: fn defs no longer use parentheses and now use 'fn argbinds... -> retbind [block]' syntax
+    (: This makes fn look more in line with if/for/etc
+  (: New bind type: cvar. Finalized in the evaluator, after which it acts as if it always had that value
+  (: Bind exporting through 'let x*' syntax
+    (: If a captured variable is marked public (as in for), it works like a c++ reference.
+  (: Block labels now use '#'
+  (: Stropping is now done with `...` (i.e 'var `var` = 1')
+  (: No more comment nesting. Comments always go until end of line.
+    (: Removes the need to parse comments to make sure a ':)' isn't inside a string lit.
+  (: Now use 'structdef'/'enumdef' instead of struct/enum to declare each respective type.
+    (: This removes ambiguity between enum as a bind and enum as a block. structdef was for consistency
+  (: Properties use an anon struct initializer with .get/.set
+  (: Ranges: Use .. [inclusive, exclusive) and ..= [inclusive, inclusive] syntax
+  (: 'in' operator: Check if a number is in a [multi]range.
+  (: Multiranges: 'in' can be used with a tuple rhs. It will check all ranges (or single values)
+  (: Change from ': |capture|' to '-> captures' syntax to be more consistent with functions
+  
+(: Tutorial
+
+(: The core of Zag is the bind statement.
+(: Here's a list of all possible bind types:
+  (: let: Bind a constant.
+  (: var: Bind a mutable variable.
+  (: cvar: Bind a variable which is mutable at compile time, but not after
+  (: field: Bind a new location inside a struct
+  (: enum: Bind a new discriminator tag for an enum
+  (: property: Bind a new C# style .get/.set property
+
+{
+  (: Normal Binds:
+  let x: = 1; (: An init expression is required for a let, but the type is optional
+  let xNoType = 1;
+  (: Both init expression and type are optional for a var. The type can be determined by the first write to it.
+  (: Note that reading from an uninitialized var is an error.
+  var y = 1;
+
+  (: cvars allow you to determine things at compile time.
+  cvar c = 1;
+  var cRuntime = c; (: cRuntime will be 2 at runtime, because all writes to a cvar are flattened at compiletime.
+  c = 2;
+
+  (: Note that you can't shadow variables of the same scope. Thus doing
+  (: let x = 2;
+  (: Would be an error here. This is why each section of this tutorial is in its own block.
+}
+
+{
+  (: Expressions
+
+  (: Zag has all the usual suspects, plus a few oddities
+  (: xor works like you'd expect: True if only one of them, false otherwise.
+  let x = 0 + 1 - 2 * 3 / 4 % 5 == 1 != true or false and true xor true;
+
+  (: Zag also introduces the === and !== (assert and not assert) operators
+  true === true;
+  (: The following would be a compiletime error, as Zag can prove it will never work:
+  (: true === false;
+  (: The following will be a runtime error, if and only if the build mode is not ReleaseFast
+  var x = true;
+  x === false;
+}
+
+{
+  (: Control flow
+
+  (: Zag has:
+    (: if/elif/else/finally, for/finally, while/finally, and loop for block-flow
+    (: continue, break [label], and return [value] for statements
+
+  if true {
+    (: Gets executed
+  } elif true {
+    (: Not executed because the first branch was taken
+  } elif false {
+    (: Not executed because the condition is false
+  } else {
+    (: Not executed.
+  } finally {
+    (: Executed only if one of the 'if' or 'elif' branches was taken.
+  }
+
+  (: In loops, '->' marks captures.
+  for 0..10 -> counter, capture #myLabel {
+    (: counter is the index of our current loop iteration. It must always be the first capture of a loop.
+    (: capture is capted from the for loop's expression (the 0..10 range)
+    (: Both are optional, and counter may be replaced with _ to ignore it and still capture.
+    (: # marks a label. This means we may do:
+    break #myLabel;
+  } finally {
+    (: A finally block is only executed if its loop didn't get broken out of.
+  }
+
+  var x: ?usize = 1;
+  while x -> _, xVal {
+    x = if xVal < 10 { x + 1 } else { null };
+  } finally {
+    (: while also supports finally blocks
+  }
+
+  (: Note you don't need a ':' to demarcate the capture here.
+  loop -> counter #myLabel {
+    (: Infinite loop
+    break #myLabel;
+  }
+}
+
+{
+  (: Ranges
+
+  (: Ranges are declared with .. or ..= syntax (exclusive end and inclusive end, respectively)
+  (: The 'in' operator checks membership
+  10 in 0..10 === false;
+  10 in 0..=10 === true;
+
+  (: You can check for membership in multiple ranges using tuplesP:
+  10 in (0, 2..7, 10) === true;
+  (: Thus it is only true if 10 is 0, 2, 3, 4, 5, 6, or 10
+  (: To be precise, 'in' will always apply itself to every member of a tuple.
+  10 in 10 === true;
+
+  (: You can also iterate over these tuple-ranges:
+  for (0, 2, 7, 10..500) -> counter, capture {
+    (: Now counter !== capture for counter > 0
+  }
+
+  (: Note you can also do this multiple iteration with other things:
+  let ar0 = [0, 1, 2, 3, 4];
+  let ar1 = [10, 11, 12];
+  for (ar0, ar1) -> _, cap {
+    (: Iterates: 0, 1, 2, 3, 4, 10, 11, 12
+  }
+}
+
+{
+  (: Functions
+
+  (: Functions are declared in binds like any other variable.
+  (: Functions *always* use result-location semantics.
+
+  (: let fib be a function which takes n, a usize, and returns res, a usize, and does...
+  let fib = fn n: usize -> res: usize {
+    if n <= 2 {
+      res = 1;
+      (: 'return 1' would also compile down to this same thing + an empty return
+    } else {
+      res = fib(n - 1) + fib(n - 2);
+    }
+
+    (: You can return without a value, but a function which does not write to its result in all paths is an err
+    (: Note that this return is technically redundant though.
+    return;
+  };
+  
+}

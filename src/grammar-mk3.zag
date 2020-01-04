@@ -1,0 +1,301 @@
+(: This is yet another rewrite of Zag's tutorial/testbed document
+(: This document will be looking at the feasability of changing Zag's parsing
+(: to do typechecking at at the same time as its parsing.
+(: This would allow for a new "consumption" system.
+(: Essentially, if an expression already "consumed" its result (i.e returns a new type called '@nothing')
+(: it does not require a semicolon after it. I think this will be done with an "accumulation" system.
+(: This would allow for us to treat if/while/for/etc as expressions, thus letting us apply unary operators to them
+(: This also means you can do stuff like the following:
+let x = {
+  let y = 12;
+
+  y + 12
+};
+(: === let x = 12 + 12;
+
+(: In effect, it would follow Rust's style. However this would also be accepted, as it writes to all variables in the bind.
+let x = {
+  let y = 12;
+  x = y + 12;
+};
+
+(: You can do unpacking syntax like so:
+let t = (1, 2, 3);
+let (x, y, z) = t;
+(: And you can declare multiple values of the same or different types at the same time:
+let x, y, z: f32, a, b, c: usize; (: x/y/z are f32, a/b/c are usize
+(: Note thay you can only assign one value to the entire bind statement:
+let x, y, z: f32, a, b, c: usize = 0;
+x === 0;
+a === 0;
+
+(: Also note that this:
+let x, y, z = t;
+(: Is not tuple unpacking. Instead it copies the whole tuple into x, y, *and* z
+
+(: Technically, 'let x, y, z' will be known as a 'bind group', and each of 'x', 'y', and 'z' is a bind
+
+(: Since all declarations must be in order, we can't directly have mutually recursive types.
+let (Foo, Bar) = {
+  (: When a var binding's type is comptime, all reads/writes to it will be folded down into its intialization.
+  (: Thus we *could* just do this as a cvar Foo, Bar at the top level of this file.
+  (: However this would leave room for further manipulation of the type.
+  (: Thus to firm up exactly what Foo and Bar are, we only make then mutable in this scope then move them to a let.
+  (: Note that a cvar is only mutable within its scope, and code outside this scope views it as a let.
+    (: I think I'll disregard this one. It could be useful to let subsystems and such register themselves.
+  (: This is essentially equivalent to Zig's 'comptime var'. In order to keep binds as pure statements,
+  (: I merged the 'comptime' operator into the bind itself.
+  cvar Foo, Bar: type;
+  Foo = struct {
+    field b: *Bar;
+  };
+  Bar = struct {
+    field f: *Foo;
+  };
+  (Foo, Bar)
+};
+(: Above, when Foo is first assigned to within the block, Foo is deduced to be a comptime type, same with Bar
+(: Importantly, this allows us to do "out of order" dependencies without having them actually be out of order.
+(: Thus we can have mutually recursive types.
+
+(: In short: A block stores a list of which external binds it reads/writes.
+(: If a bind statement finds that its init expression writes to all of its locations, it considers it initialized.
+(: If a bind statement's type is not specified, its first write determines its type.
+(: A bind statement may declare multiple variables, but these must all be of the same type.
+(: The pure operator checks if an expression contains any reads/writes to any non-const external binds
+
+
+
+(: When parsing an expression, the Parser maintains an internal state telling whether there are any dependents
+(: which need to be assigned. If all dependents are assigned to inside this expression and the expression would
+(: otherwise be consumed, it is cast to the type it is being assigned to (but no assignment takes place)
+(: Thus you don't need to return a tuple after the fact, which would just bring about the same problem as before
+
+(: New function syntax:
+(: 'fn' now acts more like if/while/loop and doesn't require parentheses
+let f = fn a: usize -> res: usize {
+  res = a;
+};
+
+(: Note that you cannot mix type dedudction in fn defs. Either they're all specified or none are.
+var f: fn a: usize, b: bool -> void;
+f = fn a: usize, b: bool {}; (: Both specified, no problem
+f = fn a, b {}; (: If b had bool specified, how would we know if a was also a bool or something deduced?
+(: To be clear, the above *is* acceptable.
+(: ERROR: f = fn a, b: bool {}; (: a should be of type usize
+(: The way this will work is that the last unspecified argument gets a special "deduce" type.
+(: Then in 'a, b, c', 'a' and 'b' simply follow the type of 'c' as they would in any other bind statement.
+(: Thus the following still works fine:
+let f = fn a, b, c, d: usize -> usize {
+  a + b + c + d
+};
+@typeOf(f) === fn a: usize, b: usize, c: usize, d: usize -> usize;
+
+(: Function definitions are now parsed by parsing the type then checking to see if there's a block.
+(: If there is, it becomes a definition rather than a type.
+(: I admit this is a little klunky, but the alternative would be 'fn' and 'fndef'
+(: Argument names are still required in the type itself as a form of enforced documentation.
+(: Note, however, that the argument names are not checked for function type equality.
+@typeOf(f) === fn a: usize -> res: usize;
+
+(: The arguments and return type may be completely omitted
+let f = fn {}; (: Takes no arguments and returns nothing.
+(: The latter is, however, to be considered bad taste when specifying it as a type
+@typeOf(f) === fn -> void and @typeOf(f) === fn;
+
+(: Reforming the 'var' keyword in functions:
+(: I'm adding the pub bind operator '*'. This isn't parsed as a true operator, but instead marks the bind as being
+(: 'public' in some way. In normal binds, this is used to determine if the bind is visible outside that scope.
+(: In captures, this will be used to determine if you want a ref to the captured variable.
+(: Rather than allow 'var' in function arguments, which introduces ambiguity about how many the var applies to:
+(: let f = fn var a, b: usize {}; (: Are 'a' *and* 'b' var, or just a?
+(: Instead, we now do this:
+let f = fn a*, b: usize {};
+(: This must be done every time the argument is referenced in both type and function creation:
+var f: fn a*, b: usize;
+f = fn a*, b {};
+
+(: Removing comment nesting. How do you know that the :) or (: wasn't a part of a string literal?
+(: I'd rather remove nesting than make comments be parsed like that.
+(: All comments are now to end of line.
+
+(: I'm adding the stropping (#) operator. This is parsed at the lexer level and allows
+(: the user to use reserved words as variables. I believe # will read better than using '`' for stropping
+(: and # for labels.
+let #void = 1;
+printf("{}", #void); (: This may be repurposed as a shorthand for the 'block{' stuff.
+
+
+(: Finally, Zag will not *require* semicolons. The following will parse and compile:
+let x = 1
+let y = 2
+if x == y {}
+(: However the following will not:
+(: let y = 2
+(: -y === -2;
+(: You must add a semicolon to end the first bind:
+let y = 2;
+-y === -2;
+
+(: In practice, I'd recommend using semicolons. However as 'if'/etc are technically expressions, I allow leaving out ';'
+(: so that the following isn't required:
+if x == y {
+  (: ...
+}; (: << The semicolon here is ugly.
+
+(: Note that because a bind is never an expression, a let/var/cvar/field/property/enum unambiguously ends a statement.
+
+(: Tutorial:
+
+(: This tutorial is written to familiarize a new Zag user.
+(: Zag is being written with heavy inspiration from Rust, Zig, and (to an extent) Lisp
+(: One of the central ideas of Zag is that code is nothing more than data that the programmer wishes to manipulate.
+(: To this end, Zag provides as many facilities as possible for manipulating the code as it's written.
+
+(: In Zag, the bind statement is everything.
+(: All bind statements loosely follow the form 'qualifier location type expression', although
+(: certain parts may be omitted (or required to be omitted) in certain circumstances.
+
+(: We bind a constant value with 'let'
+let x: usize = 0;
+(: Here, usize is x's type and 0 is its value.
+(: In a let, the type may be omitted, but the initializer cannot be for obvious reasons.
+
+(: We use let to bind many things, from variables to functions to even types themselves
+(: The 'pure' operator ensures that the function doesn't modify any external state.
+(: Only purified fns may be arithmetic operator overloads
+(: Note that the return value is bound with an 'out' binding
+(: Only one may be present, and if it is missing, the function returns void
+let fib = pure fn n: usize -> res: usize {
+  (: Zag natively supports ranges. n..m is [n, m) and n..=m is [n, m]
+  (: Everything in Zag is an expression. However if an expression returns a value, it is understood
+  (: as ending that block and the block's value becomes that of the expression.
+  (: If you want to directly consume an expression's variable, you need a semicolon after it.
+  (: Here the if statement returns a value, and so is the return for the entire function
+  if n in 0..=2 { 1 }
+  else { fib(n-1) + fib(n-2) }
+  (: If there were more code down here, there would be an "unreachable" error.
+};
+
+_ = fib(10); (: Just a normal ol' fibonacci generator.
+
+(: It should be noted that 'pure' when used on a function definition (i.e with body) is nothing more than
+(: an explicit compile-time check. If you declare a function pointer to a pure fn like below:
+var f: pure fn(a: usize);
+(: Any function which gets assigned to it is checked at that time to see if it's pure
+f = fn(a) { let x = a + 1; };
+(: Note that you can also ignore the types in a fn decl if they're deducible
+(: This comes in *very* handy for defining lambdas
+
+
+(: Inside types, we use 'field' and 'property' for structs and 'enum' for enums
+(: We use the 'typedef' keyword to signal the start of a new type declaration.
+(: Note that you cannot use enum in structs or struct qualifiers for enums
+let Vec2 = structdef { 
+  field x: f32; (: Because we have field here, we create a struct
+  field y: f32;
+
+  let get_magnitude = pure fn(self: @This, out mag: f32) {
+    (: sqrt is another builtin. It will be redirected to hardware instructions when possible.
+    return @sqrt( (self.x * self.x) + (self.y * self.y) );
+  };
+
+  (: You can mutate a function's argument by binding it with var
+  (: Normally, all arguments are technically prefixed with 'let'.
+  let set_magnitude = fn(var self: @This, newMag: f32) void {
+    let mag = self.get_magnitude();
+    self.x /= mag;
+    self.y /= mag;
+
+    self.x *= newMag;
+    self.y *= newMag;
+  };
+  
+
+  (: Properties work just like C#:
+  property magnitude: f32 = [.get = @This.get_magnitude, .set = @This.set_magnitude];
+  (: The type in the bind statement can also be omitted, as the .get/.set are statically checked such that
+  (: .set's 2nd argument is .get's return type. This type is then used as the property's type
+};
+
+(: Compound literals (struct/array) follow [:type: .field1 = expr, ... ] syntax, where :type: is optional
+var vec = [:Vec2: .x = 1.0, .y = 1.0];
+vec.magnitude === @sqrt(2.0);
+vec.magnitude = 5.0;
+
+
+(: New enums are defined with 'enumdef'
+(: This one keyword is also the reason we use 'structdef' instead of 'struct'.
+(: If we only used 'enum' for both instances (expression and bind) it would be ambiguous.
+let RomanNumeral = enumdef {
+  (: If you want to change the type used to store the enum's tag, you change
+  (: the @tagType compiler-level variable:
+  @tagType = u8;
+  @sizeOf(@This) === @sizeOf(u8);
+  
+  (: Enumerations are bound with 'enum'.
+  (: Both init expression and type are optional (More on the type later)
+  (: If the init expression were omitted here, the first enumeration would be 0
+  enum I = 1;
+  enum II; (: Defaults to (previous enumeration) + 1
+  (: You can also bind multiple at the same time, allowing for more concise C-style declarations
+  enum III, IV, V, VI, VII, VIII, IX, X, XI, XIII, XIV;
+  (: Again, each of these has a tag type that increments from the previous binding.
+};
+
+var myNumber = RomanNumeral.II;
+(: If the type is known already, you can shorten things by using an enum literal:
+myNumber = .VI;
+myNumber = .III;
+(: If you wish to directly access an enum's integer value, use the @tag builtin property:
+var myRealNumber = myNumber.@tag;
+
+(: Technically, enums in zag are actually sum types (tagged unions)
+(: When you specify the 'type' in the enum binding, you actually specify that tag's payload:
+let Octree = enumdef {
+  enum Node: *[8]Octree = 0;
+  enum Leaf: usize;
+
+  (: Thus if Octree == .Node, it contains a valid pointer to an array of 8 more octrees
+  (: However if Octree == .Leaf, it only contains a valid usize
+
+  (: Enumerations can also contain methods/static variables/etc:
+  let is_node = pure fn(self: @This) bool {
+    return self == .Node;
+  };
+};
+
+(: We bind a mutable value with 'var'
+var x: usize = 0;
+(: In a var, we may choose to omit both type and initializer. However, similar to Rust, the compiler
+(: must be able to deduce x's type at some point before it goes out of scope.
+
+(: In either let or var, you may also bind multiple variables of the same type/default value:
+var x, y, z: usize = 0;
+(: ...or multiple of different types/defaults by unpacking a tuple:
+var (x: usize, y: usize, z: usize) = (0, 1, 2);
+
+
+
+(: Example: Iterable ArrayList
+let ArrayList = structdef {
+  let Element = bool;
+  
+  field data: []Element;
+  property len = [.get = fn self: @This -> len: usize { len = self.data.len } ];
+
+  (: @forEach is the function a for loop attempts to call if a var element is requested
+  (: The compiler will convert the body of a for loop to a function and directly inline it into @forEach[var]
+  (: then inline @forEach[var] into the original callsite
+  (: Note that we must enclose do's type in parentheses because it's followed by curly braces.
+  (: Even if it wasn't, it shall be conisidered good practice unless the fn is at the end of the stmt  
+  @forEachVar = fn self, do: (fn var elem: Element) {
+    for self.data : |_, var el| {
+      do(el);
+    }
+  };
+};
+
+(: We can now use ArrayList in for loops
+(: Note that we never specified anything about the counter capture. The compiler generates
+(: all code related to this automatically.

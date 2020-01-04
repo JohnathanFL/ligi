@@ -9,27 +9,27 @@ const Token = Tokens.Token;
 const Tag = Tokens.Tag;
 const FilePos = Tokens.FilePos;
 
-
+pub const Action = enum { Read, Write };
 
 pub const Block = struct {
     pos: FilePos,
     pub const Interpret = enum {
-        Struct,
-        Enum,
-
-        /// Zag's answer to generic interfaces
-        Concept,
-
-        /// Don't interpret it at all
-        Stream,
-
-        /// Completely normal mode: Just run each statement inside at runtime.
-        Block,
+      /// This block must be evaluated to create a new type
+      TypeDef,
+      /// Don't interpret or even type check at all.
+      /// Signaled with 'block {' at the moment
+      Macro,
+      /// Just evaluate everything at runtime like normal
+      Normal, 
     };
     parent: ?*Block,
     interpret: Interpret,
-    stmts: ArrayList(*Stmt),
+    children: ArrayList(*Expr),
     label: ?Token,
+    external: struct {
+        reads: ArrayList(*Bind),
+        writes: ArrayList(*Bind),
+    },
 
     pub fn init(alloc: *std.mem.Allocator) @This() {
         return .{
@@ -38,37 +38,22 @@ pub const Block = struct {
             .interpret = .Block,
             .stmts = ArrayList(*Stmt).init(alloc),
             .label = null,
-        };
-    }
-};
-
-pub const Stmt = union(enum) {
-    ifStmt: *If,
-    loop: *Loop,
-    expr: *Expr,
-    bind: *Bind,
-    block: *Block,
-    breakStmt: *Break,
-
-    /// We really don't need a new structure type for a single *Expr.
-    /// If it's null, we return void.
-    returnStmt: ?*Expr,
-
-    pub fn init(alloc: *std.mem.Allocator) @This() {
-        return .{
-            .bind = undefined,
+            .external = .{
+                .reads = ArrayList(*Bind).init(alloc),
+                .writes = ArrayList(*Bind).init(alloc),
+            }
         };
     }
 };
 
 pub const Expr = union(enum) {
+    ifExpr: *If,    
     block: *Block,
     call: *Call,
     literal: Token,
     struct_lit: *StructLiteral,
     array_lit: *ArrayLiteral,
     symbol: Token,
-    ifExpr: *IfExpr,
     undef: void,
     fnDef: *Fn,
 
@@ -77,11 +62,18 @@ pub const Expr = union(enum) {
             .block = undefined,
         };
     }
-};
 
-//=================================================================================================
-// Stmt types
-//=================================================================================================
+    pub fn getType(self: Expr) ?*Type {
+        switch(self) {
+            .ifExpr => |i| return i.ty,
+            .block => |b| return b.ty,
+            .call => |c| return c.ty,
+            .literal => |l| {
+              if (l.tag == .IntLit)
+                
+        }
+    }
+};
 
 pub const If = struct {
     pub const Arm = struct {
@@ -91,6 +83,7 @@ pub const If = struct {
     };
 
     pos: FilePos,
+    ty: *Type, // The type this expr returns
     arms: ArrayList(Arm),
     default: ?*Block,
     finally: ?*Block,
@@ -108,6 +101,7 @@ pub const If = struct {
 
 pub const Loop = struct {
     pos: FilePos,
+    ty: *Type, // Returned either in the main loop or from the finally
     interpret: enum {
         Infinite,
         For,
@@ -144,12 +138,18 @@ pub const Loop = struct {
 
 pub const Bind = struct {
     pub const Interpret = enum {
+        /// Constant
         Let,
+        /// Mutable
         Var,
+        /// Instance-level mutable
         Field,
+        /// Possible form of an enum
         Enum,
+        /// get/set shortcut
         Property,
-        Alias, // TODO
+        /// Function output. Mutable.
+        Out,
         pub fn fromTag(tag: Tag) @This() {
             return switch (tag) {
                 .Let => .Let,
@@ -271,6 +271,8 @@ pub const IfExpr = struct {
 pub const Fn = struct {
     pos: FilePos,
     pure: bool,
+    inlined: bool,
+    
     args: ArrayList(*Bind),
 
     /// If null, then it returns void.
@@ -295,21 +297,48 @@ pub const Fn = struct {
 pub const Type = union(enum) {
     /// Only pre-evaluator stage
     expr: *Expr,
-    structType: struct {
+    /// Should only be present in Type.Void
+    voidType: void,
+    consumed: void,
+    int: struct {
+        signed: bool,
+        bits: usize
+    },
+    boolean: void,
+    pointer: struct {
+      // Reserving the right to add more attributes here later
+      inner: *Type,
+    },
+    optional: struct {
+      inner: *Type,
+    },
+    structDef: struct {
         isPacked: bool,
         isExtern: bool,
-        statics: ArrayList(*Bind),
+        static: ArrayList(*Bind),
         fields: ArrayList(*Bind),
-        discriminators: ArrayList(*Bind),
-        /// Only needed if discriminators.len > 0
-        tagType: ?*Type,
     },
+    enumDef: struct {
+        isExtern: bool,
+        static: ArrayList(*Bind),
+        enums: ArrayList(*Bind),
+        /// Only needed if discriminators.len > 0
+        tagType: *Type,
+    },
+    // A function declaration without an accompanying block
     fnType: struct {
         isExtern: bool,
-        isInline: bool,
+        /// Whether it *must* be pure.
+        isPure: bool,
+        // No point in the type being inlined. Each declaration decide that
+        //isInline: bool,
         args: ArrayList(*Bind),
         returnVal: ?*Bind,
     },
+
+    pub const Void: *Type = &.{ .voidType = .{} };
+    pub const Consumed: *Type = &.{  
+    
     // Concepts will just use structs. The 'concept' keyword will just be a sugar
     pub fn init(alloc: *std.mem.Allocator) @This() {
         return .{
