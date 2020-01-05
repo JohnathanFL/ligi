@@ -133,7 +133,7 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
   (: For the prefixed type (:type:), it must match a struct type for a struct lit and an array type for an array lit.
   (: ERROR :) let ar = [:usize: 0, 1, 2]
   (: CORRECT
-  let ar = [:[_]usize: 0, 1, 2] (: Note you can use a _ to elide the size
+  let ar = [:[_]usize: 0, 1, 2] (: Note you can use a _ ('sink') to elide the size
   (: Also correct:
   let ar: [3]usize = [0, 1, 2]
 

@@ -1,11 +1,13 @@
-const Lexer = @import("lexer.zig").Lexer;
-const Parser = @import("parser.zig").Parser;
+const std = @import("std");
 
-test "module tests" {
+test {
     _ = @import("lexer.zig");
     _ = @import("parser.zig");
+    _ = @import("typechecker.zig");
+    _ = @import("evaluator.zig");
+    _ = @import("compiler.zig");
 }
 
 pub fn main() anyerror!void {
-    // var a = .{1, 2, 3};
+    std.debug.warn("All your base are belong to us.\n");
 }

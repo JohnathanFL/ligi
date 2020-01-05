@@ -1,209 +1,117 @@
-pub const Tag = enum(u8) {
-    Add, // +
-    AddAssign, // +=
-    And,
-    AShr, // >>>
-    Assert, // ===
-    Assign, // =
-    BitAnd, // &
-    BitAndAssign, // &=
-    BitNot, // ~
-    BitOr, // |
-    BitOrAssign, // |=
-    BitXor, // ^
-    Block,
-    Break,
-    CaseOf, // caseof 
-    Colon,
-    Comma,
-    Comptime,
-    Concept, 
-    Const, // 'const'
-    Dec, // -- // Equivalent to i--
-    DecNow, // --- // Equivalent to --i
-    Div, // /
-    DivAssign, // /=
-    Dot, // .
-    ElIf, // elif
-    Else,
-    Enum,
-    EOF, // When the lexer reaches the end of the stream
-    Equal, // ==
-    Field,
-    Finally, // finally
-    Fn, // fn
-    For,
-    Greater, // >
-    GreaterEq, // >=
-    If,
-    Implies, // =>
-    In,
-    Inc, // ++ // Equivalent to i++
-    IncNow, // +++ // Equivalent to ++i
-    Inline,
-    Label, // `xxxx
-    LBrace,
-    LBracket,
-    Less, // <
-    LessEq, // <=
-    Let, // Immutable
-    Loop,
-    LParen,
-    Mod, // %
-    Mul, // *
-    MulAssign, // *=
-    NoLoc, // _
-    Not, // not
-    NotEqual, // !=
-    Optional, // ?
-    Or,
-    Packed,
-    Property,
-    Pure,
-    RBrace,
-    RBracket,
-    Return,
-    RParen,
-    Semicolon,
-    Shl, // <<
-    ShlAssign, // <<=
-    Shr, // >>
-    ShrAssign, // >>=
-    Struct,
-    Sub, // -
-    SubAssign, // -=
-    Symbol,
-    TypeDef,
-    Undef,
-    Var, // Mutable
-    Void,
-    While,
-    Xor, // xor
+pub const char = u32;
+const Tag = union(enum) {
+    // Punctuation
+    LBrace: void,
+    RBrace: void,
+    LBracket: void,
+    RBracket: void,
+    LParen: void,
+    RParen: void,
+    Store: void, // ->
+    Colon: void,
+    Comma: void,
+
+    ///// OPERATORS
+
+    // Assertions
+    // These are parsed at the same level as assignments
+    Assert: void, // ===
+    NotAssert: void, // !==
     
-    // All lits have the highest bit set
-    IntLit = 0b10000000,
-    BoolLit,
-    FloatLit,
-    CharLit,
-    StringLit,
-    NullLit, // null
+    // Assignment Operators
+    Assign: void,
+    AddAssign: void,
+    SubAssign: void,
+    MulAssign: void,
+    DivAssign: void,
+    ModAssign: void,
+    ShlAssign: void,
+    ShrAssign: void,
 
-    pub const access_ops = [_]Tag {
-      .Dot, .LBracket, .LParen
-    };
 
-    pub const unary_ops = [_]Tag {
-      .Not, .BitNot, .Sub, .Inc, .Dec, .IncNow, .DecNow
-    };
+    // Standard expression ops 
+    Add: void,
+    Sub: void,
+    Mul: void,
+    Div: void,
+    Mod: void,
 
-    const greatest_binary_precedence = 9;
-    // Precedence here essentially means the depth it would be in a tree with all ops
-    // Note this is only for binary operators
-    pub fn precedence(self: Tag) u32 {
-      return switch (self) {
-        .Assign, .AddAssign, .SubAssign, .MulAssign, 
-        .DivAssign, .ShlAssign, .ShrAssign, .BitOrAssign, 
-        .BitAndAssign => 0,
-        
-        .Or, .Xor => 1,
-        .And => 2,
-        
-        .Equal, .NotEqual, .Less, .Greater, 
-        .LessEq, .GreaterEq, .Assert => 3,
+    // Logical
+    Not: void,
+    And: void,
+    Or: void,
+    Xor: void,
 
-        .BitOr => 4,
-        .BitXor => 5,
-        .BitAnd => 6,
-        .Shl, .Shr, .AShr => 7,
-        .Add, .Sub => 8,
-        .Mul, .Div, .Mod => 9,
-        
-        else => 2663,
-      };
-    }
+    // Relational
+    Eq: void,
+    NotEq: void,
+    LessEq: void,
+    GreaterEq: void,
 
-    // Sorted by precedence 0-...
-    pub const binary_ops = [_][]const Tag{
+    // Range
+    In: void,
+    OpenRange: void,
+    ClosedRange: void,
 
-        [_]Tag {
-          .Assign, .AddAssign, .SubAssign, .MulAssign, 
-          .DivAssign, .ShlAssign, .ShrAssign, .BitOrAssign, .BitAndAssign,
-        },
-        
-        [_]Tag {.Or},
-        [_]Tag {.And},
-        
-        [_]Tag {.Equal, .NotEqual, .Less, .Greater, 
-        .LessEq, .GreaterEq, .Assert},
+    // Bit twiddlers
+    BitNot: void,
+    BitAnd: void,
+    BitOr: void,
+    BitXor: void,
 
-        [_]Tag {.BitOr},
-        [_]Tag {.Xor},
-        [_]Tag {.BitAnd},
-        [_]Tag {.Shl, .Shr, .AShr},
-        [_]Tag {.Add, .Sub},
-        [_]Tag {.Mul, .Div, .Mod},
-    };
+    // Code-mods
+    Comptime: void,
+    Pure: void,
+    Inline: void,
+    Optional: void, // ?
+    // Pointer should also be here, but it's the same as Mul
+
+
+    // Binds
+    Let: void,
+    Var: void,
+    CVar: void,
+    Field: void,
+    Enum: void,
+    Property: void,
+    Alias: void, // New one: Creates a simple alias. The AST equivalent of a pointer
+
+    // Typedefs
+    StructDef: void,
+    EnumDef: void,
+
+    // Control Flow
+    If: void,
+    ElIf: void,
+    Else: void,
+    For: void,
+    While: void,
+    Loop: void,
+    Finally: void,
+    Switch: void, // Not specced yet, but planned.
+    Fn: void,
+    Break: void,
+    Return: void,
     
-    pub fn matching(self: Tag) ?Tag {
-      return switch (self) {
-        .LBrace => .RBrace,
-        .LParen => .RParen,
-        .LBracket => .RBracket,
-        else => null,
-      };
-    }
-  
-    pub fn isLit(self: Tag) bool {
-        return @enumToInt(self) & 0b10000000 != 0;
-    }
+    Label: []const u8,
+    Symbol: []const u8,
+    Sink: void, // '_'
+    
+    // Literals
+    StringLit: []const u8, // This string is allocated apart from the file
+    CharLit: char,
+    BoolLit: bool, // Reserves both 'true' and 'false'
+    IntLit: usize, // If it can't fit in a usize, it shouldn't be a literal.
+    FloatLit: f64, // See above
 };
 
-/// These are the only 3 (currently) that could benefit from pre-parsing their values.
-/// chars/strs need escape characters interpreted, and bools only have 2 to begin with.
-pub const LexVal = union {
-    charVal: u8,
-    boolVal: bool,
-    strVal: []const u8,
+const FilePos = struct {
+  file_id: usize,
+  line: usize,
+  col: usize,
 };
-
-pub const FilePos = struct {
-    /// Root file of a project is 0. Each file afterwards is incremented in depth first order.
-    file: usize,
-    line: usize,
-    col: usize,
-
-    pub fn init(self: *FilePos, file: usize, line: usize, col: usize) void {
-        self.file = file;
-        self.line = line;
-        self.col = col;
-    }
-
-    pub fn new(file: usize, line: usize, col: usize) FilePos {
-        var self: FilePos = undefined;
-        self.file = file;
-        self.line = line;
-        self.col = col;
-        return self;
-    }
-
-    pub fn sameFile(lhs: FilePos, rhs: FilePos) bool {
-      return lhs.file == rhs.file;
-    }
-
-    pub fn after(lhs: FilePos, rhs: FilePos) bool {
-        return (lhs.line > rhs.line)
-        or (lhs.line == rhs.line and lhs.col > rhs.col);
-    }
-
-    pub fn before(lhs: FilePos, rhs: FilePos) bool {
-        return !lhs.after(rhs);
-    }
-};
-
-pub const Token = struct {
-    lexeme: []const u8,
-    /// Only used if tag == CharLit, BoolLit, StringLit
-    val: LexVal = undefined,
-    tag: Tag,
-    pos: FilePos,
+const Token = struct {
+  pos: FilePos,
+  lexeme: []const u8,
+  tag: Tag,
 };
