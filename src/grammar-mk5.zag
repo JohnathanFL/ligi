@@ -1,0 +1,313 @@
+(: Surprise: Yet another iteration!
+
+(: The following are required in every compilation root
+(: When including a module in Zag, you must always include its root and take what is public from there.
+
+(: These 6 are ignored by the compiler for speed but used by the formatter\
+(: These 3 are corrected by the formatter
+@indentWidth = 2
+@indentWith = .Spaces
+@maxColumns = 120
+(: These 3 are vigorously enforced by the formatter (i.e error if not in line with them)
+(: I'm actually considering allowing the compiler to translate foreign projects with different naming conventions
+(: into local conventions. Thus every project is 100% internally consistent, without restricting other projects
+@varCase = .camelCase
+@propertyCase = .camelCase
+@typeCase = .PascalCase
+@fnCase = .camelCase
+(: Other possibility: .snake_case
+(: Note there is no .smushedalllowercase. Although I can't really detect it reliably, only a compiler should ever
+(: use this case, in my opinion, as it is unreadable for anything but simple keywords.
+
+
+(: These are for package documentation
+@packageVersion = [.major = 0, .minor = 1]
+@packageName = "Zag Tutorial"
+@packageDescription = \\ A combination tutorial and documentation for the Zag language
+@author = \\ Johnathan Lee
+
+let std = @import("std") (: Imports the module 'std' from the known search paths
+(: @include would be used to include a file relative to the current file
+
+(: Summary of everything so far:
+  (: Adding back shadowing of variables of the same scope.
+  (: Return locations are now an implicit 'res'.
+    (: More closely parallels Nim
+    (: Allows shorter definitions without ambiguity about 'res:type' vs 'type'
+  (: Semicolons are now the "Consume" operator, which takes an expression and "consumes" its value to it isn't returned
+    (: Also used to remove ambiguity in things like 'x = 1 -x + 5 === 10' -> 'x = 1; -x + 5 === 10'
+  (: You may declare multiple variables of different types in a single bind statement
+  (: All variables in a bind statement are initialized to the same value
+  (: Tuples may be unpacked in a bind statement.
+  (: fn defs no longer use parentheses and now use 'fn argbinds... -> retbind [block]' syntax
+    (: This makes fn look more in line with if/for/etc
+  (: New bind type: cvar. Finalized in the evaluator, after which it acts as if it always had that value
+  (: Bind exporting through 'let x*' syntax
+    (: If a captured variable is marked public (as in for), it works like a c++ reference.
+  (: Block labels now use '#'
+  (: Stropping is now done with `...` (i.e 'var `var` = 1')
+  (: No more comment nesting. Comments always go until end of line.
+    (: Removes the need to parse comments to make sure a ':)' isn't inside a string lit.
+  (: Now use 'structdef'/'enumdef' instead of struct/enum to declare each respective type.
+    (: This removes ambiguity between enum as a bind and enum as a block. structdef was for consistency
+  (: Properties use an anon struct initializer with .get/.set
+  (: Ranges: Use .. [inclusive, exclusive) and ..= [inclusive, inclusive] syntax
+  (: 'in' operator: Check if a number is in a [multi]range.
+  (: Multiranges: 'in' can be used with a tuple rhs. It will check all ranges (or single values)
+  (: Change from ': |capture|' to '-> captures' syntax to be more consistent with functions
+  
+(: Tutorial
+
+(: The core of Zag is the bind statement.
+(: Here's a list of all possible bind types:
+  (: let: Bind a constant.
+  (: var: Bind a mutable variable.
+  (: cvar: Bind a variable which is mutable at compile time, but not after
+  (: field: Bind a new location inside a struct
+  (: enum: Bind a new discriminator tag for an enum
+  (: property: Bind a new C# style .get/.set property
+
+{
+  (: Normal Binds
+
+  (: Note the lack of semicolons here. You still need semicolons at times, but that will be explained later.
+  
+  let x: = 1 (: An init expression is required for a let, but the type is optional
+  let xNoType = 1
+  (: Both init expression and type are optional for a var. The type can be determined by the first write to it.
+  (: Note that reading from an uninitialized var is an error.
+  var y = 1
+
+  (: cvars allow you to determine things at compile time.
+  cvar c = 1
+  var cRuntime = c (: cRuntime will be 2 at runtime, because all writes to a cvar are flattened at compiletime.
+  c = 2
+}
+
+{
+  (: Expressions
+
+  (: Zag has all the usual suspects, plus a few oddities
+  (: xor works like you'd expect: True if only one of them, false otherwise.
+  let x = 0 + 1 - 2 * 3 / 4 % 5 == 1 != true or false and true xor true
+
+  (: Zag also introduces the === and !== (assert and not assert) operators
+  true === true
+  (: The following would be a compiletime error, as Zag can prove it will never work:
+  (: true === false;
+  (: The following will be a runtime error, if and only if the build mode is not ReleaseFast
+  var x = true
+  x === false
+
+  (: Literals
+  (: Zag has:
+  var x = 1 (: Integer literals (Implicitly convertable to floats)
+  var x = 1.0 (: Float literals (CANNOT be implicitly converted to ints)
+  var x = true or false (: Bool literals
+  var first = 'J' (: Character literals
+  var name = "John" (: Normal string literals
+  (: EOL string literals (go until the end of the line.
+  (: The trailing newline is only included if there's a second EOL lit afterwards
+  var name = \\ Johnathan Lee
+  name[name.len - 1] !== '\n'
+  (: These are useful for multiline string literals or for regexes (as you don't need to escape things)
+  var glsl =
+    \\ #version430
+    \\ ...
+    \\
+    (: The above has 2 line breaks: One after the version and one after the ...
+  var regex = \\ John\n
+  (: The '\n' above is not interpreted.
+  "John\\n" === \\ John\n
+
+  (: Compound literals:
+  (: ...can be used for arrays:
+  var array = [:[5]usize: 1, 2, 3, 4, 5]
+  (: ...or structs
+  let Foo = structdef {field x: usize}
+  var foo = [:Foo: .x = 1]
+
+  (: The general form of compound lits is:
+  var compoundForm = \\ \[(:type:)?(.field1=val,.field2=val2|val,val2)]
+  (: You may have fields (.symbol = val) xor values (val, val2) for structs or arrays, but never both.
+  (: For the prefixed type (:type:), it must match a struct type for a struct lit and an array type for an array lit.
+  (: ERROR :) let ar = [:usize: 0, 1, 2]
+  (: CORRECT
+  let ar = [:[_]usize: 0, 1, 2] (: Note you can use a _ to elide the size
+  (: Also correct:
+  let ar: [3]usize = [0, 1, 2]
+
+  (: Semicolons and Expressions
+
+  (: Technically, the semicolon in Zag is known as the "Consumption Operator".
+  (: It is Zag's only postfix operator (aside from [] and () ) and consumes whatever is leftover from an expression.
+  var x: usize
+
+  (: All assignment operators already return nothing, so a semicolon is not required here
+  x = 1
+  (: However a plain expression, such as x+1, produces a result
+  let x = if true { x + 1 } else { x - 1 }
+  (: When an expression with a result, such as in the above if statement, is not consumed, it becomes the value for that block.
+  (: Thus x+1 becomes the value of the if statement, which itself is the value of x's initializer, so x is (x=1) + 1 === 2
+
+  
+  (: The only exception to this rule is that such expressions cannot be used to return from a function.
+  (: An unconsumed expression that would appear to return from a block is an error.
+  (: ERROR: Unconsumed expression '1'. Did you mean to consume it? ('1;') :) let f = fn -> res:usize { 1 }
+}
+
+{
+  (: Control flow
+
+  (: Zag has:
+    (: if/elif/else/finally, for/finally, while/finally, and loop for block-flow
+    (: continue, break [label], and return [value] for statements
+
+  if true {
+    (: Gets executed
+  } elif true {
+    (: Not executed because the first branch was taken
+  } elif false {
+    (: Not executed because the condition is false
+  } else {
+    (: Not executed.
+  } finally {
+    (: Executed only if one of the 'if' or 'elif' branches was taken.
+  }
+
+  (: In loops, '->' marks captures.
+  for 0..10 -> counter, capture #myLabel {
+    (: counter is the index of our current loop iteration. It must always be the first capture of a loop.
+    (: capture is capted from the for loop's expression (the 0..10 range)
+    (: Both are optional, and counter may be replaced with _ to ignore it and still capture.
+    (: # marks a label. This means we may do:
+    break #myLabel;
+  } finally {
+    (: A finally block is only executed if its loop didn't get broken out of.
+  }
+
+  var x: ?usize = 1;
+  while x -> _, xVal {
+    x = if xVal < 10 { x + 1 } else { null };
+  } finally {
+    (: while also supports finally blocks
+  }
+
+  (: Note you don't need a ':' to demarcate the capture here.
+  loop -> counter #myLabel {
+    (: Infinite loop
+    break #myLabel;
+  }
+}
+
+{
+  (: Ranges
+
+  (: Ranges are declared with .. or ..= syntax (exclusive end and inclusive end, respectively)
+  (: The 'in' operator checks membership
+  10 in 0..10 === false;
+  10 in 0..=10 === true;
+
+  (: You can check for membership in multiple ranges using tuplesP:
+  10 in (0, 2..7, 10) === true;
+  (: Thus it is only true if 10 is 0, 2, 3, 4, 5, 6, or 10
+  (: To be precise, 'in' will always apply itself to every member of a tuple.
+  10 in 10 === true;
+
+  (: You can also iterate over these tuple-ranges:
+  for (0, 2, 7, 10..500) -> counter, capture {
+    (: Now counter !== capture for counter > 0
+  }
+
+  (: Note you can also do this multiple iteration with other things:
+  let ar0 = [0, 1, 2, 3, 4];
+  let ar1 = [10, 11, 12];
+  for (ar0, ar1) -> _, cap {
+    (: Iterates: 0, 1, 2, 3, 4, 10, 11, 12
+  }
+}
+
+{
+  (: Functions
+
+  (: Functions are declared in binds like any other variable.
+  (: Functions *always* use result-location semantics.
+
+  (: Functions may be marked using the 'pure' operator. This means they may have no side-effects.
+  (: If given the same args, no matter where or when, they must always return the same result.
+  (: let fib be a function which takes n, a usize, and returns another usize, and does...
+  let fib = pure fn n: usize -> usize {
+    if n <= 2 {
+      (: All functions in Zag are result-location first.
+      (: 'res' is implicitly defined in all functions as the location you are returning to.
+      (: You may treat it as a pseudo-keyword
+      res = 1
+      (: 'return 1' would also compile down to this same thing + an empty return
+    } else {
+      res = fib(n - 1) + fib(n - 2)
+    }
+
+    (: You can return without a value, but a function which does not write to its result in all paths is an err
+    (: Note that this return is technically redundant though, as 'return x' compiles down to 'res = x; return'
+    return res
+  };
+
+  (: Note that a pure fn definition is not the same as a pure fn type
+  var f: pure fn a,b:usize -> bool;
+  (: Despite not annotating the first below fn, it still works.
+  f = fn a, b -> bool { res = a == b }
+  f = pure fn a, b -> bool { res = a == b }
+  (: This is because the compiler will attempt to implicitly coerce a function into a pure fn if needed.
+  (: If it cannot, it will error out.
+  (: The pure operator as used in a definition simply kicks the compiler and says "Oi, I need to know this is pure NOW"
+}
+
+{
+  (: Types
+  (: Structs and enums are declared with structdef and enumdef, respectively
+
+  (: structdef to define the start of a new struct
+  let Foo = structdef {
+    (: field to declare a variable member of that struct
+    (: The type is *not* optional here.
+    field x: usize
+    (: You can still declare let/var/etc binds here. They will simply be static attributes:
+    let y = 1
+    var yMut = 1
+
+    (: Methods (foo.func(...)) are done with normal ol' lets
+    (: @This is a special compiler-level var that refers to the current struct
+    (: (as its bind is not available in its initializer)
+    (: Introducing: The public operator ('*'). It makes binds available from outer scopes
+    (: All fields are implicitly public, but lets/vars/properties are not.
+    (: This is because there's really no stopping a determined programmer from acessing private variables
+    let add* = pure fn lhs, rhs: @This -> res: @This {
+      (: Struct literals use [] syntax (actually a compound literal)
+      (: If you must specify the type (we don't need to here) you use :type: syntax
+      res = [:@This: .x = lhs.x + rhs.x];
+    }
+
+    (: Properties act like they do in C#: Reading from a property calls .get, writing calls .set
+    (: Properties are assigned using a compund initializer with at least either a .get or .set method
+    (: The type in the bind statement is the type gotten or set
+    property negative*: usize = [
+      (: Note we can ignore the type of self here, as the property itself can infer it.
+      .get = pure fn self -> usize {
+        res = -self.x
+      },
+      (: If you didn't want a setter (or a getter) you could either leave them out or set them to null.
+      (: The evaluator for properties is smart about those things.
+      (: I may add additional members to the init literal, which is why I used that instead of a tuple (get, set)
+      .set = fn self, newVal {
+        self.x = -newVal
+      }
+   ] 
+  }
+  var foo = [:Foo: .x = 1]
+  foo.negative === -1 (: Retrieving a property
+  
+  foo.negative = 7 (: Setting it
+  foo.negative === 7
+  foo.x === -7
+
+}
