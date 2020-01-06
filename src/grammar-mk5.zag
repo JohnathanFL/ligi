@@ -3,13 +3,20 @@
 (: The following are required in every compilation root
 (: When including a module in Zag, you must always include its root and take what is public from there.
 
-(: These 6 are ignored by the compiler for speed but used by the formatter\
-(: These 3 are corrected by the formatter
-@indentWidth = 2
+(: These ones are ignored by the compiler for speed but used by the formatter
+(: (as well as programmers reading your code)
+(: These 5 are corrected by the formatter
+@indentWidth=2
 @indentWith = .Spaces
 @maxColumns = 120
+@braceStyle = .NewLine (: or .SameLine
+(: Do we require semicolons only after expressions (which would otherwise become that scope's value)
+(: or for everything that isn't control flow (after all binds and expressions)
+(: or just always (which would require them after if/for/while/etc
+@semicolonStyle = .OnlyExpressions (: or .NonFlow or .Always
 (: These 3 are vigorously enforced by the formatter (i.e error if not in line with them)
-(: I'm actually considering allowing the compiler to translate foreign projects with different naming conventions
+(: It will not attempt to correct them on the off chance that it would end up mucking things up.
+(: I'm actually considering allowing the compiler to translate foreign projects with different conventions
 (: into local conventions. Thus every project is 100% internally consistent, without restricting other projects
 @varCase = .camelCase
 @propertyCase = .camelCase
@@ -44,7 +51,7 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
   (: New bind type: cvar. Finalized in the evaluator, after which it acts as if it always had that value
   (: Bind exporting through 'let x*' syntax
     (: If a captured variable is marked public (as in for), it works like a c++ reference.
-  (: Block labels now use '#'
+  (: Block labels now use '`', stropping is # (to allow #{ )
   (: Stropping is now done with `...` (i.e 'var `var` = 1')
   (: No more comment nesting. Comments always go until end of line.
     (: Removes the need to parse comments to make sure a ':)' isn't inside a string lit.
@@ -106,7 +113,7 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
   var x = true or false (: Bool literals
   var first = 'J' (: Character literals
   var name = "John" (: Normal string literals
-  (: EOL string literals (go until the end of the line.
+  (: EOL string literals go until the end of the line, and adjacent EOL lits are concatenated with newlines.
   (: The trailing newline is only included if there's a second EOL lit afterwards
   var name = \\ Johnathan Lee
   name[name.len - 1] !== '\n'
@@ -119,6 +126,17 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
   var regex = \\ John\n
   (: The '\n' above is not interpreted.
   "John\\n" === \\ John\n
+  (: Note that the single space in '\\<space>' is *required*, and *not* part of its parsed value.
+  (: This is to improve readability when the EOLit launches into a bunch of backslashes like below:
+  let regex = \\ \\\[0\]
+  regex[0] === '\\'
+  let regex = \\  \\\[0\]
+  regex[0] === ' '
+  (: The sole exception is in the case of a '\\<newline>'. This is allowed only a a quality-of-life thing
+  (: when you just want to indicate an empty line and don't want the trouble of '\\<space>'
+  (: I know this may end up being a little confusing, and I may reverse it, but I believe it is a worthy
+  (: tradeoff for the readability of escape sequences and embedding other language snippets (its intended use)
+  (: I'd recommend making your editor highlight the following space somehow.
 
   (: Compound literals:
   (: ...can be used for arrays:
@@ -176,12 +194,12 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
   }
 
   (: In loops, '->' marks captures.
-  for 0..10 -> counter, capture #myLabel {
+  for 0..10 -> counter, capture `myLabel {
     (: counter is the index of our current loop iteration. It must always be the first capture of a loop.
     (: capture is capted from the for loop's expression (the 0..10 range)
     (: Both are optional, and counter may be replaced with _ to ignore it and still capture.
     (: # marks a label. This means we may do:
-    break #myLabel;
+    break `myLabel;
   } finally {
     (: A finally block is only executed if its loop didn't get broken out of.
   }
@@ -193,10 +211,9 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
     (: while also supports finally blocks
   }
 
-  (: Note you don't need a ':' to demarcate the capture here.
-  loop -> counter #myLabel {
+  loop -> counter `myLabel {
     (: Infinite loop
-    break #myLabel;
+    break `myLabel;
   }
 }
 
@@ -310,4 +327,44 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
   foo.negative === 7
   foo.x === -7
 
+  (: enumdef defines a new enum (duh)
+  let Meal = enumdef {
+    @tagType = u8 (: If you wish to specify what stores the tag, use the internal @tagType var
+    (: This would make it act like C++'s 'enum Meal : u8'
+    
+    (: Enumerations are bound with 'enum'
+    enum Breakfast = 7 (: The optional init value is used to determine the tag's value. Default first is 0
+    (: All further enumerations increment from the last value
+
+    (: All enums in Zag are tagged unions (similar to rust)
+    (: Note that if no enum contains a value, its size is equal to that of its tag
+    (: This enumeration contains a bool to tell whether or not our lunch was eaten out
+    enum Lunch: bool
+    enum Supper
+
+    (: Enums can have all the same static stuff a struct can
+    property wasEatenOut= [
+      .get = pure fn self: @This -> bool {
+        res = false
+        (: You use .Enum syntax if you don't want to include the full name before
+        (: You can access the contents of the union as if the enumeration were a field
+        if self == .Lunch and self.Lunch == true {
+          res = true
+        }
+      }
+    ]
+  }
+
+  var lastMeal = Meal.Breakfast
+  lastMeal.wasEatenOut === false
+  (: Assigning a union member with its value is done with ()
+  lastMeal = .Lunch(true)
+  lastMeal.wasEatenOut === true
+  lastMeal = .Lunch(false)
+  
+  (: Assigning a tag without assigning to its union-field works the same as an uninitialized variable:
+  lastMeal = .Lunch
+  (: ERROR: lastMeal.Lunch has not been written to since it was made active
+  (: if lastMeal.Lunch == true {}
+  (: Thus you have the freedom to not immediately assign, but still need to write before you read.
 }

@@ -1,5 +1,5 @@
 pub const char = u32;
-const Tag = union(enum) {
+pub const Tag = union(enum) {
     // Punctuation
     LBrace: void,
     RBrace: void,
@@ -9,7 +9,9 @@ const Tag = union(enum) {
     RParen: void,
     Store: void, // ->
     Colon: void,
+    Semicolon: void,
     Comma: void,
+    Dot: void,
 
     ///// OPERATORS
 
@@ -17,7 +19,7 @@ const Tag = union(enum) {
     // These are parsed at the same level as assignments
     Assert: void, // ===
     NotAssert: void, // !==
-    
+
     // Assignment Operators
     Assign: void,
     AddAssign: void,
@@ -28,8 +30,7 @@ const Tag = union(enum) {
     ShlAssign: void,
     ShrAssign: void,
 
-
-    // Standard expression ops 
+    // Standard expression ops
     Add: void,
     Sub: void,
     Mul: void,
@@ -45,6 +46,8 @@ const Tag = union(enum) {
     // Relational
     Eq: void,
     NotEq: void,
+    Less: void,
+    Greater: void,
     LessEq: void,
     GreaterEq: void,
 
@@ -65,7 +68,6 @@ const Tag = union(enum) {
     Inline: void,
     Optional: void, // ?
     // Pointer should also be here, but it's the same as Mul
-
 
     // Binds
     Let: void,
@@ -92,26 +94,28 @@ const Tag = union(enum) {
     Fn: void,
     Break: void,
     Return: void,
-    
+
     Label: []const u8,
     Symbol: []const u8,
     Sink: void, // '_'
-    
+
     // Literals
-    StringLit: []const u8, // This string is allocated apart from the file
+    StringLit: []const u8, // This string is allocated apart from the file (TODO)
     CharLit: char,
     BoolLit: bool, // Reserves both 'true' and 'false'
     IntLit: usize, // If it can't fit in a usize, it shouldn't be a literal.
     FloatLit: f64, // See above
 };
 
-const FilePos = struct {
-  file_id: usize,
-  line: usize,
-  col: usize,
+// So we don't have to declare all those tags twice
+pub const TagType = @TagType(Tag);
+
+pub const FilePos = struct {
+    file_id: usize,
+    line: usize,
+    col: usize,
 };
-const Token = struct {
-  pos: FilePos,
-  lexeme: []const u8,
-  tag: Tag,
+pub const Token = struct {
+    pos: FilePos,
+    tag: Tag,
 };

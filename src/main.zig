@@ -1,6 +1,6 @@
 const std = @import("std");
 
-test {
+test "Main" {
     _ = @import("lexer.zig");
     _ = @import("parser.zig");
     _ = @import("typechecker.zig");
