@@ -5,9 +5,11 @@
 
 (: These ones are ignored by the compiler for speed but used by the formatter
 (: (as well as programmers reading your code)
-(: These 5 are corrected by the formatter
-@indentWidth=2
-@indentWith = .Spaces
+(: These 4 are corrected by the formatter
+@indentWidth = 2
+(: @indentWith = .Spaces (: No such thing. Zag is Space only.
+(: All text editors can just as easily treat blocks of spaces as tabs and space sizes are fixed,
+(: so it leads to consistent formatting
 @maxColumns = 120
 @braceStyle = .NewLine (: or .SameLine
 (: Do we require semicolons only after expressions (which would otherwise become that scope's value)
@@ -27,7 +29,7 @@
 (: use this case, in my opinion, as it is unreadable for anything but simple keywords.
 
 
-(: These are for package documentation
+(: These are used by the compiler and for package documentation
 @packageVersion = [.major = 0, .minor = 1]
 @packageName = "Zag Tutorial"
 @packageDescription = \\ A combination tutorial and documentation for the Zag language
@@ -51,8 +53,7 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
   (: New bind type: cvar. Finalized in the evaluator, after which it acts as if it always had that value
   (: Bind exporting through 'let x*' syntax
     (: If a captured variable is marked public (as in for), it works like a c++ reference.
-  (: Block labels now use '`', stropping is # (to allow #{ )
-  (: Stropping is now done with `...` (i.e 'var `var` = 1')
+  (: Block labels now use '#', stropping is `...` (to allow spaces and such)
   (: No more comment nesting. Comments always go until end of line.
     (: Removes the need to parse comments to make sure a ':)' isn't inside a string lit.
   (: Now use 'structdef'/'enumdef' instead of struct/enum to declare each respective type.
@@ -62,6 +63,10 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
   (: 'in' operator: Check if a number is in a [multi]range.
   (: Multiranges: 'in' can be used with a tuple rhs. It will check all ranges (or single values)
   (: Change from ': |capture|' to '-> captures' syntax to be more consistent with functions
+  (: Slices now use 'slice' operator
+  (: Arrays now use an 'array' operator on a tuple of (size, type)
+  (: Add swizzling. Easy way to extract many values from a single struct at once
+  (: Removing ===/!==. Adding 'assert' unary operator
   
 (: Tutorial
 
@@ -73,6 +78,64 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
   (: field: Bind a new location inside a struct
   (: enum: Bind a new discriminator tag for an enum
   (: property: Bind a new C# style .get/.set property
+
+{
+  (: 10 second crash course (Just to show some basics)
+  (: Zag is
+    (: Case sensitive
+    (: Whitespace insensitive
+    (: Semicolon optional
+
+  (: Since it's semicolon optional/whitespace insensitive, this:
+  let x = 0
+  let y = 1
+  (: is the same as
+  let x = 0 let y = 1
+  (: And the same as
+  let x = 0; let y = 1
+  (: So it's really just a question of style as to what you do
+  (: However
+  let a = ArrayList(slice const u8).init(std.heap.c_allocator);
+  (a).append("Hi");
+  (: Is not the same as
+  let a = ArrayList(slice const u8).init(std.heap.c_allocator)
+  (a).append("Hi")
+  (: As the (a) gets interpreted as a function call on the result of the init without a semicolon
+  (: These situations should be rather rare, but may be encountered from time to time.
+  
+  let y = x + 12 / 50
+  let z = if y > 10 {
+    printf("Hi there!\n")
+    10 (: Unconsumed value breaks a block
+  } else {
+    printf("Goodbye!\n")
+    11
+  }
+  assert z == 11 (: Built in assertion operators
+
+  for 0..10 -> i {
+    printf("Hello for the {} time!\n", i)
+  }
+
+  loop {
+    printf("This is the song that never eeeeeends\n")
+    printf("Until here, at least\n")
+    break
+  }
+
+  (: Semicolons only needed to remove ambiguity
+  let x = 10;
+  assert (x, 10, 40) == (10, 10, 40)
+  (: Otherwise how do we know we aren't trying to write 10(x, 10, 40) (function call style)
+  (: Of couse these should be somewhat rare
+  (: You can, of course, choose to go full C-style and require semicolons everywhere
+  (: The @semicolonStyle from the beginning tells the formatter and reader what style you prefer
+
+  (: Note: I *may* make the language semi-whitespace sensitive
+  (: It would involve making sure that () and {} are on the same line as the last token
+  (: of the associated expression.
+}
+
 
 {
   (: Normal Binds
@@ -89,22 +152,88 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
   cvar c = 1
   var cRuntime = c (: cRuntime will be 2 at runtime, because all writes to a cvar are flattened at compiletime.
   c = 2
+
+  (: You can alias a bind with... alias
+  (: What did you expect, 'abracadabra'?
+  var x = 1
+  alias trueX = x (: The rhs of an alias should only be a single symbol
+  x = 2
+  assert trueX == 2
+
+  (: Aliases are a way of keeping a reference to an old variable even after it's shadowed
+  var x = "Hello" (: Shadows x:usize with x:(slice const u8)
+  assert trueX == 2 (: But trueX still points to x:usize
+  
+}
+
+{
+  (: Types
+
+  (: The type system is essentially Zig's system adapted to a more homiconic style
+
+  (: Integers
+  var x: u32 (: Unsigned integer made of 32 bits
+  var x: u12 (: unsigned integer made of 12 bits
+  var x: i12 (: signed integer made of 12 bits
+  (: And so on. You get the idea. {u,i}(number of bits >= 1)
+
+  (: Booleans
+  var b: bool = true or false
+
+  (: Characters
+  var c: char
+  assert c.@size == 4 (: bytes. All chars are unicode. For ASCII, use a u8
+  var ascii: u8 = '1' (: Char literals of appropriate size can implicitly cast to a u8
+
+  (: Pointers use the '*' unary operator for now. That may be changed to 'ptr'.
+  var ptrToChar: *char = c.addr (: Taking an address uses a .addr field
+  (: This was decided to disambiguate taking the address of a long expression
+  var c = ptrToChar.deref (: Dereferences use .deref to disambiguate things, same as addr
+
+  (: Arrays use the 'array' unary operator.
+  (: The operator has overloads for either a type or a tuple (usize, type)
+  (: Array literals are discussed later
+  var arrayOf5Usizes: array (5, usize) = [0, 1, 2, 3, 4, 5]
+  (: You can infer the size by not using a tuple
+  var arrayOf3Usizes: array usize = [0, 1, 2]
+
+  (: Slices are pointers to arrays of dynamic length and use the 'slice' unary operator.
+  var s: slice usize = arrayOf5Usizes[0..2] (: A slice of usizes. Points to the first 2 usizes
+  (: (indices 0,1)
+  
+  var arrayOf5Usizes: array (5, usize) (: array is a unary operator. Used on either tuple 
 }
 
 {
   (: Expressions
 
+  (: First off, '_' is called the Sink
+  (: Think of it as Zag's /dev/null. Write anything you like to it.
+  _ = someFunctionThatReturnsAResultWeDontNeed()
+
+  (: Any expression that returns a result other than void also returns from the current block:
+  let x = {
+    let y = 1 + 2
+    y + 12
+  }
+  assert x == 1 + 2 + 12
+
+  (: 'assert' is a unary operator (parsed at the same precedence as let/var/etc) that panics if its expression is false.
+  (: A language builtin was chosen instead of a standard library feature because this assert is made to give
+  (: information about *why* its input is false.
+  let (a, b, c, d) = (true, false, false, false)
+  assert a and b xor c or d
+  (: Prints "ERROR: ( ( (a:true) and (b:false) ):false xor (c:false) ) or (d:false)
+  (: (Message subject to change. Point is it attempts to backtrack the expression and find out why it's false)
+  (: Asserts are very useful, and the Zaggy way is to use them plentifully to tell both compiler and programmer what
+  (: should be expected.
+  (: I plan to make them only do the checks in non-ReleaseFast modes, and allow the compiler to assume that
+  (: the assertions hold for more rigorous optimizations during ReleaseFast mode.
+  (: This way we get absolute safety with the ability for absolute speed
+
   (: Zag has all the usual suspects, plus a few oddities
   (: xor works like you'd expect: True if only one of them, false otherwise.
   let x = 0 + 1 - 2 * 3 / 4 % 5 == 1 != true or false and true xor true
-
-  (: Zag also introduces the === and !== (assert and not assert) operators
-  true === true
-  (: The following would be a compiletime error, as Zag can prove it will never work:
-  (: true === false;
-  (: The following will be a runtime error, if and only if the build mode is not ReleaseFast
-  var x = true
-  x === false
 
   (: Literals
   (: Zag has:
@@ -116,7 +245,7 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
   (: EOL string literals go until the end of the line, and adjacent EOL lits are concatenated with newlines.
   (: The trailing newline is only included if there's a second EOL lit afterwards
   var name = \\ Johnathan Lee
-  name[name.len - 1] !== '\n'
+  assert name[name.len - 1] != '\n'
   (: These are useful for multiline string literals or for regexes (as you don't need to escape things)
   var glsl =
     \\ #version430
@@ -125,22 +254,23 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
     (: The above has 2 line breaks: One after the version and one after the ...
   var regex = \\ John\n
   (: The '\n' above is not interpreted.
-  "John\\n" === \\ John\n
+  assert "John\\n" == \\ John\n
   (: Note that the single space in '\\<space>' is *required*, and *not* part of its parsed value.
   (: This is to improve readability when the EOLit launches into a bunch of backslashes like below:
   let regex = \\ \\\[0\]
-  regex[0] === '\\'
+  assert regex[0] == '\\'
   let regex = \\  \\\[0\]
-  regex[0] === ' '
+  assert regex[0] == ' '
   (: The sole exception is in the case of a '\\<newline>'. This is allowed only a a quality-of-life thing
   (: when you just want to indicate an empty line and don't want the trouble of '\\<space>'
   (: I know this may end up being a little confusing, and I may reverse it, but I believe it is a worthy
   (: tradeoff for the readability of escape sequences and embedding other language snippets (its intended use)
   (: I'd recommend making your editor highlight the following space somehow.
 
-  (: Compound literals:
-  (: ...can be used for arrays:
-  var array = [:[5]usize: 1, 2, 3, 4, 5]
+  (: Compound literals always follow the form [:optional type: members...]
+  
+  (: They can be used for arrays:
+  var arr = [:array usize: 1, 2, 3, 4, 5]
   (: ...or structs
   let Foo = structdef {field x: usize}
   var foo = [:Foo: .x = 1]
@@ -151,9 +281,9 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
   (: For the prefixed type (:type:), it must match a struct type for a struct lit and an array type for an array lit.
   (: ERROR :) let ar = [:usize: 0, 1, 2]
   (: CORRECT
-  let ar = [:[_]usize: 0, 1, 2] (: Note you can use a _ ('sink') to elide the size
-  (: Also correct:
-  let ar: [3]usize = [0, 1, 2]
+  let ar = [:array usize: 0, 1, 2] (: Note we don't *need* to specify the type
+  (: Also correct, as all integer literals are inferred as usize.
+  let ar = [0, 1, 2]
 
   (: Semicolons and Expressions
 
@@ -172,6 +302,95 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
   (: The only exception to this rule is that such expressions cannot be used to return from a function.
   (: An unconsumed expression that would appear to return from a block is an error.
   (: ERROR: Unconsumed expression '1'. Did you mean to consume it? ('1;') :) let f = fn -> res:usize { 1 }
+
+  (: Note that the whole expression idea also extends to control flow structures:
+  let x = if true { 1 } else { 0 } (: All branches must have the same type. Else is non-negotiable
+  (: Even loops. Here's an example of finding an element's index:
+  (: Like if-expressions, the finally is non-negotiable, as we can't guarentee the main loop will break with a value.
+  let ar = [0, 6, 2, 8, 1]
+  let target = 8
+  let index: ?usize = for ar -> i, cur #l {
+      if cur == target {i} (: Breaks the loop with 'i'. 'break #l i' is also acceptable.
+    } finally { null }
+  assert index == 3
+
+  (: Tuples and their many wonderful uses
+
+  (: Tuples, both in type and value, are defined with (...) syntax
+  let tuple = (1, 2, 3)
+  (: A tuple soley composed of types may be coerced into a type.
+  assert tuple.@Type == (usize, usize, usize)
+
+  (: There's no such thing as a tuple of 1
+  let tuple = (1)
+  assert tuple.@Type == usize
+
+  (: You can directly access each member with .n syntax
+  let tuple = (0, 1, 2)
+  let first = tuple.0
+
+  (: You can unpack with {let,var} (...) = ...
+  let tuple = (1, 2, 3)
+  let (x,y,z) = tuple
+  assert x == 1 and y == 2 and z == 3 (: Now's also a good time to note you can use and/or with assertions
+  (: You can unpack multiple levels
+  let tuple = ((1, 3), 2, 4)
+  let ((odd1, odd2), even1, even2) = tuple
+
+  (: Finally: The piece de resistance
+  (: Swizzling!
+  let Vec3 = structdef { field x, y, z: f32 }
+  let pos = [:Vec3: .x = 1.0, .y = 2.0, .z = 3.0]
+  (: The wonderful swizzling can be done with .(...) syntax
+  let (x, y, z) = pos.(x, y, z) (: Gets translated to (pos.x, pos.y, pos.z)
+  let (z, y, x) = pos.(z, y, z) (: (pos.z, pos.y, pos.x)
+  let x = pos.(x) (: pos.x, as a 1-tuple === no-tuple
+  (: It's essentially nothing but shorthand for the same expression over and
+  (: over again, only with a different thing on the right side of the dot, so you can re-swizzle over and over
+  (: inside an existing swizzle to your heart's content
+  let Mat3x3 = structdef { field row1, row2, row3: (f32, f32, f32) }
+  let mat = [:Mat3x3: .row1 = (1, 0, 0), .row2 = (0, 1, 0), .row3 = (0, 0, 1)]
+  let transpose = mat.(
+    (row1.0, row2.0, row3.0),
+    (row1.1, row2.1, row3.1),
+    (row1.2, row2.2, row3.2)
+  )
+  (: Translates to:
+  (: let transpose = (
+    (: (mat.row1.0, mat.row2.0, mat.row3.0)...
+  (: )
+
+  (: Here's a direct application of swizzling... to do literal swizzling!
+  let Color = structdef {
+    field r, g, b, a: f32
+    property tuple = [
+      .get = pure fn self -> (f32, f32, f32, f32) {
+        return (self.r, self.g, self.b, a)
+      },
+      .set = fn self, newVals {
+        self.(r, g, b, a) = newVals (: You can also do it the other way around and assign with it!
+      }
+    ]
+  }
+
+  var color = [:Color: .r = 0, .g = 1, .b = 2, .a = 3]
+  (: Rearrange the color into ARGB format instead of RGBA
+  color.tuple = color.(a, r, g, b)
+
+  (: To be perfectly clear: The arguments in a swizzle are not actually evaluated. Swizzling is more of a macro
+  (: than an operator of its own.
+  let r = true
+  _ = color.(r, g) (: Just the same as before. 'r' is not evaluated.
+
+
+  (: Swizzling can also be useful for importing multiple things at once
+  (: Note that these are Zig std constructs. I haven't decided on anything STD yet
+  let (ArrayList, SegmentedList, Buffer, (ArenaAllocator, CAllocator))
+    = std.(ArrayList, SegmentedList, Buffer, heap.(ArenaAllocator, c_allocator))
+  (: I'm considering adding a new 'import' binding type, but I think this would be a more Zaggy way to do it.
+
+
+  (: TODO: Look into advanced swizzling ideas
 }
 
 {
@@ -190,19 +409,29 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
   } else {
     (: Not executed.
   } finally {
-    (: Executed only if one of the 'if' or 'elif' branches was taken.
+    (: Executed only if one of the 'if' or 'elif' branches was taken. (so is executed)
   }
 
   (: In loops, '->' marks captures.
-  for 0..10 -> counter, capture `myLabel {
+  (: Additionally, '#' is used at the token level to label a block
+  for 0..10 -> counter, capture #myLabel {
     (: counter is the index of our current loop iteration. It must always be the first capture of a loop.
     (: capture is capted from the for loop's expression (the 0..10 range)
     (: Both are optional, and counter may be replaced with _ to ignore it and still capture.
-    (: # marks a label. This means we may do:
-    break `myLabel;
+    (: By default, break leaves the innermost {}, for{, while{, or loop{
+    break #myLabel;
   } finally {
     (: A finally block is only executed if its loop didn't get broken out of.
   }
+
+  (: If you want to be able to modify a captured variable, you must mark it public (*)
+  (: public captures act like vars, not pointers.
+  var ar = [0, 1]
+  for ar -> _, val* {
+    val = val + 1
+  }
+  assert ar[0] == 1
+  assert ar[1] == 2
 
   var x: ?usize = 1;
   while x -> _, xVal {
@@ -211,10 +440,21 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
     (: while also supports finally blocks
   }
 
-  loop -> counter `myLabel {
+  loop -> counter #myLabel {
     (: Infinite loop
-    break `myLabel;
+    break #myLabel;
   }
+
+  (: Code modifiers
+  (: Since these are all still expressions, you can also use the inline/comptime operators on loops:
+
+  (: The compiler will forcibly unroll this to 5 'printf("Thunder")'
+  inline for 0..5 {
+    printf("Thunder")
+  }
+
+
+
 }
 
 {
@@ -222,14 +462,14 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
 
   (: Ranges are declared with .. or ..= syntax (exclusive end and inclusive end, respectively)
   (: The 'in' operator checks membership
-  10 in 0..10 === false;
-  10 in 0..=10 === true;
+  assert 10 in 0..10 == false
+  assert 10 in 0..=10 == true
 
   (: You can check for membership in multiple ranges using tuplesP:
-  10 in (0, 2..7, 10) === true;
+  assert 10 in (0, 2..7, 10) == true
   (: Thus it is only true if 10 is 0, 2, 3, 4, 5, 6, or 10
   (: To be precise, 'in' will always apply itself to every member of a tuple.
-  10 in 10 === true;
+  assert 10 in 10 == true
 
   (: You can also iterate over these tuple-ranges:
   for (0, 2, 7, 10..500) -> counter, capture {
@@ -237,8 +477,8 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
   }
 
   (: Note you can also do this multiple iteration with other things:
-  let ar0 = [0, 1, 2, 3, 4];
-  let ar1 = [10, 11, 12];
+  let ar0 = [0, 1, 2, 3, 4]
+  let ar1 = [10, 11, 12]
   for (ar0, ar1) -> _, cap {
     (: Iterates: 0, 1, 2, 3, 4, 10, 11, 12
   }
@@ -277,6 +517,41 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
   (: This is because the compiler will attempt to implicitly coerce a function into a pure fn if needed.
   (: If it cannot, it will error out.
   (: The pure operator as used in a definition simply kicks the compiler and says "Oi, I need to know this is pure NOW"
+
+  (: Generic functions:
+  (: Zag has only operator overloading, not function overloading (technically)
+  (: You can accomplish generic functions with the 'any' type.
+  (: Whenever the function is called with a different set of argument types, it will technically create
+  (: a new function with those types.
+  (: You can also technically make the return type an any.
+  (: However for any set of argument types, there may be only one possible return type
+  (: (i.e the relation @typeOf(args...) -> returnType must be 1-1 and comptime knowable)
+  let add = fn a, b: any -> any {
+    return a + b
+  }
+
+  let (x, y: u21) = (20, 24)
+  assert add(x, y) == 44
+
+  (: Note that this could cause problems with figuring out what it returns
+  let (x: isize, y: usize) = (20, 24)
+  _ = add(x, y) (: Will it be isize?
+
+  (: Note that a function with 'any' arguments can be implicitly coerced into a function with concrete args:
+  var fPointer: fn a,b:usize -> bool (: A pointer to a fn(usize,usize) which returns a bool
+
+  (: This is also how we allow lambdas
+  (: Any argument without an explicit type is 'any', and any 'any' can be cast into
+  (: a concrete type. Thus we can do:
+  fPointer = fn a, b -> any {
+    return a < b
+  }
+  (: The compiler sees all arguments/returns are 'malleable' in the sense that an any can be coerced, and so
+  (: it just changes them to match fPointer's type
+  
+
+  (: Generics in Zag are very useful, but care must be taken in their use, as types may have (stupidly) overloaded
+  (: their operators with meanings which make no sense relative to that operator's intended usage
 }
 
 {
@@ -321,11 +596,11 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
    ] 
   }
   var foo = [:Foo: .x = 1]
-  foo.negative === -1 (: Retrieving a property
+  assert foo.negative == -1 (: Retrieving a property
   
   foo.negative = 7 (: Setting it
-  foo.negative === 7
-  foo.x === -7
+  assert foo.negative == 7
+  assert foo.x == -7
 
   (: enumdef defines a new enum (duh)
   let Meal = enumdef {
@@ -356,10 +631,10 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
   }
 
   var lastMeal = Meal.Breakfast
-  lastMeal.wasEatenOut === false
+  assert lastMeal.wasEatenOut == false
   (: Assigning a union member with its value is done with ()
   lastMeal = .Lunch(true)
-  lastMeal.wasEatenOut === true
+  assert lastMeal.wasEatenOut == true
   lastMeal = .Lunch(false)
   
   (: Assigning a tag without assigning to its union-field works the same as an uninitialized variable:
@@ -367,4 +642,447 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
   (: ERROR: lastMeal.Lunch has not been written to since it was made active
   (: if lastMeal.Lunch == true {}
   (: Thus you have the freedom to not immediately assign, but still need to write before you read.
+}
+
+{
+  (: (Mutual) Recursion
+
+  (: Since we can't directly access the name of the type we're binding inside the current bind statement,
+  (: we must use @This to refer to the current type
+  let LinkedList = structdef {
+    field next: *@This
+  }
+  
+  (: By now you've probably noticed that since all bindings can be shadowed, and only the previous
+  (: value of a binding is available in the initializer, how could we do mutually recursive types/funcs?
+
+  (: Answer: cvars!
+  (: cvars are bindings which are variable at compile time, but act like lets at runtime
+  (: When an operation attempts to write to them, that value is folded directly back into their original bind
+  (: Only when something reads from them is their entire subtree evaluated
+  let (Foo, Bar) = {
+    cvar Foo, Bar: type
+    (: Now Foo and Bar are available!
+    Foo = structdef { field b: *Bar }
+    Bar = structdef { field f: *Foo }
+
+    (Foo, Bar)
+    (: In the above, the type of 'b' and 'f' are stored as pointers to the binds Foo and Bar
+    (: Then, when they're returned from the block, their types get an evaluation that
+    (: resolves the pointer to each bind into what's currently stored in that bind
+    (: (i.e the real Foo and Bar types)
+  }
+  (: We could also technically just use cvars from the get-go, but that leaves them open to modification
+  (: A public cvar may be seen and *manipulated* from anywhere it's visible.
+  (: Thus some jerk could conceivably change Foo and Bar into other types if we had used cvars
+  (: Thus we only use cvars at the inner scope here, and return their values to constant lets for safekeeping
+
+  (: Works exactly the same for functions
+  let (foo, bar) = {
+    cvar foo: fn a: usize -> usize
+    cvar bar: fn a: usize -> usize
+
+    foo = fn a -> usize {
+      if a < 2 { return 1 }
+      else return bar(a)
+    }
+    bar = fn b -> usize {
+      if b - 1 < 2 { return foo(b) }
+      else return foo(b - 10)
+    }
+
+    (foo, bar)
+  }
+
+  (: I know this whole part of Zag is a wee bit convoluted, but I felt it was the best poison available.
+    (: I didn't want to compromise on shadowing, so I couldn't easily allow references to undeclared but comptime known
+    (: bindings
+      (: (That's the path Zig took (I think))
+    (: I didn't want to compromise on using let-s for all constant declaration, so I didn't introduce a 'type' binding
+      (: (That's the way out Rust took)
+    (: I didn't want to make type declarations their own special type of thing
+      (: (That's essentially the way out C++ and friends took)
+}
+
+{
+  (: Implicit Coercions and Types
+
+  (: Integer literals always start as usize
+  let x = 0
+  assert x.@type == usize
+
+  (: Character literals always start as char
+  let c = 'h'
+  assert c.@type == char
+
+  (: In general: Variables may only be widened, unless the compiler can prove it fits at compiletime
+
+  let x: isize = 0 (: Although 0 is a usize and usize->isize narrows, the compiler can prove it's fine
+  let x: u8 = 255 (: Also fine, as 255 <= u8.max
+  (: ERROR :)
+  (: let x: u8 = 256 (: Obviously 256 is greater than a u8 can hold, so the compiler errors on this cast
+
+  let c: u8 = 'h' (: The compiler can prove h's codepoint is small enough for a u8
+  (: ERROR :)
+  (: let c: u8 = 'ᛲ' (: 'ᛲ' needs multiple u8s to represent
+}
+
+{
+  (: Type arithmetic
+
+  (: You can use a full array of arithmetic operators on types
+
+  (: Tuples:
+  (: a type * usize gives a tuple of that many of that type, assuming the usize is comptime known
+  let tupleOf5: usize * 5 = (0, 1, 2, 3, 4)
+  (: You can also add these together
+  let tuple: usize * 2 + f32 * 3 = (0, 0, 1.5, 1.5, 1.5)
+
+  (: Structs:
+  let Vec2 = structdef {
+    field x, y: usize
+    let add = pure fn lhs, rhs: @This -> @This {
+      return [.x = lhs.x + rhs.x, .y = lhs.y, rhs.y]
+    }
+  }
+
+  (: It works by literally concatenating the two structdefs together
+  (: Thus all shadowing rules work the same as always: field/enum no, let/var/property/alias yes
+  let Vec3 = Vec2 + structdef {
+    field z: usize
+    let add = pure fn lhs, rhs: @This -> @This {
+      return [.x = lhs.x + rhs.x, .y = lhs.y + rhs.y, .z = lhs.z + rhs.z]
+    }
+  }
+
+  (: If rhs contains all binds that lhs does, no matter what else rhs has, lhs < rhs
+  assert Vec2 < Vec3
+
+  (: If rhs contains all binds that lhs does, as well as the same memory layout, lhs <= rhs
+  (: if lhs <= rhs, then rhs may be passed in the place of lhs. This allows for extending things
+  let Foo = structdef {
+    field x: usize
+    let add = pure fn lhs, rhs: @This -> @This { return [.x = lhs.x + rhs.x] }
+  }
+  (: Bar *extends* Foo to allow subtraction
+  let Bar = Foo + structdef {
+    let sub = pure fn lhs, rhs: @This -> @This { return [.x = lhs.x - rhs.x] }
+    let add = pure fn lhs, rhs: @This -> bool { return false }
+  }
+  (: lhs is 'in' rhs if they have the same memory layout and all of lhs's bindings can be found in rhs
+  (: Those bindings may have been shadowed at a later date, as in Bar, but they still exist.
+  (: Note that this is a deep equality check. Same name/type isn't enough. The functions must have the same contents
+  (: Thus it is safe to pass a Bar where a Foo is expected.
+  (: Note that is is not 'in' in the same was that a Vec2 is 'in' a Vec3, as a Vec3 has a different memory layout
+  assert Foo in Bar
+  let func = pure fn f: Foo -> usize {
+    return f.x
+  }
+  var b = [:Bar: .x = 5]
+  assert func(b) == 5
+
+  (: Although I suppose it's technically *possible* for there to be 2 unrelated structs with the same fields
+  (: and exact same functions, it's so unlikely I don't think it's worth considering.
+  (: TL;DR: If it looks like a duck and quacks like a duck then I don't care where it came from,
+  (: I intend to roast it.
+
+  (: This feature is there to allow extending structs with your own methods, without compromising the ability
+  (: to still pass them into functions which expect the old version.
+}
+
+{
+  (: In depth with optionals
+
+  (: As you know, ? creates a new optional type:
+  let x: ?usize = null
+  (: And you can test this either like so
+  if x -> xVal {
+  }
+  (: Or like so
+  if x.has {
+    let xVal = x.val
+  }
+  (: But the variable that 'if' and others check isn't set in stone.
+  (: You can make it work with your own structs like so:
+  let MyResult = pure fn T: type -> type {
+    return enumdef {
+      enum Error: slice const u8 (: What went wrong
+      enum Ok: T
+
+      property isOk = [
+        .get = pure fn self: @This -> bool {
+          return self == .Ok
+        }
+      ]
+      alias @has = isOk (: The compiler by default uses @has to check in ifs/whiles/etc
+      (: Reading @has must result in a boolean if it's present.
+      (: This could be a field or a property, but not a function.
+      property val = [
+        .get = pure fn self: @This -> T {
+          return self.Ok
+        }
+      ]
+      alias @val = val
+      (: Note that simply naming the property 'val' is not enough.
+      (: The alias @val *must* point to whatever you want to use.
+    }
+  }
+  (: This then lets you use it for fun stuff: Error handling
+  (: Zag both agrees and disagrees with Zig. Error handling should be explicit, but
+  (: it should also
+
+  (: x should be in 1..=10
+  let doubleOneToTen = pure fn x: usize -> MyResult(usize) {
+    if not (x in 1..=10) {
+      return .Error("X MUST be in 1..=10!")
+    }
+    return .Ok(x * 10)
+  }
+  
+
+}
+
+
+{
+  (: C Interop
+  (: Zag is designed to follow Zig's footsteps with C interoperability
+
+  let libpng = @cInclude(
+    [("PNG_DEBUG", 3)], (: An ?array of things to be defined before including
+    ["libpng.h"] (: An array of files to include
+  )
+  (: @cInclude takes as its argument an array of tokens.
+  (: It parses it internally,
+}
+
+{
+  (: Zaggy things to do
+
+  (: If you need to add hooks that other modules can register themselves in, why not use a cvar?
+  cvar preHooks*: slice fn void -> void
+  (: Since preHooks is marked public (*), other modules can add their own functions to that list,
+  (: since a slice can be manipulated at compiletime, then your module can do
+  for preHooks -> hook {
+    hook()
+  }
+  (: To run all the collected hooks (Obviously with actual parameters)
+}
+
+{
+  (: Possible changes to the language
+
+  (: Make tuples use []
+  (: Would work like this:
+  let tupleOf5 = [true, 1, 1.0, 4, "Hey"]
+  (: If a compound literal cannot resolve all its arguments to the same type (and they are unnamed),
+  (: then it would be a tuple
+  (: Problem:
+
+
+  (: Remove ===/!==, just add a normal 'assert' keyword that generates a deep inspection of the expressions
+  (: to figure out where they went wrong
+  (: This would remove most of the cases of ambiguity without semicolons
+  (: Update: Doing this
+  (: Update: Done
+  (: Assert will be parsed at the same level as a let, even though it's technically still a unary operator
+
+  (: Make relational operators work as a cartesian product
+  (: Thus:
+  (1, 2) < (2, 3);
+  (: Which would normally be true, as 1<2 and 2<3
+  (: Translates as
+  1 < 2 and 1 < 3 and 2 < 2 and 2 < 3;
+  (: And is thus false
+  (: This would make things like
+  1 in (1, 2, 3);
+  (: more consistent, as '1' is technically a 1-tuple and thus unable to do a pair-wise comparison with (1,2,3)
+
+  (: Update: The above were the ravings of a sleep deprived madman.
+  (: It makes no sense to make then cartesian, as in (1,2)<(2,3), if 1 < 3 then it's also <2 and so on
+  (: See the next major section for notes on how how operators will work with tuples
+  (: 
+}
+
+{
+  (: Notes on how things work:
+
+  
+  (: ==, !=, <, <=, >, >= will be defined to work pairwise no matter what.
+  assert (1, 2) < (2, 3)
+  (: 'in' shall be defined as (all of lhs) (in rhs1 or in rhs2 or...)
+  assert 1 in (-1..=0, 1, 5, 50..100)
+  (: 1 in -1..=0 or 1 in 1 or 1 in 5 or 1 in 50..100
+  assert (1, 51) in (-1..=0, 1, 5, 50..100)
+  (: (1 in .. or 1 in 50..100) AND (51 in ...)
+  assert not ( (1, 21) in (-1..=0, 1, 5, 50..100) )
+  (: 
+}
+
+{
+  (: Error handling and the like (Still WIP)
+
+  (: Defer
+  (: Zag follows in Zig's footsteps with the defer operator.
+  (: It's parsed at the same level as let/var/assert/etc (i.e first in a statement)
+
+  (: If you want to do something at the end of this block (whenver that may be), use 'defer'
+  defer printf("World!\n")
+  printf("Hello")
+  (: Print "Hello" now, and "World!\n" whenver this block exits for any reason
+
+  (: By default a deferment is for the most inner block
+  {
+    {
+      defer printf("This will happen before ")
+    }
+    printf("this executes")
+  }
+  (: However you can defer with a label to specify where
+  #outer {
+    {
+      defer #outer printf("before this does")
+    }
+    printf("This executes ")
+  }
+  (: Note that deferment from only one conditional branch is still uncharted territory.
+  (: I don't know if I'll allow things like this or not:
+  #outer {
+    if true {
+      defer #outer printf("May be executed?")
+    } else {
+      (: Ain't no deferments here. What gives?
+    }
+  }
+
+  (: As in Zig, this helps with pairing initialization and destruction
+  var a = ArrayList(u8).init()
+  defer a.deinit() (: Explicitly sets a's lifetime to this scope
+  (: Note that you cannot defer an expression with variables that don't live long enough
+  (: to see that deferment
+  #outer {
+    {
+      var a = 1
+      (: defer #outer printf("{}", a) (: ERROR: 'a' does not live long enough for deferment
+    }
+  }
+
+
+  (: Error handling
+  (: Zag takes a middleground between Rust and Zag:
+  (: Error handling should be simplistic, explicit, and userspace 
+  (: You've already seen how you can make a Result type in the custom optional section (@has/@val)
+  (: This is essentially how Zag expects error handling to be done.
+  (: You can make it a bit easier using concatenated enums:
+  let Result = pure fn Result, Errors: type -> type {
+    return Errors + enumdef {
+      enum Ok: Result
+      property isOk = [.get = pure fn self -> bool { return self == .Ok } ]
+      alias @has = isOk
+      property val = [.get = pure fn self -> Result { return self.Ok } ]
+      alias @val = val
+    }
+  }
+  (: Now we can take all our error sets
+  let AllocationErrors = enumdef {
+    enum OutOfMemory, NoAllocator
+  }
+  let HashMapErrors = enumdef {
+    enum Clobber, NoKey
+  }
+  (: and concatenate then together:
+  let set = fn map, key, val -> Result(usize, AllocationErrors + HashMapErrors) {
+    (: Now we can return any of the errors we've explicitly declared
+    if true {
+      return .OutOfMemory
+    } elif true {
+      return .NoAllocator
+    } elif true {
+      return .Clobber
+    } else {
+      return .Ok(0)
+    }
+  }
+
+  (: and either check to see if it was successful:
+  let map = true (: Pretend this was an actual hashmap
+  if set(map, "Thingy", "someVal") -> result {
+    (: ...
+  } else {
+    printf("Error")
+  }
+  (: Or also check what went wrong
+  match set(map, "Thingy", "someVal") {
+    using val
+    .Ok(val) -> {
+      printf("Went well and got result={}", val)
+    },
+    .OutOfMemory -> {
+      printf("Were out of memory!")
+    },
+    else -> {}
+  }
+}
+
+{
+  (: Matches (Syntax still highly experimental)
+  (: Zag has a match structure, similar to Rust's
+  (: and we also use the sink as a sort of wildcard
+
+  (: Matches are the only blocks that don't completely conform to normal block rules
+  let t = (true, false, 5)
+  match t {
+    (: Patterns are checked sequentially, like with normal if/elif
+    (: The pattern itself is compared with '=='
+    (true, true, 0) -> { (: Normally it must be '-> stmt,'
+      (: Do something
+    },
+    (: A constant capture can be specified with let
+    let x
+    (: Note we don't use a -> here. This is because I am making secondary condition checks part of the match itself.
+    (: This way you don't have to do the checks inside the block and have some other convoluted logic
+    (: for if it doesn't match and you wish you used a different pattern.
+    (true, _, x) if x <= 2 {
+      (: we're still inside the match expression until we're inside this if statement's block
+    } elif x == 2 { (: Once again, the elif itself exists inside the match expression, and its block is normal code space
+      printf("We had (true, something, 2)")
+    },
+    (: Else is optional for an inner if. Another pattern could end up covering it.
+
+    
+    (: Else is not optional here. The entire match pattern needs to be exhaustive, not each individual arm
+    (: This if-pattern, although admittedly somewhat convoluted, is intended to reduce duplication writing patterns
+
+    (: 'else' simply matches anything. Duh.
+    else -> {
+
+    }
+  }
+
+  (: You can also match against compound literals
+
+  let ar = [0, 5, 10]
+  match ar {
+    (: ... is used as a sort of 'blanket sink' for the rest of the pattern
+    [0, ...] -> {
+
+    },
+    else -> {}
+  }
+  
+  let Vec2 = structdef { field x, y: f32 }
+  let v = [:Vec2: .x = 10, .y = 200]
+
+  match v {
+    (: If you capture with 'var' instead of let it becomes mutable. Duh.
+    var y
+    [.x = 10, .y = y] if y < 300 {
+      y = 10
+    },
+    else -> {}
+  }
+
+  (: In general:
+  (: 'match' expr '{'
+  (:   ['using' bindList] expr (ifBlocks | '->' block)
+  (: '}'
 }

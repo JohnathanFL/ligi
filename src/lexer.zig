@@ -4,7 +4,7 @@ const Allocator = std.mem.Allocator;
 const printf = std.debug.warn;
 const assert = std.debug.assert;
 
-pub const tokens = @import("token.zig");
+pub const tokens = @import("tokens.zig");
 const FilePos = tokens.FilePos;
 const Tag = tokens.Tag;
 const Token = tokens.Token;
@@ -280,7 +280,6 @@ pub const Lexer = struct {
         .{ .str = ">>=", .tag = .ShrAssign }, // # >>=
         .{ .str = ">=", .tag = .GreaterEq }, // # >=
         .{ .str = ">", .tag = .Greater }, // # >
-        .{ .str = "===", .tag = .Assert }, // # ===
         .{ .str = "==", .tag = .Eq }, // # ==
         .{ .str = "=", .tag = .Assign }, // # =
         .{ .str = "<=", .tag = .LessEq }, // # <=
@@ -306,13 +305,15 @@ pub const Lexer = struct {
         .{ .str = "&", .tag = .BitAnd }, // # &
         .{ .str = "%=", .tag = .ModAssign }, // # %=
         .{ .str = "%", .tag = .Mod }, // # %
-        .{ .str = "!==", .tag = .NotAssert }, // # !==
         .{ .str = "!=", .tag = .NotEq }, // # !=
         .{ .str = "?", .tag = .Optional }, // # ?
     };
 
     const keywords = [_]StrTok{
         .{ .str = "_", .tag = .Sink },
+        .{ .str = "array", .tag = .Array },
+        .{ .str = "assert", .tag = .Assert }, // # ===
+        .{ .str = "slice", .tag = .Slice },
         .{ .str = "not", .tag = .Not },
         .{ .str = "and", .tag = .And },
         .{ .str = "or", .tag = .Or },

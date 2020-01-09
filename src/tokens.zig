@@ -17,8 +17,7 @@ pub const Tag = union(enum) {
 
     // Assertions
     // These are parsed at the same level as assignments
-    Assert: void, // ===
-    NotAssert: void, // !==
+    Assert: void, // 'assert'
 
     // Assignment Operators
     Assign: void,
@@ -63,6 +62,8 @@ pub const Tag = union(enum) {
     BitXor: void,
 
     // Code-mods
+    Array: void, // These 2 since [] is ambiguous with a compound literal.
+    Slice: void,
     Comptime: void,
     Pure: void,
     Inline: void,
