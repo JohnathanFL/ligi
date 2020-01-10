@@ -156,14 +156,23 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
   (: You can alias a bind with... alias
   (: What did you expect, 'abracadabra'?
   var x = 1
-  alias trueX = x (: The rhs of an alias should only be a single symbol
+  alias trueX = x (: The rhs of an alias should only be a single symbol or path (dot expression)
   x = 2
   assert trueX == 2
 
   (: Aliases are a way of keeping a reference to an old variable even after it's shadowed
   var x = "Hello" (: Shadows x:usize with x:(slice const u8)
   assert trueX == 2 (: But trueX still points to x:usize
-  
+
+  (: Aliases may not specify their type. The type and semantics of an alias always match
+  (: whatever it is set to point to.
+  (: Think of it like an AST level pointer.
+  (: Note that it is not:
+    (: A C++ reference
+    (: Anything physical. No memory or processing is consumed beyond compiletime.
+  (: They are useful for when you just don't want to rewrite the same long path over and over,
+  (: want to shadow a variable without losing access, or want to match an interface (as we'll see
+  (: you can do with @has/@val later) while using your own names.
 }
 
 {
@@ -201,7 +210,9 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
   var s: slice usize = arrayOf5Usizes[0..2] (: A slice of usizes. Points to the first 2 usizes
   (: (indices 0,1)
   
-  var arrayOf5Usizes: array (5, usize) (: array is a unary operator. Used on either tuple 
+  var arrayOf5Usizes: array (5, usize) (: array is a unary operator. Used on either tuple
+
+  (: We'll go into how to create your own types later.
 }
 
 {
@@ -389,6 +400,13 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
     = std.(ArrayList, SegmentedList, Buffer, heap.(ArenaAllocator, c_allocator))
   (: I'm considering adding a new 'import' binding type, but I think this would be a more Zaggy way to do it.
 
+  (: You can also swizzle tuple-side:
+  var ar1: array (5, usize), ar2: array (10, usize), ar3: array (1, bool) = undef
+  (: Other than a few builtin variables/methods, any dot access into a tuple redirects to all members
+  (: and makes a new tuple with the result of doing that access on all members
+  assert (ar1, ar2, ar3).len == (5, 10, 1)
+  (: The only current builtins are the .0 through .(tuple length) for member access,
+  (: but I intend to add some more useful onces as I find enough uses.
 
   (: TODO: Look into advanced swizzling ideas
 }
@@ -514,9 +532,9 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
   (: Despite not annotating the first below fn, it still works.
   f = fn a, b -> bool { res = a == b }
   f = pure fn a, b -> bool { res = a == b }
-  (: This is because the compiler will attempt to implicitly coerce a function into a pure fn if needed.
-  (: If it cannot, it will error out.
-  (: The pure operator as used in a definition simply kicks the compiler and says "Oi, I need to know this is pure NOW"
+  (: Every fn def stores an 'ispure:?bool' which tells if a function is pure.
+  (: All the 'pure' operator does is kick the compiler to check if it's pure, and error if it isn't.
+  (: If you assign a fn def to a fn type that requires purity, it will still kick the compiler to check.
 
   (: Generic functions:
   (: Zag has only operator overloading, not function overloading (technically)
@@ -527,15 +545,25 @@ let std = @import("std") (: Imports the module 'std' from the known search paths
   (: However for any set of argument types, there may be only one possible return type
   (: (i.e the relation @typeOf(args...) -> returnType must be 1-1 and comptime knowable)
   let add = fn a, b: any -> any {
+    (: You can use @isNumeric to check if a type is some {u,i}{1..} or f{32,64,128}
+    (: Checks like this, while not required, are encouraged in 'any' functions to make the intent clear
+    (: at a glance to any reader.
+    assert (a.@type, b.@type).@isNumeric == (true, true)
+    (: Also note that although 'a' and 'b' may look like they must share a type, it is still currently possible
+    (: to pass 2 different types. Let's restrict that
+    assert a.@type == b.@type
+    (: Thus we have just made a generic function while also restricting what types it could possibly take,
+    (: all in (what I'd consider) a pretty readable package.
+    (: As with many things in Zag, the onus is on the writer to not go insane with this stuff.
     return a + b
   }
 
   let (x, y: u21) = (20, 24)
   assert add(x, y) == 44
 
-  (: Note that this could cause problems with figuring out what it returns
   let (x: isize, y: usize) = (20, 24)
-  _ = add(x, y) (: Will it be isize?
+  (: ERROR: a.@type:isize == b.@type:usize is false
+  (: _ = add(x,y)
 
   (: Note that a function with 'any' arguments can be implicitly coerced into a function with concrete args:
   var fPointer: fn a,b:usize -> bool (: A pointer to a fn(usize,usize) which returns a bool
