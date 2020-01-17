@@ -50,7 +50,7 @@ proc nextEql(self: var Lexer, pat: string): bool {.inline.} =
   return true
 
 
-proc scan*(self: var Lexer): tuple[where: FilePos, what: Token] =
+proc scan*(self: var Lexer): Token =
   var doneSkipping = false
   while not doneSkipping:
     doneSkipping = true
@@ -73,7 +73,7 @@ proc scan*(self: var Lexer): tuple[where: FilePos, what: Token] =
   result.where.line = self.line
   result.where.col = self.col
   if self.nextChar == '\0':
-    result.what = Token(tag: EOF)
+    result.what = Tok(tag: EOF)
     return
 
 
@@ -87,20 +87,20 @@ proc scan*(self: var Lexer): tuple[where: FilePos, what: Token] =
     while self.nextChar in validSymbolChars: lexeme &= self.advance()
     for word in words:
       if $word == lexeme:
-        result.what = Token(tag: word)
+        result.what = Tok(tag: word)
         return
-    result.what = Token(tag: Symbol, lexeme: lexeme)
+    result.what = Tok(tag: Symbol, lexeme: lexeme)
   elif self.nextChar in '0'..'9':
     var lexeme = ""
     while self.nextChar in validNumLitChars:
       lexeme &= self.advance()
-    result.what = Token(tag: Tag.IntLit)
+    result.what = Tok(tag: Tag.IntLit)
 
     result.what.lexeme = lexeme
   elif self.nextEql "`":
     var lexeme = "" & self.advance() # Get the '`' in there
     while self.nextChar in validSymbolChars: lexeme &= self.advance()
-    result.what = Token(tag: Label, lexeme: lexeme)
+    result.what = Tok(tag: Label, lexeme: lexeme)
   elif self.nextChar == '"':
     var lexeme = ""
     discard self.advance()
@@ -113,7 +113,7 @@ proc scan*(self: var Lexer): tuple[where: FilePos, what: Token] =
     if self.nextChar == '\n':
       echo "ERROR: Newline terminated string literal at ", result.where
     discard self.advance # Skip the '"'
-    result.what = Token(tag: StringLit, lexeme: lexeme)
+    result.what = Tok(tag: StringLit, lexeme: lexeme)
   else:
     const ops: seq[Tag] = @[
       # Grouped by starting character

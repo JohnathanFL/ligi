@@ -22,7 +22,6 @@ type
     BitXor = "^"
     BitXorAssign = "^="
     Block = "block"
-    BoolLit = "BOOLLIT"
     CharLit = "CHARLIT"
     Comptime = "comptime"
     Concept = "concept"
@@ -104,7 +103,10 @@ type
 
 
 type BinLevel*{.pure.} = enum
-  Assignment, Equality, Relational, Ors, Ands, Arithmetic, Product, Bitwise
+  Assignment, Equality, Relational, Ors, Ands, Range, Arithmetic, Product, Bitwise
+
+template below*(level: BinLevel): BinLevel =
+  BinLevel(ord(level) + 1)
 
 # All expression-level binary operators.
 # FieldAccess and such are not included here as they are parsed below even unary
@@ -114,6 +116,7 @@ const binOps*: array[BinLevel, set[Tag]] = [
   {Less, Greater, GreaterEql, LessEql, Spaceship},
   {Or, Xor},
   {And},
+  {OpenRange, ClosedRange},
   {Add, Sub},
   {Mul, Div, Mod},
   {BitOr, BitAnd, BitXor},
@@ -123,7 +126,18 @@ const binOps*: array[BinLevel, set[Tag]] = [
 
 const unaryOps*: set[Tag] = {
   Sub, BitNot, Not,
-  Const, Comptime # Used for type expressions
+  Const, Comptime, # Used for type expressions
+  Array, Tag.Slice, Optional
+}
+
+const callOps*: set[Tag] = { LParen, LBracket }
+
+const bindSpecs*: set[Tag] = {
+  Let, Var, CVar, Field, Property, Enum
+}
+
+const atoms*: set[Tag] = {
+  Symbol, NullLit, IntLit, StringLit
 }
 
 const validSymbolBeginnings*: set[char] = {
@@ -134,10 +148,13 @@ const validSymbolChars*: set[char] = validSymbolBeginnings + {'0'..'9'}
 const validNumLitChars*: set[char] = {'0'..'9'}
 
 type
-  FilePos* = tuple[line: uint, col: uint]
-  Token* = object
+  FilePos* = object
+    line*: uint
+    col*: uint
+  Tok* = object
     case tag*: Tag
     of Tag.Symbol, Tag.Label, Tag.IntLit, StringLit, CharLit:
       lexeme*: string
     else: discard
+  Token* = tuple[what: Tok, where: FilePos]
 
