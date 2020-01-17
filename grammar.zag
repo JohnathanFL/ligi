@@ -1,780 +1,427 @@
-(= A testground for new language ideas and the official "if it's in here, it'll parse" document.
-(= Will also be the tutorial for the language.
-(= ColumnLimit: hard 120
-(= Indent: 2
-(= Names: camelCase
-(= Functions: snake_case
-(= Types: PascalCase
-
-(: Welcome to Zag: The readable, general purpose language.
-(: Warning: Zag places an emphasis on sigils over operators where possible
-(: Note that this file is a WIP. I'm basically just brainstorming here and seeing how things look once highlighted
-
-(: The above doc comment ( '(=' ) is required to be in the root compilation unit of every project
-(: It defines the project's purpose/indentation width/naming conventions.
-(: Indent _only_ takes effect when formatting the code
-(: I hope to eventually allow for interop between projects with different naming conventions
-(: by having the compiler convert at compile time, but for now it's just nice for people reading your code
-
-(: All comments are single line
-(: Comments can, however, be terminated before the newline :)
-
-(: Language basics
-  (: Whitespace insensitve
-  (: Braced C-style
-  (: Sigils are better than operators
-    (: (C) *&data -> (Zag) data.addr.deref
-    (: (Zig) optional.? -> (Zag) optional.val (and optional.has)
-  (: Code is data
-    (: Generics are done with functions that take/return types
-    (: Types can be programmatically constructed to suit the programmer
-    (: All types/functions are bound with let
-  (: ':' is reused as often as possible to denote "the next option", as in:
-    (: for array : |i, x|..
-    (: while opty : |i, x| : after_stmt...
-    (: let x: type...
-    (:...
-  (: |...| is used to capture things
-  (: `label denotes a label named label
-  (: All things that bind a symbol use the same syntax symbol:type
-    (: field x: type = default;
-    (: enum  e: type = tag_val;
-    (: let   x: type = val;
-    (: var   x: type = val;
-    (: fn(x: type) res: type...
-  (: All major flow control structures support a finally block, even where useless
-    (: if...finally: Finally executed if one of the paths was taken
-      (: if...else...finally is redundant. Just place the code after the stmt
-    (: while...finally: Finally executed if the loop executes normally
-    (: for...finally: Finally executed if the loop exits normally
-    (: loop...finally: Useless. Only way out is break
-    (: 
-
-(: Ziggy Zaggy Zenny
-  (: Stop taking things too seriously
-  (: From so simple a beginning, endless forms most beautiful
-  (: Code is just another type of data
-  (: Give programmers flexible tools
-  (: Flexibility is more important than arbitrarily restricting programmers.
-  (: The language exists to express intent of the programmer
-  (: The programer's intent is to make a working program as intuitively as possible
-  (: What's been should tell you what's coming
-  (: Code should flow in reading and writing, but especially in reading.
-  (: Common things should be language builtins
+(: Grammar MK6 - Final (hopefully) iteration of the language
+(: Biggest change as of the beginning of this doc is removing all shadowing
 
 
-(: Constants are declared with let
-(: General form: let <varname>[: <type>] = <init_expr>;
-(: init_expr is not optional.
-let x: usize = 0;
-(: The type can also be omitted
-(: Note that this x is actually a completely new binding. Zag bindings can shadow each other, rust style
-let x = 0;
-(: Obviously, these can't be reassigned
-x = 1; (: ERROR
-(: This may change in the future if all assignments are designated as being at compile time
+{
+  (: 10 minute crash course
+  (: We'll make a happy little comment with '(:'
 
+  (: Zag's all about the binds
+  let myFirstVal: usize = 0 (: Let creates a constant
+  (: The type is optional for a let
+  var myFirstVar: usize = 0 (: Var creates a mutable variable
+  (: Both type and initialization expression are optional for vars
+  (: If both are unspecified, the first write to the var determines its type
+  var noType
+  noType = 10
 
-(: Variables are declared with var
-var y = 0;
-(: initialization can be deferred with undef
-var y = undef; (: Attempting to read this is an error until it's reassigned
-(: Variables can be reassigned
-y = 1;
+  (: Note that semicolons are optional.
+  (: You only need them if there's ambiguity to remove, or if you prefer peppering them all over.
+  (: I've taken care to make a language that has very little of said ambiguity.
+  (: The only real problem is if, for some reason, you needed to write an expression on one line
+  (: then have the next line start with a unary '-'. In that case, just use () to disambiguate it.
 
-(: Types consist of 0+ modifiers followed by a base type and are read left->right
-(: The below is an optional pointer to a slice of arrays of 5 booleans
-(: Slices are defined with []T. They have:
-  (: A layout of {ptr: *T, len: usize} (Guaranteed, so you _could_ cast something to a slice)
-  (: Built in .len: usize field
-  (: Built in .ptr: *T field. This points to the first member of the slice and is useful for passing slices to C code
-  (: A built in iterate[_mut] method
-  (: You may also write []T as Slice(T)
-(: Optionals are defined with ?T. They have:
-  (: A layout of {has: u8, val: T}
-  (: The null literal.
-  (: Built in .has:u8 field.
-  (: Built in .val:T field.
-  (: Note that accesses to .val are guarded with checks to has in all modes but ReleaseFast
-  (: You can also write ?T as Optional(T), as the compiler redirects ?<rhs..> to Optional(rhs)
-(: Arrays are defined with [N]T, where N may be _. They have:
-  (: A layout of {T1, T2, ..., T[N-1]}
-    (: Because the layout is just the values directly, you can safely pass a ptr to an array to C code
-  (: A built in static variable len: usize. This is not included in the data is it can easily be inferred.
-  (: A built in iterate[_mut] method
-  (: You may also write [N]T as Array(N, T)
-(: You may note that the above sections make it sound like slices are basically glorified structs.
-(: That's because they _are_ glorified structs, with a little syntactic sugar on top.
-(: Also, although you _can_ use the pseudo-reserved field names for your own purposes, it's mildly discouraged.
-(: If you do choose to use them, at least make sure they follow the same purpose, eh?
+  (: Zag is semi-whitespace sensitive. Call/index operators must be on the same line as their preceeding symbol,
+  (: So you can unambiguously write things like
+  let x = 10, y = 10
+  (x, y) += 1
+  (: Expands to
+  assert (x += 1, y += 1).@type == (void, void)
+  (: Without the rule, that would be interpreted as Call{'()', 10, x, y}
+  (: With the rule, it's properly interpreted as 'Expr{10}, Call{'+=', (x, y), 1}'
 
-(: This means that 'x' now means a mutable, compiletime known optional pointer to a constant slice of arrays of 5 boolean
-var x: comptime ?*const[][5]bool = undef;
+  (: All variables must be written to before they are read from
+  var undefinedMemory: usize
+  (: ERROR: printf("{}", undefinedMemory)
+  undefinedMemory = 1
+  printf("{}", undefinedMemory)
 
-(: Optionals may be either the type to the right of the ? or null
-var x: ?*void = null;
-x = y.addr;
-(: Optionals may be "dereferenced" with .val
-var z: *void = x.val;
-(: And you may check if they're present with .has
-var truthy = x.has;
+  (: You can get around this by assigning the value of 'undef'
+  var undefMemory: usize = undef
+  printf("{}", undefMemory) (: No guarantees about what gets printed
 
-(: Zag doesn't use & and * for pointers. Instead, we use addr and deref:
-(: This pattern of built-in fields in variables will continue later.
-var addrOfY = y.addr;
-(: === is the built-in assertion operator. If it's not true at runtime (or can be disproven at compile-time)
-(: then it emits a panic (or a compile error) with the values of both sides.
-y === addrOfY.deref;
+  (: Zag has arrays, either with or without explicit type
+  let myFirstAr:
+    (: 'array', when used with only a type as its argument, infers the size
+    array usize =
+    (: When used with a tuple of (usize, type), it creates an array of that size.
+    [:array (10, usize): 0, 1, 2, 3]
+  (: You can slice into arrays
+  let myFirstSlice: slice usize = myFirstAr[0..2]
+  assert myFirstSlice.len == 2
+  assert myFirstSlice[1] == 1
 
-(: Zag supports all your typical arithmetic ops
-y = 1 * 2 + 3 - 4 / 5 % 6;
-(: And bit-ops
-var z = ~0 | 1 & 0;
-(: And relational ops
-var truthy = z == 0;
-truthy = z != 0;
-truthy = z > 0;
-(:...
-(: And logical ops
-(: xor is true only if one of them is true.
-(: ! is the only logical op that isn't a sigil because I think it visually binds to its value better
-  (: This may change eventually
-truthy = truthy or truthy and truthy xor truthy; 
+  (: You can concatenate arrays in 2 circumstances:
+  (: 1. When you can determine the entire size and concatenation at compiletime
+  cvar concatArray = [98, 99, 100]
+  comptime for 0..98 -> i {
+    concatArray = [i] + concatArray
+  }
+  (: 2. When the size is comptime known and it only happens once
+  (: (i.e no loops or other control structures like above)
+  let ar0 = [0, 1, 2]
+  let ar1 = [3, 4, 5]
+  var ar01 = ar0 + ar1
+  (: Note that if it's done with non-comptime values, it stores that on the stack,
+  (: as it's able to determine the size statically
 
-(: TODO
-(: Conditional expressions are supported with the if <expr>: val operator.
-(: This style of ternary (well, more than ternary with elif) was chosen so that all braces
-(: will always indicate the beginning of a section you put statements in, as well as
-(: from a lack of a better word than if/elif. case and caseof were considered, but found lacking.
-(:var oneOfThem = if x > 1: 1 elif x < 1: -1 else 0;
-(: You can also capture in if expressions (with the same semantics as other captures):
-var oneOfThem = if opty.has: 1 else 0;
-var oneOfThem = if opty: |val| val + 1 else 0;
-var oneOfThem = if opty: |var val| val.someMutatingFunc() else 0;
+  (: Zag has builtin optionals
+  let someVal: ?usize = 10
 
-(: Note you can't directly nest if expressions inside each other:
-(:ERROR:) (: var oneOfThem = if if val1: val2 else val3: val4 else val5;
-(: (Also, I threw up a little writing that.)
+  (: Zag has all the normal flow controls
+  (: They also work with optionals
+  (: (Note equality also works with optionals)
+  if someVal == 6 {
+  } elif someVal == 10 {
+    (: You can pass () (empty tuple) sometimes to denote no arg
+    printf("Yay!", ())
+  } elif someVal == null {
+  } elif someVal -> someValsVal { (: -> is used to capture things
+    printf("someVal was {}", someValsVal)
+  } else {
+    (: Can never execute
+  } finally {
+    printf("Executed because one of the if/elif was executed", ())
+  }
 
-(: Blocks can be labeled and broken from with a value
-(: Only valid with this sort of block. (no breaking from a loop with a value)
-let x = `block {
-  break `block 1;
-};
+  (: Ranges are included..excluded and included..=included
+  for 1..11 -> iterationNumber, capturedValue {
+    printf("{}-{}", (iterationNumber, capturedValue))
+    (: iterationNumber: 0..10
+    (: capturedValue: 1..11
+  } else -> err {
+    (: If some error happened with the iteration, we'd capture it in err
+  } finally {
+    printf("I ran because nothing broke the loop!", ())
+  }
 
-(: Case doesn't work for all branches. For major branches, we have if/elif/else/finally
-(: elif/else/finally are all optional
-var x = undef;
-if 1 > 0 {
-  x = "Hey";
-} elif 1 < 0 { 
-  x = "This can't be right";
-} finally { (: A finally block is always executed if any of the branches was taken.
-      (: Obviously this is useless if you had an else, and that is an error.
-  printf("We set x to {}\n", x);
-}
+  (: Labels are denoted with `blahBlah
+  while someVal -> someValsVal `whileLoopLabel {
+    break `whileLoopLabel (: Leave early
+    (: while can't get an error (i.e no need for an else)
+  } finally {
+    printf("I won't run because the loop broke!", ())
+  }
 
-(: If statements also work with optionals
-var opty: ?usize = 42;
-if opty : |theAnswer| {
-  theAnswer === 42;
-} else {
-  (: What's wrong with the world?
-}
-(: Optionals may also be more directly dereferenced using .has/.val:
-if opty.has and opty.val == 42 {
-  printf("All is right\n");
-} elif opty : |trueAnswer| {
-  printf("Something ain't right. The answer shouldn't be {}\n", trueAnswer);
-}
+  (: These can all return values
+  let maybe10 = if true { 10 } else { 50 }
 
+  let anArray = [0, 1, 2, 3, 4]
+  let indexOf2 = for anArray -> i, val {
+    if val == 2 { i }
+  } finally { null } (: Finally is required for a for loop expression
+  assert indexOf2.has
+  assert indexOf2 == 2
 
-(: Array literals use []
-(: If you need to specify the type contained within, use :type: syntax at the beginning
-var array = [:u32: 1, 2, 3, 4, 5];
+  (: Types are defined with struct/enum
+  let Vec2 = struct {
+    (: Fields use 'field'
+    field x, y: f32 (: Binds without an explicit type defer to the type of the righthand neighbor
 
-(: Ain't no goto here
-(: If you wanna loop, use for/while/loop
-
-(: for loop: Read as "for each of array's indices and elements"
-(: array is the iterable to be iterated over
-(: i is the index of the current element, and is required, although a _ can be substituted if you don't need it.
-(: x is the current element at array[i], and is optional.
-  (: x could also be written *x, in which case it is a pointer to the original x
-(: Also: Labels.
-  (: Labels are written as `(\w|\d)+ and are used to mark the block they immediately precede
-  (: The remainder of a labeled block may be skipped by using break `<name>, otherwise break simply breaks
-  (: the closest block.
-for array : |_, x| `forArray {
-  break `forArray; 
-} finally { (: Executed if the loop wasn't broken out of
-}
-
-
-(: while loop: Read as "while truthy isn't null, capturing the loop count and x's unwrapped value, ...
-(: I'd reccomend not doing such long continuation expressions, but whatever.
-var x: ?usize = 10;
-while x : |i, x| : x -= 1 {
-  break; (: You don't need a label to break
-} finally { (: As usual, this is for if we weren't broken out of
-
-}
-
-(: loop loop: Loop the loop with the loop. Never exits on its own. Requires a label.
-loop : |i| `mainLoop {
-  break `mainLoop;
-}
-
-
-
-(: Functions are also defined with lets
-(: Zag is a return-elision first language. All return values have their own variable
-(: You can also return <val>, but that will just expand out to res = <val>; return;
-(= This is a doc-comment describing this function
-(= Doc-comments are designed to be readable by both humans and doc generators.
-(= The format is either '(= <long desc>' or '(= Key: <Describe key>'
-(= Arg a: This describes parameter a
-(= Arg b: this describes parameter b
-(= Arg c: this is a compilation error, as there is no argument or result named 'c'
-(= Return: This tells you what gets returned
-(= Pre: This tells what must be true before you run
-(= Post: This tells what *will* be true after you run.
-(= Author: This tells you who to burn at the stake.
-(= Date: This tells you how young and dumb they were when they wrote this.
-let add = fn(a: usize, b: usize) res: usize {
-  res = a + b;
-};
-
-(: Functions can also be 'pure', meaning that can never change outside state
-let add = purefn(a: usize, b: usize) res: usize {
-  res = a + b;
-  truthy = false; (: ERROR
-};
-
-(: Functions don't have to return a value. You can replace the entire return bind with 'void'.
-let foo = purefn(a: usize) void {
-  printf("{}", a);
-};
-
-(: In contrast to the lets, this would be a function pointer assigned to an anonymous function
-(: This example would use an adder for the first invocation, then a subtracter for the second, then add for all after
-(: This is only an example. I'd reccomend not doing this in real life.
-var foo = fn(a: usize, b: usize) res: usize {
-  res = a + b;
-  foo = fn(a: usize, b: usize) res: usize {
-    res = a - b;
-    foo = add;
-  };
-};
-
-(: Structs can be declared in kind
-let Point = struct {
-  (= This is a doc-comment describing x's function
-  (= This is a constant, static variable in Point's namespace
-  let bar = 1;
-  (= This is a static variable (read: global) in Point's namespace
-  var foo = 2;
-
-  (= The "field" keyword denotes something that's specific to each instance of Point
-  (= Note that everything in a struct def follows the same syntactic style as any other block.
-  (= I even may make field valid in functions, which would define a variable accessible at
-  (= func_name.fieldName.
-  (= Initialization is optional, but if it ain't initialized here it must be when Point is made
-  field x: usize;
-  (= Field types are never optional
-  field y: usize = 1;
-
-  (= Add two points together.
-  (= This can be called as a.add(b) or Point.add(a, b)
-  (= Additionally, because this is a purefn, it's eligible to be an overload
-  (= for an arithmetic operator (more on that later)
-  let add = purefn(lhs: Point, rhs: Point) res: Point {
-    (: By default, all of res's fields are undefined.
-    (: Thus, not assigning to one of them is a compile error on return
-    res.x = lhs.x + rhs.x;
-    res.y = lhs.y + rhs.y;
-  };
-
-  (= Discussed below
-  let addEq = fn(lhs: *Point, rhs: Point) void {
-    lhs.x += rhs.x;
-    lhs.y += rhs.y;
-  };
-};
-(: Note that this entire file is, in fact, another struct.
-(: Instantiating a file-level struct (as well as field-level fields), however, is planned to be an error.
-
-(: You can also make a struct that has no padding whatsoever
-(: Note that in contrast to zig, we don't say "packed struct", we just say "packed"
-(: let Point = packed {
-(:  field x: usize;
-(:  field y: usize;
-(: };
-
-
-(: Struct literals use [] too, but they have named fields inside
-var p: Point = [.x = 0, .y = 1];
-(: If you want to specify the type on the right side (like when nesting in a giant list), you can use :Type: syntax again
-var p = [:Point: .x = 0, .y = 1];
-(: This syntax, by contrast, declares p to be of type struct:<line>:<col>. It has nothing to do with Point.
-(: Be careful of this. I plan to make this a warning.
-var p = [.x = 0, .y = 1];
-
-(: This specifies that for this scope, 'Point.add' shall be considered when attempting to resolve
-(: '+'s overloads. Note that .overload is a built-in method of all functions.
-(: Attempting to overload an arithmetic operator with a non-purefn is a compile error.
-(: Internally, @overloads is literally just a var comptime hashmap of str -> vector(bind) that's local to this scope.
-(: @bind is a builtin function that gets the Bind node for a variable.
-(: Read as "the overloads for '+' have added to it the binding named Point.add
-@overloads["+"] += @bind(Point.add);
-
-(: This specifies an overload in this scope for += on Point
-(: Note that addEq isn't a purefn. Operators which logically have to change state (like +=, -=, etc)
-(: are allowed to be non-pure
-@overloads["+="] += @bind(Point.add);
-
-(: Note that you can't just rebind @variables as they're reserved compiler internals:
-(: TYPECHECKER ERROR: :) (: let @overloads = 1;
-
-(: Enums are declared similarly to structs
-(: Enum syntax is still under heavy construction, but I'm planning on making them like rust's enums
-(: The current syntax here means Options is an enum whose tag fits in 1 byte (u8) with those 4 possible values.
-(: Additionally, if the tag is MSAA or NumMods, the structure also contains a usize, so the total size of the structure
-(: (no matter what) is always 9 bytes on 64-bit machines (1 for tag + 8 for max of all possible values)
-(: Enums have:
-  (: A built-in (sorta) static variable @tagType that sets what the enum uses to store its tag.
-    (: The default is usize.
-  (: A built in field tag: <@tagType> that allows direct access to the tag
-  (: A built in field ptr: [N]u8 that points to the beginning of the data, where N is the max size of all possible vals
-let Options = enum {
-  (: When the compiler goes through, it actually prepends a special compiler-specific enum block to all new
-  (: enums. Thus, when you rebind @tagType, it shadows the old declaration and tells the compiler what to do.
-  let @tagType = u8;
-  (: rather than the typical Symbol, Symbol, Symbol syntax, Zag uses "enum Symbol [contained type] [ = tag val];"
-  (: This allows the parser to reuse the same code for parsing blocks in struct/enum/concept/etc
-  (: If there are no contained values, then the enum is guaranteed to be the same size as its tag type
-  (: If there's no tag val assigned, the enums start at 0 and increment from there.
-  (: When a tag val is assigned, all future tag vals increment from that.
-  enum Fullscreen;
-  enum Borderless;
-  enum MSAA: usize;
-  enum NumMods: usize;
-
-  (: Enums can also have functions/static vars/etc
-  (: This is called like any other method
-  let need_big_size = purefn(self: Options) res: bool {
-    if self == Options.Fullscreen {
-      return true;
-    } elif self == Options.Borderless {
-      return true;
-    } else {
-      return false;
+    (: structs can have static stuff defined
+    (: 'pure' asserts that a function always does the same thing if it gets the same args
+      (: All arithmetic operator (+, -, *, etc) overloads *must* be pure
+      (: Operators such as +=, -=, etc are not subject to this restriction
+    (: @This is a special compiler-level variable that means "the type we're currently inside"
+      (: (Not to be confused with @this, which means "the function we're currently inside"
+      (: (Note you could also use Vec2 in place of @This. This is a matter of preference)
+    let addVec2 = pure fn lhs, rhs: @This -> res: @This { (: Zag is return-location first. You bind a result location.
+      (: Struct literals look like array literals, but use .fieldName to specify each field
+      res = [.x = lhs.x + rhs.x, .y = lhs.y + rhs.y]
     }
-  };
-};
+    (: You can add a function to the global overload table with @overload
+    @overload(.Add, @This.addVec2)
 
-(: Since enums will be like rust's enums (unions), there's no need for tagged unions
-(: You may have noticed that we can't exactly have an "extern enum" for direct C-compatability.
-(: This is because you would just do enum: c_int or something similar to guarentee size.
-(: Zag already follows C semantics for numbering (default start at 0, count up)
+    (: A property works C# style. Read it and it calls .get. Write to it and it calls .set
+    property length = [
+      .get = pure fn self: @This -> len: f32 {
+        return @sqrt(self.x * self.x + self.y * self.y)
+      },
+      .set = fn self: @This, newLen: f32 {
+        let curLen = self.length
+        (: Tuples are most useful for doing many operations at once
+        (: The tuples must either be of equal length, or at least one must have len == 1
+        (: Thus this is 'diveq both by curLen'
+        (self.x, self.y) /= curLen
+        (: Don't bother if we're already there
+        if newLen != 1.0 { (self.x, self.y) *= newLen }
+      }
+    ]
+    (: Now we can do v.length to get a length, or v.length = 1.0 to normalize it to 1.0, etc
+    (: You can also overload certain operators for properties, but that's for another time
+  }
 
+  (: Enums in Zag are always tagged unions
+  let Meal = enum {
+    @tagType = u8 (: Means the enum stores its tag in a u8
+    (: If there are no union fields, this is the entire size of the enum
 
-(: Generics are done like in Zig: Through functions
-(: Note, however, that the comptime needs to be type-side
-(: Note that I declare this as a purefn. You *could* do this as a normal fn, but purefn is always preferred where possible
-(: just in case the compiler could benefit from knowing all context
-let MultiArray = fn(n: comptime usize, m: comptime usize) res: type {
-  field data: [n][m]u32;
-  let at = purefn(self: MultiArray, n: usize, m: usize) res: u32 {
-    res = self.data[n][m];
-  };
-  
-  @overloads["[]"] += @This.at;
-};
+    (: 'enum' either specifies an enum block or an enum bind (as here)
+    (: If it's found at the beginning of a statement, 'enum bind' takes precedence
+    enum (: Note these are all in 1 bind statement. You don't need to, I just do it because.
+      BaconAndEggs = 0, (: You can assign a tag value
+      Pizza: bool, (: Here we store a bool iff the tag is Pizza to know if it was reheated
+      Cake
 
-(: Note that 'at' takes multiple arguments.
-(: This means you can now do the following:
-let m = [
-  :MultiArray(2, 2):
-  .data = [
-    [0, 1],
-    [2, 3]
-  ]
-];
-m[0, 1] === 1;
-m[1, 1] === 3;
-(: (Note the above also shows the preferred way of formatting multiline struct literals)
+    (: Like a struct, enums can have static stuff
+    var numberOfMealsEaten = 0
+    let wasReheated = pure fn self: @This -> res:bool {
+      (: #Symbol is an enum literal. #Symbol(expr) is an enum literal with union initialization
+      (: Zag first compares the tag, then the union value iff the tag was equal, thus we can avoid
+      (: drawn out 'self == #Pizza and self.Pizza == true' stuff.
+      (: # was chosen instead of Zig's .Yadda to distinguish between
+      (: [ .EnumLit...] and [ .FieldName = ... ] without advance lookahead
+      res = self == #Pizza(true)
+    }
+  }
 
+  (: All types can be concatenated together
+  let Vec3 = Vec2 + struct {
+    field z: f32
+    (: Note that '@This' means '@This as of time of use'
+    (: Now you see why I used 'addVec2' instead of 'add'
+    let addVec3 = pure fn lhs, rhs: @This -> res: @This {
+      return [.x = lhs.x + rhs.x, .y = lhs.y + rhs.y, .z = lhs.z + rhs.z]
+    }
+    @overload(.Add, @This.addVec3)
+  }
 
-(: CONCEPTS
-(: Concepts are zag's answer to generic arguments. (And are very WIP)
-(: Each time an argument of a new type is passed to a function that takes that argument
-(: as a concept, Zag creates a new overloaded function for that type after it makes sure that
-(: that type fits the concept.
-(: Comparison is done on the types of all fields in the concept, and it is a compile error
-(: for anything in the concept to have a default value.
-let StackOfUSize = concept {
-  field len: usize;
-
-  let push: fn(*Stack, usize)void;
-  let pop: fn(*Stack)usize;
-
-
-  (: The compiler will look for a function named
-  (: "concept" and attempt to run it at compile time to see if it works.
-  (: If it panics, then the concept doesn't fit.
-    (: Make sure the given type supports stack semantics
-  s.push(0);
-  s.push(1);
-  s.push(2);
-  s.pop() === 2;
-  s.pop() === 1;
-  s.pop() === 0;
-
-  (: You can't specify overloads in concepts.
-  (: When someone uses a concept-ed object, they'll have to
-  (: manually declare the overloads when they need them.
-};
-
-let manip_stack = fn(s: StackOfUSize)void {
-  s.push();
-};
-
-(: Concepts can also be generalized with comptime arguments:
-let GenericStack = fn(T: comptime type) res: type {
-  res = concept {
-    field len: usize;
-
-    let push: fn(*@This, T) void;
-    let pop: fn(*Stack) T;
-  };
-};
-
-
-(: Advanced iteration
-
-(: for iteration on custom types is done under the hood by calling the iterate and iterate_mut methods from a type:
-
-(: All for iteration for something like |i, x| checks the following concept:
-let Iterable = purefn(T: comptime type) res: type {
-  res = concept {
-    let iterate: fn(*@This, fn(T)void)void;
-  };
-};
-(: The actual function call gets optimized out
-
-
-(: All for iteration for something like |i, *x| checks the following concept:
-let MutIterable = purefn(T: comptime type) res: type {
-  res = concept {
-    let iterate_mut: fn(*@This, fn(*T)void)void;
-  };
-};
-
-(: As a side effect, this also you could just directly call foo.iterate(my_foreach_func) if you wanted to and
-(: skip for loops alltogether
-
-(: Advanced optionals (This is only a maybe at this point. It may be too permissive)
-(: Since optionals are basically a glorified struct {field has; field val}, you can do things like:
-(: Because the compiler basically just checks against the Concept, you can think of the ? type operator
-(: as sugar for creating a new type that wraps the rhs type and provides the Optional type
-let Foo = struct {
-  field has: bool;
-  field val: Bar;
-
-  (: ...
-  (: a bunch of assorted functions/other stuff you want Foo to have
-  (: ...
-};
-
-var f = [:Foo: .has = 1, .val = something ];
-if f : |v| {
-  v === something;
+  (: Note:
+  let val = [.x = 10.0, .y = 10.0, .z = 10.0]
+  let vec3Val: Vec3 = [.x = 10.0, .y = 10.0, .z = 10.0]
+  assert val.@type != vec3Val.@type
+  (: The type of val is something like 'struct0_132_13', as that's where it was first used
+  (: The second one still makes a new anonymous struct, but it coerces it into a Vec3
+  (: because all fields match just fine.
 }
 
-(: Comptime initialization
+{
+  (: Binds use one of the following:
+  let someConst = 10
+  var someMutable = someConst
+  (: field/enum as described
+  alias anotherTermForSomeMut = someMutable
+  (: Changes to anotherTermForSomeMut are reflected in someMutable and vice versa
 
-(: Sometimes you want to be able to hook things together that didn't know about each other when written
-(: For example: Registering all components in an ECS
-(: This is made easy in Zag because each file/struct is just another Block to be run at compile time.
-(: Thus the following is valid
-let Point = struct {
-  field x: f32;
-  field y: f32;
+  (: cvars are mutable at compiletime, and resolve to a let by runtime
+  cvar compileVar = 0
+  (: cvars must be changed in 'comptime' subtrees
+  comptime (compileVar += 10)
+  assert compileVar == 11
+  comptime (compileVar += 1)
+  (: Note the order there. Use cvars with care. (and probably sparingly)
+  (: They're great for letting systems register themselves with each other, but have a high potential
+  (: for abuse.
 
-  (: The compiler will make the static var as normal
-  var totalNumOfPoints: usize = undef;
-  (: Then _at compile-time_, when it's evalating the struct, it will change totalNumOfPoints' initial value to 0
-  (: Nothing happens at runtime. Essentially, struct/etc blocks are just scrcipting blocks for Zag in Zag
-  totalNumOfPoints = 0;
+  (: 'use' is the sole special case of binds.
+  (: It's really just a macro that expands 'use path.member' into 'alias member = path.member'
+  (: Obviously, we use it for including things from other modules
+  use std.ArrayList (: Std library borrowed from Zig until we have an actual parser 
 
-  (: We can also do platform specific code
+  (: Note you could also use it like so:
+  let ar = [0, 1, 2, 3, 4]
+  use ar.len
+  (: === alias len = ar.len
+  assert len == 5
+  (: Use this style sparingly though.
 
-  let addWindows = fn(a: usize, b: usize) res: usize {};
-  let addLinux = fn(a: usize, b: usize) res: usize{};
-  
-  let add;
-  (: Since struct blocks are evaluated at comptime, we don't need to resort to inline ternary expressions
-  (: to resolve the type/value of add by platform.
-  if os.platform == Platform.Windows {
-    add = addWindows;
-  } elif os.platform == Platform.Linux {
-    add = addLinux;
-  } else {
+  (: A bind with '*' immediately after it is publicized
+  let publicBind* = 10
+  (: Now another module that imported this block could see and use that.
+
+  (: In summary:
+    (: * to make public
+    (: Let for constants that never change
+    (: Var for variables that do change
+    (: alias for having a shorter name for something without making a new memory location
+    (: cvar for compiletime logic that changes over time
+      (: Note that 'let' can also store types and such
+    (: use as a shorthand alias
+
+  (: Binds may not be shadowed (i.e you can't 'let x; let x')
+  (: Binds in sibling scopes do not affect each other, only binds in direct ancestors
+  {
+    let myVal = 10
   }
-};
-
-(: This means you can also do things like this:
-
-let Reg = struct {
-  var globalCompReg;(:: ...;
-};
-
-let Rotation = struct {
-  Reg.globalCompReg.add(@This);
-
-  field rot: Quaternion;
-};
-
-(: Think of this stuff like nim's ability to put code outside the main func
-
-
-(: Advanced type stuff
-
-(: Since types are just treated as a block, why can't we just concatenate two blocks together?
-(: Answer: WE CAN
-
-let Point2 = struct {
-  field x: f32;
-  field y: f32;
-
-  let add = purefn(lhs: Point2, rhs: Point2) res:Point2 {
-    res.x = lhs.x + rhs.x;
-    res.y = lhs.y + rhs.y;
-  };
-};
-
-(: This results in a struct that has the same layout of Point2 with a new struct added on to the end
-(: You can think of it like inheritance, although it's really not. You can safely get a pointer to the
-(: section of the new struct that holds the old struct.
-(: Note again: ZAG HAS NO VTABLES OR ANYTHING LIKE THAT. If you want those, you'll have to do it in userspace.
-let Point3 = Point2 + struct {
-  (: Memory layout before this point is _exactly_ the same as Point2
-  (: This also means that if you have a packed + a normal struct, the beginning portion is still packed.
-  (: This is one of those things were I choose to trust the programmer to not be stupid. I'll likely be a comp warn.
-
-  field z: f32;
-
-  (: Because declarations in blocks shadow each other, this new let binding of add overrides the old Point2 add
-  let add = purefn(lhs: Point3, rhs: Point3) res: Point3 {
-    (: These aren't declared in Point3 directly. Rather, they are taken from Point2
-    res.x = lhs.x + rhs.x;
-    res.y = lhs.y + rhs.y;
-
-
-    res.z = lhs.z + rhs.z;
-  };
-};
-
-(: You can also use this to extend a struct:
-let CustomPoint3 = Point3 + struct {
-  let sub = purefn(lhs: Point3, rhs: Point3) res: Point3 {
-    res.x = lhs.x - rhs.x;
-    res.y = lhs.y - rhs.y;
-    res.z = lhs.z - rhs.z;
-  };
-};
-(: Because CustomPoint3 doesn't add any new fields or shadow old ones, CustomPoint3 is completely compatible
-(: anywhere a Point3 is expected. We can guarentee this because the fields/methods are all the same, so code
-(: expecting the old struct can't be harmed by the new extensions.
-(: Extended structs are treated like any other struct, with the above exception that they are implicitly coercible to
-(: the old type. This also means that you can extend another lib's struct to fit a concept for your lib,
-(: then do an explicit cast from the other lib's struct to your extended struct before calling a func
-
-(: Technically, this could already work even if you shadowed a method, as all functions are technically global vars,
-(: but I feel like that would take things too far. If you have A.foo: fn(a: bool) and B.foo: fn(b:usize), where
-(: B = A ++ struct {...}, how do you know which foo gets called? Thus, I'm somewhat arbitrarily restricting this
-(: to prevent some future headaches.
-(: Note: The above may change in the future. A simple compiler warning may suffice to make sure the programmer knows
-
-
-
-(: Macros
-(: Since we've already seen that we can just treat blocks of code like data unto itself, why can't we pass blocks around directly?
-(: Answer: WE CAN
-
-let daBlock = block {
-  x += 1;
-  if x + 5 == y {
-    printf("Hey there\n");
+  {
+    let myVal = true
+    {
+      (: ERROR: let myVal = true
+    }
   }
-};
-(: This defines a block of code. Literally.
-(: It does _not_ get typechecked as is (or even put into the symbol tables), and is merely parsed into an AST.
-(: Thus as long as the code within is _syntactically correct_, the project will compile just fine.
-(: It is planned that the entire compiler's AST setup will be available as a builtin library, so you can
-(: then get a block's AST and do operations on it:
-let glslZagCode = block {
-  let version = "430";
+}
 
-  let VertOut = struct {
-    field pos: Vec4;
-    field color: Vec4;
-  };
-  let vertexMain = purefn(vertPos: Vec3, viewMat: Mat4x4) out: VertOut {
-    (: ...
-  };
+{
+  (: Expressions
+  (: We'll make heavy use of it, so first: assert
+  assert true == true
+  (: It's parsed at the same precedence as 'let/var/etc', and will panic and do its best to explain
+  (: what went wrong if the expression is false
 
-  let fragMain = purefn(color: Vec4) out: Vec4 {
-    (: ...
-  };
-};
-(: glslZagCode could then be passed to a function at compile time (or maybe even run time) and compiled into SPIR-V
-(: there, thus allowing you to write shaders "directly" in Zag.
+  (: Standard operators
+  (: Zag has all the standard arithmetic/logical/relational ops, with the exception that
+  (: ||, &&, and ! are written 'or', 'and', and 'not'
 
-
-(: Tuples
-(: Tuples are essentially structs without any names.
-(: They're defined with the (t0,t1,...) syntax:
-let tuple: (u32, u32, u32) = (0, 0, 0);
-(: You can also use let (s0,s1...) syntax to unpack a tuple:
-let (t0, t1, t2) = tuple;
-(: Note that all three of the above values are now constant because it's a let expression.
-(: Similarly, all three values below are mutable:
-var (t0, t1, t2) = tuple;
-(: Thus, while Rust allows stuff to the effect of:
-(: ERROR let (var t0, t1, t2) = tuple;
-(: Zag doesn't. This is because I feel defining constants and variables in the same statement is somewhat confusing.
-(: You can instead do:
-var t0 = tuple.0;
-let (_, t1, t2) = tuple;
-(: ...where _ means we don't care about that element.
-
-(: Tuple addition
-(: Since we can add two structs p and q together and get struct pq, why not tuples?
-let Vector3 = (f32, f32, f32);
-let Quaternion = Vector3 + (u32);
-Quaternion === (f32, f32, f32, u32);
-(: You may see the above and ask "well how does the compiler tell the difference between '(u32)' and 'u32'?
-(: Answer: '(anything)' is already a tuple. However, a single element tuple is implicitly coercible to its
-(: element type. Thus, any time we see '(' (outside funcs), we know we're starting a tuple.
-
-(: Tuple operators
-(: An operator is defined for a tuple t iff all types contained within have that operator defined.
-let x = (0, 1, 2);
-let y = (2, 1, 0);
-let z = x + y;
-z === (2, 2, 2);
-(: You cannot overload this functionality in the same way you cannot overload operators for primitives.
-(: Tuples are considered to be primitives. If you need to be able to overload an operator, use a struct/enum.
-(: (or @distinct)
-
-(: Note that this is planned to exploit SIMD. Thus, the above x+y would use SIMD instructions if possible
-
-
-(: Tuples and cyclic types
-(: Say you want to make a structure like so:
-let Foo = struct {
-  field friend: *Bar;
-};
-
-let Bar = struct {
-  field friend: *Foo;
-};
-(: Unfortunately, because declarations are still being parsed top-down, this doesn't work.
-(: Foo simply doesn't know what a 'Bar' is.
-(: Because Zag allows shadowing, it's a little trickier for the compiler (and the human) to know
-(: which Bar is being referenced.
-
-(: You *could* do something like this:
-let Foo1 = purefn(T: comptime type) res: type {
-  res = struct {
-    field friend: *T;
-  };
-};
-let Bar = struct {
-  field friend: *Foo1(Bar);
-};
-let Foo = Foo1(Bar);
-(: ...but that's pretty ugly, ain't it?
-
-(: Luckily, Zag has a solution: tuples!
-let (Foo, Bar) = {
-  Foo = struct {
-    field friend: *Bar;
-  };
-  Bar = struct {
-    field friend: *Foo;
-  };
-};
-
-(: Note that we could also specify their types as such:
-(: (This may change in the future. I may move it to let (tuple): (types) syntax)
-let (Foo: comptime type, Bar: comptime type) = {
-};
-
-(: Although Foo and Bar are constant, you can still assign to them there because it's technically within their assignment statement.
-(: Also, although the assignment statement's block doesn't break with any value, the compiler sees
-(: "well Mr. Programmer assigned a value to both of them inside, so I guess I can let it slide", and lets you continue.
-(: You could also directly break the block with a tuple and create the structs inside, but that feels a bit ugly, eh?
-(: This also helps encourage grouping tightly coupled stuff like this together
-
-
-(: Explanations
-
-(: Types
-(: The only built in types are the u##, i##, f{32,64,128}, bool, and char types
-(: Technically, you could then consider a pointer to be an extension of a usize,
-(: as a pointer is just a number. Thus, those are also the only reserved identifiers,
-(: beyond those that start with a '@' and the keywords themselves.
-
-(: Type expressions
-(: ? and the unary * (as used in type expressions) are just normal old operators.
-
-(: Properties
-(: Zag allows you to use C# style properties. I mainly included these because I felt that
-(: they arose logically from the deref/addr stuff. Some may say that hidden function calls
-(: are bad, but in this case I'd say the programmer's freedom is more important.
-(: If the hidden calls are truly a problem, they'll be discovered and replaced.
-(: ? is defined as such:
-let optional = purefn(t: comptime type) res: comptime type {
-  if not @isPtr(t) {
-    res = struct {
-      field has: bool;
-      field val: t;
-    };
-  } else {
-    res = struct {
-      field val: t;
-      let isValid = purefn(self: @This) res: bool {
-        (: @as shall be both a global function ( @as(type, val) ) and a method of any object ( val.@as(type))
-        (: This one cannot be overridden. It only allows you to cast things. No special overriding for weirdness
-        return self.@as(usize) != 0;
-      };
-      (: This is how you declare a C# style property
-      (: (syntax tentative)
-      (: A property bind statement has 3 things:
-        (: A name (obviously)
-        (: a type that it gets/sets
-        (: a compound literal with at least one of a getter or a setter
-      property has: bool = [.get = @This.isValid, .set = null];
-      (: If one of them is null, you can also choose to omit it:
-      (: property has: bool = [.get = @This.isValid];
-    };
-
-    (: Thus a ?*usize compiles down to nothing more than a pointer, as the .has is
-    (: abstracted away.
+  (: Zag also adds:
+  { (: xor
+    let x = true xor false (: true
+    assert true xor true == false
+    (: Note that tuple rules let you check for one truth of a tuple easily now:
+    assert false xor (true, false, false)
+    (: (Expands to false xor true xor false xor false)
+    assert not (false xor (true, true, false))
   }
-};
-(: For obvious reasons, the following isn't *actually* how the compiler handles a pointer
-(: it's just an example to showcase Zag's properties.
-let ptr = purefn(t: comptime type) res: comptime type {
-  field val: usize; (: The pointer itself
-  let get = purefn(self: @This) res: t {
-    (: Some weirdness to dereference the pointer and put it in res
-  };
-  let set = purefn(self: @This, newVal: t) void {
-    (: Some weirdness to dereference the pointer and set it to newVal
-  };
-  property deref: t = [.get = get, .set = set];
-};
+  { (: in and the range operators
+    assert 10 in 0..11
+    assert not ( 10 in 0..10 )
+    assert 10 in 0..=10
+
+    (: This works with tuples as well
+    (: (Note that 'in' between 2 scalars is defined as '=='
+    (: Great for checking membership in a disjoint range
+    assert 10 in (0, 5, 0..=9, 10, 11)
+    (: (expands to 10 in 0 or 10 in 5 or ...)
+    (: 'in', when used with tuples, is 'all of the left side are in one of the right sides'
+    assert (0, 1) in (0, 1..4, 10)
+    (: (expands to (0 in 0 or 0 in 1..4 or 0 in 10) and (1 in 0 or 1 in 1..4 or 1 in 10)
+    assert not ( (0, 1) in (0, 2..4, 10) )
+  }
+  {
+    (: Just about anything's an expression:
+    let x = {
+      10
+    }
+    let xIfTrue = if true { x } else {100}
+  }
+  {
+    (: comptime marks its entire subtree for evaluation at compiletime
+    let x = comptime {
+      10 + 12 + 135
+    }
+    (: Anything that comes out of a comptime subtree has its type marked 'comptime'
+    (: If used on a single type, it means that any value assigned to that type must also be comptime known
+    (: Thus you can also write 'comptime usize' when specifying a fn arg to say that it must be comptime known
+      (: i.e comptime has an overload for taking only a type, and an overload for taking a general expression
+    (: Any outside variables read in a comptime block must be comptime known
+    (: Any outside variables written in a comptime block must be cvars
+    (: If the subtree can't be evaluated at comptime, it's an error.
+  }
+  {
+    (: pure/inline are also just unary operators
+    (: Inline can either be used on the function definition to specify that it must always be inlined,
+    (: or used on a subtree to tell the compiler that it'd better either inline or or face the consequences
+    (: (such as a compile error)
+    var x = 10
+    inline (x += 10) (: Not gonna do much here, but you get the idea
+
+    (: Pure can only be used on a function def to specify that it may not modify anything outside its scope,
+    (: and may only read constant, comptime-known variables
+  }
+}
+
+{
+  (: Types
+
+  { (: Primitives
+    (: Zag technically has 1028 primitive types
+    let voidy: void = () (: Void. It's... nothing. A zero-tuple ( () ) is of type void
+    let uintOf21Bits: u21 = 0 (: u{1..=512} for unsigned integers of specified size
+    let intOf21Bits: i21 = -2 (: i{1..=512} for signed integers of specified size
+    (: Don't worry, that's already 1025 of them :)
+    let archUnsigned: usize = 0 (: u{16, 32, 64, etc} depending on target architecture
+    let archSigned: isize = -2 (: i{16, 32, 64, etc} depending on target architecture
+    
+    let booly = true (: Booleans
+    (: And that's all the primitives
+  }
+
+  { (: Modifier types
+    (: Zag has 6 modifier types
+
+    (: const means it can't be modified anymore
+    var a: const usize = 10
+    (: Kinda redundant here, just use a let.
+
+    (: comptime means its value must be known at compiletime
+    cvar v: comptime usize = 10
+
+    (: Arrays
+    (: You can use array (size, type) to declare with a specific size
+    let arrayOf5: array (5, usize) = [0, 1, 2, 3, 4]
+    (: Or just array type to deduce the size from its initializer
+    let deducedSize: array usize = [0, 1, 2]
+    let deducedLen = deducedSize.len (: They have a .len property that gives their length
+
+    (: Slices
+    (: Slices are a slice of an array. They're created by indexing an array with a range
+    let first3: slice usize = arrayOf5[0..3]
+    assert first3.len == 3
+    
+
+    (: Optional (? operator)
+    (: ?foo is either a foo or null
+    let optionalUsize: ?usize = null
+    (: Optionals have 2 builtin properties:
+    let has: bool = optionalUsize.has (: Is the value present?
+    let val: usize = optionalUsize.val (: The value
+    (: Note that on BuildMode != ReleaseFast, taking the val when !has is an error
+
+    (: Pointer (* operator)
+    (: Must never be null. Use a ?*foo for that
+    let u = 10
+    let ptrToU32: *u32 = u.addr (: use .addr to take the address of something
+    let uAgain = ptrToU32.deref (: and .deref on a pointer to dereference it
+    (: You can use .bytes to get a (slice u8) from a pointer:
+    let uBytes = ptrToU32.bytes
+    assert uBytes.len == (u32.size, 4)
+
+    (: These can be chained
+    let optPtrToOptUsize: ?*?usize = null
+    (: Just don't go too crazy
+  }
+
+  {
+    (: Tuples
+
+    (: Zag has tuples that can be used to store multiple different types without needing a full struct
+    {
+      let t = (0, true, "Oi maties")
+      assert t.@type == (usize, bool, slice const u8)
+    }
+    {
+      (: the dot operator redirects to all members, except for a few compiler builtins
+      let ars = ([0, 1], [0], [1, 2, 3, 4, 5])
+      assert ars.len == (2, 1, 5)
+      (: .<num> indexes into a tuple
+      assert ars.0.len == 2
+      assert ars.1.len == 1
+      (: All the compiler builtins for tuples start with @tup
+      assert ars.0 == ars.@tupAt(0)
+      (: @tupLen gets the number of elements in the tuple
+      assert ars.@tupLen == 3
+      (: These @vars come in handy more when you're taking arguments of unknown type and use a tuple
+    }
+    
+  }
+
+  {
+    (: Basic type arithmetic
+
+    (: You can multiply a type to get a tuple:
+    let tupleOf5: usize * 5
+    assert tupleOf5.@type == (usize, usize, usize, usize, usize)
+  }
+}
+
+
+{
+  (: Interesting notes about how things work
+
+  (: There's no such thing as a float literal in Zag.
+  1.0;
+  (: is actually parsed as a field access into 1's field 0
+  (: The jury's still out on how annoying this could become, but I can't see any immediate problems.
+  (: This allows us to work unambiguously with swizzling without lexer tricks:
+  let a = ((1, 2, 3), (1, 3))
+  assert a.0.1 == 2
+}

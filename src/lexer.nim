@@ -1,118 +1,9 @@
 import streams
 import strutils
-import gara
+
+import tokens
 
 type
-  Tag* {.pure.} = enum
-    # Or/And-Assigns are Bitwise
-    Semicolon = ";"
-    Comma = ","
-    Add = "+"
-    AddAssign = "+="
-    And = "and"
-    AShr = ">>>"
-    Assert = "==="
-    Assign = "="
-    BitAnd = "&"
-    BitAndAssign = "&="
-    BitNot = "~"
-    BitNotAssign = "~="
-    BitOr = "|"
-    BitOrAssign = "|="
-    BitXor = "^"
-    BitXorAssign = "^="
-    Block = "block"
-    BoolLit = "BOOLLIT"
-    CharLit = "CHARLIT"
-    Comptime = "comptime"
-    Concept = "concept"
-    Const = "const"
-    Div = "/"
-    DivAssign = "/="
-    Enum = "enum"
-    ElIf = "elif"
-    Else = "else"
-    EOF = "EOF"
-    Equal = "=="
-    Field = "field"
-    FieldAccess = "."
-    FloatLit = "FLOATLIT"
-    Fn = "fn"
-    Greater = ">"
-    GreaterEql = ">="
-    If = "if"
-    IntLit = "INTLIT"
-    Label = "LABEL"
-    LBrace = "{"
-    LBracket = "["
-    Less = "<"
-    LessEql = "<="
-    Let = "let"
-    LParen = "("
-    Mod = "%"
-    Mul = "*"
-    MulAssign = "*="
-    Not = "!"
-    NotEqual = "!="
-    NullLit = "null"
-    Optional = "?"    # These shall be actual operators
-    Or = "or"
-    PureFn = "purefn"
-    RBrace = "}"
-    RBracket = "]"
-    RParen = ")"
-    Separator = ":"
-    Shl = "<<"
-    ShlAssign = "<<="
-    Shr = ">>"
-    ShrAssign = ">>="
-    Spaceship = "<=>" # Spaceship only tentative
-    StringLit = "STRLIT"
-    Struct = "struct"
-    Sub = "-"
-    SubAssign = "-="
-    Symbol = "SYM"
-    Undef = "undef"
-    Var = "var"
-    Xor = "xor"
-
-    INVALID_TAG = "INVALID"
-
-
-# Expression hierarchy is Binary->Unary->Access->(Repeat in parens)
-
-# All expression-level binary operators.
-# FieldAccess and such are not included here as they are parsed below even unary
-const binOps*: seq[set[Tag]] = @[
-  {Assign, AddAssign, SubAssign, MulAssign, DivAssign, BitOrAssign,
-      BitAndAssign, ShlAssign, ShrAssign},
-  {Equal, NotEqual, Assert},
-  {Less, Greater, GreaterEql, LessEql, Spaceship},
-  {Or, And, Xor},
-  {Add, Sub},
-  {Mul, Div, Mod},
-  {BitOr, BitAnd, BitXor},
-]
-
-const unaryOps*: set[Tag] = {
-  Sub, BitNot, Not,
-  Const, Comptime # Used for type expressions
-}
-
-const validSymbolBeginnings: set[char] = {
-  '_', '@', 'a'..'z', 'A'..'Z'
-}
-const validSymbolChars: set[char] = validSymbolBeginnings + {'0'..'9'}
-const validNumLitChars: set[char] = {'0'..'9', '.'}
-
-type
-  FilePos* = tuple[line: uint, col: uint]
-  Token* = object
-    case tag*: Tag
-    of Tag.Symbol, Tag.Label, Tag.IntLit, Tag.FloatLit, StringLit, CharLit:
-      lexeme: string
-    else: discard
-
   Lexer* = object
     input: Stream
     line*: uint
@@ -188,8 +79,9 @@ proc scan*(self: var Lexer): tuple[where: FilePos, what: Token] =
 
   if self.nextChar in validSymbolBeginnings:
     const words: seq[Tag] = @[
-      Fn, PureFn, And, Or, Xor, Let, Var, Field, Enum, Concept, NullLit, If,
-      ElIf, Else, Comptime, Const, Undef
+      Fn, PureFn, Not, And, Or, Xor, Let, Var, Field, Enum, Concept, NullLit, If,
+      ElIf, Else, Comptime, Const, Undef, Tag.Slice, Array, Assert, Void, For, While, Loop, Finally, Struct, Enum,
+      Break, Pure, Property, Use, Alias, In, CVar
     ]
     var lexeme = ""
     while self.nextChar in validSymbolChars: lexeme &= self.advance()
@@ -200,12 +92,9 @@ proc scan*(self: var Lexer): tuple[where: FilePos, what: Token] =
     result.what = Token(tag: Symbol, lexeme: lexeme)
   elif self.nextChar in '0'..'9':
     var lexeme = ""
-    var isFloat = false
     while self.nextChar in validNumLitChars:
-      if self.nextChar == '.': isFloat = true
       lexeme &= self.advance()
-    if isFloat: result.what = Token(tag: Tag.FloatLit)
-    else: result.what = Token(tag: Tag.IntLit)
+    result.what = Token(tag: Tag.IntLit)
 
     result.what.lexeme = lexeme
   elif self.nextEql "`":
@@ -230,7 +119,7 @@ proc scan*(self: var Lexer): tuple[where: FilePos, what: Token] =
       # Grouped by starting character
       AddAssign, Add,
 
-      SubAssign, Sub,
+      SubAssign, StoreIn, Sub,
 
       Mul, MulAssign,
 
@@ -251,13 +140,15 @@ proc scan*(self: var Lexer): tuple[where: FilePos, what: Token] =
       BitNotAssign, BitNot,
 
       BitXorAssign, BitXor,
+      
+      ClosedRange, OpenRange, FieldAccess,
 
       # All unrelated single characters
+      Pound,
       Comma,
       Separator,
       Optional,
       Mod,
-      FieldAccess,
       LBrace,
       RBrace,
       LBracket,
