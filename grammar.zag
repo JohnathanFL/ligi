@@ -429,7 +429,52 @@
   }
 }
 
-assert 0 notin 1..10
+{
+  (: Experimental feature: Stropping
+  (: We'll use #StringLit to do stropping, allowing reserved stuff to be used as symbols
+  (: This will be parsed at the token level (# immediately followed by " == strop)
+  let #"pure" = true
+  (: Note that this does *not* conflict with enum lits
+  let E = enum { enum #"pure", #"fn" }
+  let e: E = ##"pure"
+  (: Think of # like a "promotion" operator
+  (: It promotes String->Symbol and Symbol->EnumLit
+
+  (: Update: Added.
+}
+
+{
+  (: Leaving this as a monument to my foolishness.
+  (: This can't work, as an ?*T can't be represented as an enum
+  (: Optionals will have to be structs
+  
+  (: Experimental feature: Options as enums
+  (: We *could* implement options like so within the compiler:
+  (: let @Optional = fn T: type -> type {
+  (:   if T.@isPtrType {
+  (:     return packed enum {
+  (:       @tagType = usize
+  (:       enum
+  (:         Some: 
+  (:         None: void
+  (:       (: Thus accessing the val gets the entire enum, tag and all
+  (:       alias val = @this.@unsafeCast(usize)
+  (:     }
+  (:   } else {
+  (:     return enum {
+  (:       enum
+  (:         Some: T,
+  (:         None: void
+  (:       property
+  (:         has: bool = [ .get = pure fn self -> has { return self == #Some } ],
+  (:       alias val = Some (: Thus everything redirects to Some's union field
+  (:       (: (avoids nasty questions of how to allow treating .val as the value itself when using a property)
+  (:     }
+  (:   }
+  (: }
+  (: (: And in the compiler itself:
+  (: @overload(#Optional, @Optional)
+}
 
 {
   (: Interesting notes about how things work

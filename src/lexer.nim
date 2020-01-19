@@ -24,7 +24,8 @@ proc advance(self: var Lexer): char =
   #stdout.write self.next[0]
 
 proc advanceBy(self: var Lexer, by: int): void =
-  for i in 0..by: discard self.advance()
+  for i in 0..<by:
+    discard self.advance()
 
 proc newLexer*(stream: Stream): Lexer =
   result = Lexer(
@@ -34,7 +35,7 @@ proc newLexer*(stream: Stream): Lexer =
     input: stream,
   )
 
-  result.advanceBy(2)
+  result.advanceBy(3)
   result.line = 1
   result.col = 1
 
@@ -103,6 +104,14 @@ proc scan*(self: var Lexer): Token =
     var lexeme = "" & self.advance() # Get the '`' in there
     while self.nextChar in validSymbolChars: lexeme &= self.advance()
     result.what = Tok(tag: Label, lexeme: lexeme)
+  elif self.nextEql "#\"":
+    #Stropping
+    var lexeme = ""
+    self.advanceBy(2)
+    # TODO: Iron out the exact rules for what's allowed in a strop
+    while self.nextChar != '"': lexeme &= self.advance
+    discard self.advance
+    result.what = Tok(tag: Symbol, lexeme: lexeme)
   elif self.nextChar == '"':
     var lexeme = ""
     discard self.advance()
@@ -161,7 +170,8 @@ proc scan*(self: var Lexer): Token =
       if self.nextEql $t:
         result.what.tag = t
         # -1 because \0
-        self.advanceBy (($t).len - 1)
+        self.advanceBy (($t).len)
         break
       result.what.tag = Tag.INVALID_TAG
+  #echo "Scanned a ", result
 
