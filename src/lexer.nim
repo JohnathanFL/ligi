@@ -79,9 +79,11 @@ proc scan*(self: var Lexer): Token =
 
   if self.nextChar in validSymbolBeginnings:
     const words: seq[Tag] = @[
-      Fn, PureFn, Not, And, Or, Xor, Let, Var, Field, Enum, Concept, NullLit, If,
-      ElIf, Else, Comptime, Const, Undef, Tag.Slice, Array, Assert, Void, For, While, Loop, Finally, Struct, Enum,
-      Break, Pure, Property, Use, Alias, In, CVar
+      Alias, And, Array, Assert, Break, Comptime, Concept, Const, CVar, DoWhile,
+      ElIf, Else, Enum, Enum, Field, Finally, Fn, For, If, In,
+      Inline, Let, Loop, Not, NotIn, NullLit, Or, Proc, Property, Pure,
+      PureFn, Return, Sink, Struct, Tag.Slice, Undef, Use, Var, Void, While,
+      Xor,
     ]
     var lexeme = ""
     while self.nextChar in validSymbolChars: lexeme &= self.advance()
@@ -121,10 +123,8 @@ proc scan*(self: var Lexer): Token =
 
       SubAssign, StoreIn, Sub,
 
-      Mul, MulAssign,
-
-      Div, DivAssign,
-
+      MulAssign, Mul,
+      DivAssign, Div,
       NotEqual,
 
       Assert, Equal, Assign,

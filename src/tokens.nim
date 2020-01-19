@@ -1,15 +1,15 @@
 
 type
   Tag* {.pure.} = enum
-    # Or/And-Assigns are Bitwise
-    Test = "test" # TODO
-    Array = "array"
-    Semicolon = ";"
-    StoreIn = "->"
-    Comma = ","
+    # Leaving this here, whether as a monument to my insanity or brilliance I don't know
+    # Float literals are now parsed as field accesses into an int
+    # (i.e every int has an infinite number of fields, each named for an int)
+    # FloatLit = "FLOATLIT"
     Add = "+"
     AddAssign = "+="
+    Alias = "alias"
     And = "and"
+    Array = "array"
     AShr = ">>>"
     Assert = "assert"
     Assign = "="
@@ -22,27 +22,33 @@ type
     BitXor = "^"
     BitXorAssign = "^="
     Block = "block"
+    Break = "break"
     CharLit = "CHARLIT"
+    ClosedRange = "..="
+    Comma = ","
     Comptime = "comptime"
     Concept = "concept"
     Const = "const"
+    CVar = "cvar"
     Div = "/"
     DivAssign = "/="
-    Enum = "enum"
+    DoWhile = "dowhile"
     ElIf = "elif"
     Else = "else"
+    Enum = "enum"
     EOF = "EOF"
     Equal = "=="
-    Field = "field"
     FieldAccess = "."
-    # Leaving this here, whether as a monument to my insanity or brilliance I don't know
-    # Float literals are now parsed as field accesses into an int
-    # (i.e every int has an infinite number of fields, each named for an int)
-    # FloatLit = "FLOATLIT"
+    Field = "field"
+    Finally = "finally"
     Fn = "fn"
+    For = "for"
     Greater = ">"
     GreaterEql = ">="
     If = "if"
+    In = "in"
+    NotIn = "notin"
+    Inline = "inline"
     IntLit = "INTLIT"
     Label = "LABEL"
     LBrace = "{"
@@ -50,51 +56,48 @@ type
     Less = "<"
     LessEql = "<="
     Let = "let"
+    Loop = "loop"
     LParen = "("
     Mod = "%"
     Mul = "*"
     MulAssign = "*="
-    Not = "not"
     NotEqual = "!="
+    Not = "not"
     NullLit = "null"
+    OpenRange = ".."
     Optional = "?"    # These shall be actual operators
     Or = "or"
+    Pound = "#"
+    Proc = "proc"
+    Property = "property"
     PureFn = "purefn"
+    Pure = "pure"
     RBrace = "}"
     RBracket = "]"
+    Return = "return"
     RParen = ")"
+    Semicolon = ";"
     Separator = ":"
-    Slice = "slice"
     Shl = "<<"
     ShlAssign = "<<="
     Shr = ">>"
     ShrAssign = ">>="
+    Sink = "_"
+    Slice = "slice"
     Spaceship = "<=>" # Spaceship only tentative
+    StoreIn = "->"
     StringLit = "STRLIT"
     Struct = "struct"
     Sub = "-"
     SubAssign = "-="
     Symbol = "SYM"
+    Test = "test" # TODO
     Undef = "undef"
-    Var = "var"
-    Xor = "xor"
-    Void = "void"
-    For = "for"
-    While = "while"
-    Loop = "loop"
-    Finally = "finally"
-    Pound = "#"
-
-    Break = "break"
-    Pure = "pure"
-    Property = "property"
     Use = "use"
-    Alias = "alias"
-    In = "in"
-    CVar = "cvar"
-
-    OpenRange = ".."
-    ClosedRange = "..="
+    Var = "var"
+    Void = "void"
+    While = "while"
+    Xor = "xor"
 
     INVALID_TAG = "INVALID"
 
@@ -103,7 +106,7 @@ type
 
 
 type BinLevel*{.pure.} = enum
-  Assignment, Equality, Relational, Ors, Ands, Range, Arithmetic, Product, Bitwise
+  Assignment, Equality, Relational, Ors, Ands, Membership, Range, Arithmetic, Product, Bitwise
 
 template below*(level: BinLevel): BinLevel =
   BinLevel(ord(level) + 1)
@@ -116,6 +119,7 @@ const binOps*: array[BinLevel, set[Tag]] = [
   {Less, Greater, GreaterEql, LessEql, Spaceship},
   {Or, Xor},
   {And},
+  {In, NotIn},
   {OpenRange, ClosedRange},
   {Add, Sub},
   {Mul, Div, Mod},
@@ -127,7 +131,10 @@ const binOps*: array[BinLevel, set[Tag]] = [
 const unaryOps*: set[Tag] = {
   Sub, BitNot, Not,
   Const, Comptime, # Used for type expressions
-  Array, Tag.Slice, Optional
+  Array, Tag.Slice, Optional,
+  Pure, Inline, Proc,
+  # As pointer
+  Mul
 }
 
 const callOps*: set[Tag] = { LParen, LBracket }
@@ -138,6 +145,11 @@ const bindSpecs*: set[Tag] = {
 
 const atoms*: set[Tag] = {
   Symbol, NullLit, IntLit, StringLit
+}
+
+# In foo.bar.baz, these are the bar/baz
+const validSwizzles*: set[Tag] = {
+  Symbol, IntLit
 }
 
 const validSymbolBeginnings*: set[char] = {

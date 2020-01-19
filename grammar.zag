@@ -5,9 +5,8 @@
 {
   (: 10 minute crash course
   (: We'll make a happy little comment with '(:'
-
   (: Zag's all about the binds
-  let myFirstVal: usize = 0 (: Let creates a constant
+  let myFirstVal*: usize = 0 (: Let creates a constant
   (: The type is optional for a let
   var myFirstVar: usize = 0 (: Var creates a mutable variable
   (: Both type and initialization expression are optional for vars
@@ -23,10 +22,10 @@
 
   (: Zag is semi-whitespace sensitive. Call/index operators must be on the same line as their preceeding symbol,
   (: So you can unambiguously write things like
-  let x = 10, y = 10
+  let 
+    x = 10,
+    y = 10
   (x, y) += 1
-  (: Expands to
-  assert (x += 1, y += 1).@type == (void, void)
   (: Without the rule, that would be interpreted as Call{'()', 10, x, y}
   (: With the rule, it's properly interpreted as 'Expr{10}, Call{'+=', (x, y), 1}'
 
@@ -65,6 +64,10 @@
   (: Note that if it's done with non-comptime values, it stores that on the stack,
   (: as it's able to determine the size statically
 
+  (: Array concatenation is still very tentative.
+  (: If you want to add 2 sets of numbers at the same time, use tuples:
+  assert (0, 1, 2) + (0, -1, -2) == (0, 0, 0)
+
   (: Zag has builtin optionals
   let someVal: ?usize = 10
 
@@ -72,6 +75,7 @@
   (: They also work with optionals
   (: (Note equality also works with optionals)
   if someVal == 6 {
+    printf("Oi!", {})
   } elif someVal == 10 {
     (: You can pass () (empty tuple) sometimes to denote no arg
     printf("Yay!", ())
@@ -89,15 +93,16 @@
     printf("{}-{}", (iterationNumber, capturedValue))
     (: iterationNumber: 0..10
     (: capturedValue: 1..11
-  } else -> err {
-    (: If some error happened with the iteration, we'd capture it in err
   } finally {
     printf("I ran because nothing broke the loop!", ())
   }
 
   (: Labels are denoted with `blahBlah
   while someVal -> someValsVal `whileLoopLabel {
-    break `whileLoopLabel (: Leave early
+    (: breaks are either:
+    break `whileLoopLabel
+    (: or
+    break `whileLoopLabel, 10 (: If you want to break with a value
     (: while can't get an error (i.e no need for an else)
   } finally {
     printf("I won't run because the loop broke!", ())
@@ -130,7 +135,7 @@
       res = [.x = lhs.x + rhs.x, .y = lhs.y + rhs.y]
     }
     (: You can add a function to the global overload table with @overload
-    @overload(.Add, @This.addVec2)
+    @overload(#Add, @This.addVec2)
 
     (: A property works C# style. Read it and it calls .get. Write to it and it calls .set
     property length = [
@@ -183,7 +188,7 @@
     let addVec3 = pure fn lhs, rhs: @This -> res: @This {
       return [.x = lhs.x + rhs.x, .y = lhs.y + rhs.y, .z = lhs.z + rhs.z]
     }
-    @overload(.Add, @This.addVec3)
+    @overload(#Add, @This.addVec3)
   }
 
   (: Note:
@@ -200,7 +205,7 @@
   let someConst = 10
   var someMutable = someConst
   (: field/enum as described
-  alias anotherTermForSomeMut = someMutable
+  (:alias anotherTermForSomeMut = someMutable
   (: Changes to anotherTermForSomeMut are reflected in someMutable and vice versa
 
   (: cvars are mutable at compiletime, and resolve to a let by runtime
@@ -216,11 +221,11 @@
   (: 'use' is the sole special case of binds.
   (: It's really just a macro that expands 'use path.member' into 'alias member = path.member'
   (: Obviously, we use it for including things from other modules
-  use std.ArrayList (: Std library borrowed from Zig until we have an actual parser 
+  (: use std.ArrayList (: Std library borrowed from Zig until we have an actual parser 
 
   (: Note you could also use it like so:
   let ar = [0, 1, 2, 3, 4]
-  use ar.len
+  (: use ar.len
   (: === alias len = ar.len
   assert len == 5
   (: Use this style sparingly though.
@@ -335,6 +340,17 @@
     (: And that's all the primitives
   }
 
+  {
+    (: Functions
+    (: Zag specifies the type of a function with the 'proc' operator and a tuple
+    let foo = fn {}
+    assert foo.@type == proc ((), ()) (: Function which takes/returns void
+    assert foo.@type == proc(void, void)
+    let bar = fn a, b: usize -> res:isize {res = a + b}
+    assert bar.@type == proc ((usize, usize), isize)
+
+  }
+
   { (: Modifier types
     (: Zag has 6 modifier types
 
@@ -413,6 +429,7 @@
   }
 }
 
+assert 0 notin 1..10
 
 {
   (: Interesting notes about how things work
@@ -424,4 +441,13 @@
   (: This allows us to work unambiguously with swizzling without lexer tricks:
   let a = ((1, 2, 3), (1, 3))
   assert a.0.1 == 2
+  (: This also means that this is technically syntactically correct:
+  1.2.4;
+  (: Although I'm not yet sure if it'll be semantically correct
+
+  (: TL;DR: The first '.' begins a path. Successive '.'s act as separators in that path
+  (: Thus the symbols/literals inside that path are no longer truly evaluated as normal
+  (: Thus when we need to grab something's field, we can pass it the Path
+  (: It then takes the first part of the path out and, if needed, passes the rest of the path to
+  (: whatever is specified by the first part of the path
 }
