@@ -27,7 +27,6 @@ type
     ClosedRange = "..="
     Comma = ","
     Comptime = "comptime"
-    Concept = "concept"
     Const = "const"
     CVar = "cvar"
     Div = "/"
@@ -70,7 +69,6 @@ type
     Pound = "#"
     Proc = "proc"
     Property = "property"
-    PureFn = "purefn"
     Pure = "pure"
     RBrace = "}"
     RBracket = "]"
@@ -166,10 +164,10 @@ type
   FilePos* = object
     line*: uint
     col*: uint
-  Tok* = object
+  Token* = object
+    pos*: FilePos
     case tag*: Tag
     of Tag.Symbol, Tag.Label, Tag.IntLit, StringLit, CharLit:
       lexeme*: string
     else: discard
-  Token* = tuple[what: Tok, where: FilePos]
 
