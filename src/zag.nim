@@ -4,9 +4,10 @@ import tokens
 import lexer
 import nodes
 import parser
+import evaluator
 
 when isMainModule:
   var file = openFileStream "grammar.zag"
   var blocky = file.newLexer.parse()
-  blocky.prettyPrint()
+  #blocky.prettyPrint()
   

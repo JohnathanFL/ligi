@@ -146,6 +146,9 @@ const bindSpecs*: set[Tag] = {
 const atoms*: set[Tag] = {
   Symbol, NullLit, IntLit, StringLit
 }
+const literals*: set[Tag] = {
+  NullLit, IntLit, StringLit
+}
 
 # In foo.bar.baz, these are the bar/baz
 const validSwizzles*: set[Tag] = {

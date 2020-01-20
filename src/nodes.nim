@@ -4,8 +4,40 @@ import tables
 import tokens
 
 type
+  TypeClass*{.pure.} = enum
+    Void, UInt, Int, USize, ISize,
+    Bool, Char, Str, Any,
+    Type, # i.e the symbol usize/isize, or a stored Struct
+    Tuple,
+    FnType,
+    Structure, Enumeration
+  TypeId* = object
+    case class*: TypeClass
+      of UInt, Int:
+        numBits*: 1..256
+      of Structure:
+        structId*: uint
+      of Enumeration:
+        enumId*: uint
+      of Tuple:
+        children*: seq[TypeId]
+      of FnType:
+        args*: seq[TypeId]
+        ret*: ref TypeId
+      else: discard
+
+
+# 1-256
+proc uintType(size: 1..256): TypeId =
+  return TypeId(class: TypeClass.UInt, numBits: size)
+proc intType(size: uint): TypeId =
+  return TypeId(class: TypeClass.Int, numBits: size)
+
+type
   Stmt* = ref object of RootObj
   Expr* = ref object of Stmt
+    typeOf*: TypeId
+    isComptimeKnown*: bool
 
   Atom* = ref object of Expr
     tok*: Token
@@ -39,6 +71,7 @@ type
   BindSym* = ref object of BindLoc
     loc*: Token
     ty*: Option[Expr]
+    typeOf*: TypeId
     pub*: bool
   BindTup* = ref object of BindLoc
     children*: seq[BindLoc]
@@ -63,7 +96,6 @@ type
     cond*: Expr
     capture*: Option[Bind]
     final*: Option[Block]
-    
   IfArm* = object
     cond*: Expr
     val*: Block
@@ -80,7 +112,6 @@ type
   Call* = ref object of Expr
     fn*: Token ## What do we call?
     args*: seq[Expr]
-
   # Thus paths are parsed more as a linked list than a tree
   Path* = ref object of RootObj
     next*: Option[Path] # Points to baz in foo.bar.baz and foo.(bar, far).baz
