@@ -33,121 +33,122 @@ proc uintType(size: 1..256): TypeId =
 proc intType(size: uint): TypeId =
   return TypeId(class: TypeClass.Int, numBits: size)
 
+# With heavy inspiration from Lisp/Nim/similar: The new S-expression styled AST
+# The idea is that there will be a global table of union(Nim Func, Zag Func) to overload
+# any command (although only operators can be overloaded by users) that gets indexed
+# and called.
+# The interpreter runs in 2 phases: Evaluator and Runner.
+# Evaluator resolves all types and runs all comptime-possible operations
+# Runner evaluates all static operations
 type
-  Stmt* = ref object of RootObj
-  Expr* = ref object of Stmt
-    typeOf*: TypeId
-    isComptimeKnown*: bool
+  List* = seq[Expr]
+  # Note that the actual values of symbols are stored outside this AST
+  # This AST is designed to be incredibly simple to interpret.
+  Expr* = object
+    pos*: FilePos
+    case cmd*: Command
+    of Sink, Undef: discard
+    # The atoms are themselves
+    of Int:
+      intVal*: int
+    of Float:
+      floatVal*: float
+    of Symbol:
+      symbol*: string
+    of Block:
+      label*: Option[string]
+      subtree*: List
+    of String:
+      strVal*: string
+    of Char:
+      charVal*: string
+    # Anything else needs to be interpreted from args
+    else:
+      args*: List
+  Command* = enum
+    # Do nothing, just return the list
+    # Essentially the 'list' function in lisp
+    Tuple,
+    # Write to it does nothing
+    # Comparing against it is always true. Thus (0, 1) < (1, _) is true
+    Sink,
+    # 'we don't know'. I'm thinking of replacing the 'any' type with just this
+    Undef,
+    # All normal operators.
+    # All of these can be overloaded, with the exception of the specifics of tuples.
+    AShr, Shr, Shl, BitNot, BitAnd, BitOr, BitXor,
+    Add, Sub, Mul, Div, Mod,
+    Not, And, Or, Xor
+    Eq, NotEq, Less, Greater, LessEq, GreaterEq,
+    OpenRange, ClosedRange,
+    In, NotIn,
+    Assign, AddAssign, SubAssign, MulAssign, DivAssign, ShlAssign, ShrAssign,
 
-  Atom* = ref object of Expr
-    tok*: Token
-
-  # assert expr
-  Assert* = ref object of Stmt
-    expr*: Expr
-  # break [`label] [value]
-  Return* = ref object of Stmt
-    val*: Option[Expr]
-  Break* = ref object of Stmt
-    label*: Option[Token]
-    val*: Option[Expr]
-
-  BlockInterpret*{.pure.} = enum
-    Struct, Enum,
-    Tree, # block {}
-    Token, # #{}
-    Sequence
-  # [struct|enum|block] [#label] {children}
-  Block* = ref object of Expr # Inherits from Expr so we can use struct {} and similar
-    children*: seq[Stmt]
-    interpret*: BlockInterpret
-    label*: Option[Token]
-
-
-  BindType*{.pure.} = enum
-    Let, Var, Enum, Field, Property, CVar
-
-  BindLoc* = ref object of RootObj
-  BindSym* = ref object of BindLoc
-    loc*: Token
-    ty*: Option[Expr]
-    typeOf*: TypeId
-    pub*: bool
-  BindTup* = ref object of BindLoc
-    children*: seq[BindLoc]
+    # Find a value, given a starting point and a path
+    # args[0] is what to access, all after is a path. Thus foo.bar.(baz, faz).car is:
+      # Access:(Symbol:foo, Symbol:bar, Tuple:(Symbol:baz, Symbol:faz), Symbol:car)
+    Access, 
+    # Comptime stuff
+    Proc, Optional, Inline, Comptime, Const,
+    Slice, Array, Enum, Struct,
+    # Control flow
+    # arg[0] is a tuple of tuples, each of which is (condition, capture, value)
+    # arg[1] is the else
+    # arg[2] is the finally
+    If,
+    # arg[0] is the range or condition
+    # arg[1] is the capture(s)
+    # arg[2] is what to do each time
+    For, While,
+    # arg[0] is the capture
+    # arg[1] is what to do each time
+    Loop,
+    # arg[0] is what to return
+    Return,
+    # arg[0] is what to break from
+    # arg[1] is what to break with
+    Break,
+    # arg[0] is the type
+    # arg[1] is a tuple of the values
+    ArrayLit,
+    # arg[0] is the type
+    # arg[1] is a tuple of tuples of (name, val)
+    StructLit,
+    # arg[0] is the name of the enum
+    # arg[1] is the value of the union
+    EnumLit,
+    # arg[0] is a tuple of arg binds
+    # arg[1] is the return
+    # arg[2] is what to do. Note this is not a block, as blocks may be broken/labeled
+    FnDef,
+    # A sequence of statements to be evaluated.
+    # The first non-void value evaluated breaks the block
+    # Break will attempt to go up the tree until it finds its label in one of these.
+    Block,
+    # Binders
+    # Each of these uses:
+      # arg[0]: The location(s) to bind. May be a tuple of tuples and so on
+      # arg[1]: The total type of the bind
+      # arg[2]: The value the expression begins as, or Undef for... undef
+      # The types are expanded out from the initial expression to be in arg[2]
+      # This means a parser must move the types in (x:usize, (y:isize, z:u8)) out into their own tuple
+      # For example: let (x:usize, (y:isize, z:u8)) = (1, (2, 3)) becomes
+        # Let(
+          # Tuple(Symbol:x, Tuple(Symbol:y, Symbol:z)),
+          # Tuple(Symbol:usize, Tuple(Symbol:isize, Symbol:u8)),
+          # Tuple(Int:1, Tuple(Int:2, Int:3))
+        # )
+      # It's somewhat more convoluted for the parser, but I think it makes the AST more logical.
+    Let, Var, CVar, Field, Property,
+    # Special binders
+    # Alias just takes 2 args: The symbol to bind as, and the path to bind
+    # Use takes just 1 arg: The path to import into scope
+    Alias, Use,
+    # Special control flow: Only interpreted with `zag test`
+    Test,
+    # Atoms. Simply store their own stuff
+    Int, Float, Symbol, String, Char
     
-  Bind* = ref object of Stmt
-    interpret*: BindType
-    loc*: BindLoc
-    default*: Option[Expr]
-  EnumLit* = ref object of Expr
-    tok*: Token # The name of the enumeration
-    val*: Option[Expr] # The union initializer, if any
-
-
-  Loop* = ref object of Expr # Infinite loop
-    counter*: Option[Bind]
-    body*: Block
-  LoopType*{.pure.} = enum
-    # 'infinite' or similar isn't here becase it's completely different from this type of loop
-    For, While, DoWhile # DoWhile TODO
-  CondLoop* = ref object of Loop # For/While.
-    interpret*: LoopType # Is cond something to iterate, or to check for truthy-ness
-    cond*: Expr
-    capture*: Option[Bind]
-    final*: Option[Block]
-  IfArm* = object
-    cond*: Expr
-    val*: Block
-    capture*: Option[Bind]
-  If* = ref object of Expr
-    arms*: seq[IfArm]
-    default*: Option[Block]
-    final*: Option[Block]
-  Tuple* = ref object of Expr
-    children*: seq[Expr]
-  # The 'fn' here isn't an actual function yet
-  # Instead it's an operator, using '(' and '[' for FuncCalls/Indexes
-  # This avoids splitting the AST too much
-  Call* = ref object of Expr
-    fn*: Token ## What do we call?
-    args*: seq[Expr]
-  # Thus paths are parsed more as a linked list than a tree
-  Path* = ref object of RootObj
-    next*: Option[Path] # Points to baz in foo.bar.baz and foo.(bar, far).baz
-  SwizzlePath* = ref object of Path
-    paths*: seq[Path] # (bar, far) in foo.(bar, far).baz
-  AccessPath* = ref object of Path
-    # Symbol/Int (Perhaps String)
-    name*: Token # bar, far, and baz in foo.bar.baz, and foo.(bar, far).baz
-  
-  # (Foo, Bar).(Baz, Zab)
-  Access* = ref object of Expr
-    accessed*: Expr
-    path*: Path
-  CompoundLiteral* = ref object of Expr
-    ty*: Option[Expr]
-  StructLiteral* = ref object of CompoundLiteral
-    fields*: Table[string, Expr]
-  ArrayLiteral* = ref object of CompoundLiteral
-    children*: seq[Expr]
-
-  Fn* = ref object of Expr
-    args*: seq[Bind]
-    ret*: Option[Bind] # if isNone then ret.@type == void
-    body*: Block
-
-
-proc asBindType*(tag: Tag): BindType =
-  case tag:
-    of Tag.Let: return BindType.Let
-    of Tag.Var: return BindType.Var
-    of Tag.Property: return BindType.Property
-    of Tag.Field: return BindType.Field
-    of Tag.CVar: return BindType.CVar
-    of Tag.Enum: return BindType.Enum
-    else: assert false
-
 # Because the default $ for this is long and irksome
 proc `$`(t: Token): string =
   case t.what.tag:
