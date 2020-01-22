@@ -1,4 +1,4 @@
-import strutils
+discard """import strutils
 import parseutils
 import re
 import tokens
@@ -186,3 +186,4 @@ method eval*(f: Fn) =
       f.ret.get.eval()
     prettyEcho "Do:"
     f.body.eval()
+"""

@@ -161,9 +161,7 @@ const validSymbolChars*: set[char] = validSymbolBeginnings + {'0'..'9'}
 const validNumLitChars*: set[char] = {'0'..'9'}
 
 type
-  FilePos* = object
-    line*: uint
-    col*: uint
+  FilePos* = tuple[line: uint, col: uint]
   Token* = object
     pos*: FilePos
     case tag*: Tag

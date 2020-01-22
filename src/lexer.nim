@@ -71,39 +71,38 @@ proc scan*(self: var Lexer): Token =
   # We are now definitely not about to start a comment or be in whitespace, but may be EOF
 
   # The token starts here, so we copy the position here
-  result.where.line = self.line
-  result.where.col = self.col
+  let pos = (line: self.line, col: self.col)
   if self.nextChar == '\0':
-    result.what = Tok(tag: EOF)
+    result = Token(pos: pos, tag: EOF)
     return
 
 
   if self.nextChar in validSymbolBeginnings:
     const words: seq[Tag] = @[
-      Alias, And, Array, Assert, Break, Comptime, Concept, Const, CVar, DoWhile,
+      Alias, And, Array, Assert, Break, Comptime, Const, CVar, DoWhile,
       ElIf, Else, Enum, Enum, Field, Finally, Fn, For, If, In,
       Inline, Let, Loop, Not, NotIn, NullLit, Or, Proc, Property, Pure,
-      PureFn, Return, Sink, Struct, Tag.Slice, Undef, Use, Var, Void, While,
+      Return, Sink, Struct, Tag.Slice, Undef, Use, Var, Void, While,
       Xor,
     ]
     var lexeme = ""
     while self.nextChar in validSymbolChars: lexeme &= self.advance()
     for word in words:
       if $word == lexeme:
-        result.what = Tok(tag: word)
+        result = Token(pos: pos, tag: word)
         return
-    result.what = Tok(tag: Symbol, lexeme: lexeme)
+    result = Token(pos: pos, tag: Symbol, lexeme: lexeme)
   elif self.nextChar in '0'..'9':
     var lexeme = ""
     while self.nextChar in validNumLitChars:
       lexeme &= self.advance()
-    result.what = Tok(tag: Tag.IntLit)
+    result = Token(pos: pos, tag: Tag.IntLit)
 
-    result.what.lexeme = lexeme
+    result.lexeme = lexeme
   elif self.nextEql "`":
     var lexeme = "" & self.advance() # Get the '`' in there
     while self.nextChar in validSymbolChars: lexeme &= self.advance()
-    result.what = Tok(tag: Label, lexeme: lexeme)
+    result = Token(pos: pos, tag: Label, lexeme: lexeme)
   elif self.nextEql "#\"":
     #Stropping
     var lexeme = ""
@@ -111,7 +110,7 @@ proc scan*(self: var Lexer): Token =
     # TODO: Iron out the exact rules for what's allowed in a strop
     while self.nextChar != '"': lexeme &= self.advance
     discard self.advance
-    result.what = Tok(tag: Symbol, lexeme: lexeme)
+    result = Token(pos: pos, tag: Symbol, lexeme: lexeme)
   elif self.nextChar == '"':
     var lexeme = ""
     discard self.advance()
@@ -122,9 +121,9 @@ proc scan*(self: var Lexer): Token =
         lexeme &= self.nextChar
       discard self.advance
     if self.nextChar == '\n':
-      echo "ERROR: Newline terminated string literal at ", result.where
+      echo "ERROR: Newline terminated string literal at ", result.pos
     discard self.advance # Skip the '"'
-    result.what = Tok(tag: StringLit, lexeme: lexeme)
+    result = Token(pos: pos, tag: StringLit, lexeme: lexeme)
   else:
     const ops: seq[Tag] = @[
       # Grouped by starting character
@@ -168,10 +167,10 @@ proc scan*(self: var Lexer): Token =
     ]
     for t in ops:
       if self.nextEql $t:
-        result.what.tag = t
+        result.tag = t
         # -1 because \0
         self.advanceBy (($t).len)
         break
-      result.what.tag = Tag.INVALID_TAG
+      result.tag = Tag.INVALID_TAG
   #echo "Scanned a ", result
 
