@@ -53,7 +53,7 @@ type
     Sink,
     # 'we don't know'. I'm thinking of replacing the 'any' type with just this
     Undef,
-    # All normal operators.
+    # All normal operators. All are either binary or unary.
     # All of these can be overloaded, with the exception of the specifics of tuples.
     AShr, Shr, Shl, BitNot, BitAnd, BitOr, BitXor,
     Add, Sub, Mul, Div, Mod,
@@ -64,13 +64,24 @@ type
     Assign, AddAssign, SubAssign, MulAssign, DivAssign, ShlAssign, ShrAssign,
     BitNotAssign, BitAndAssign, BitOrAssign, BitXorAssign,
 
+    # Call arg[0] with arguments arg[1..]
+    Call,
+    # Index into arg[0] with arguments arg[1..]
+    Index,
+
+    # Panic if subtree is false at runtime or can be proven false at comptime
     Assert,
 
     # Find a value, given a starting point and a path
     # args[0] is what to access, all after is a path. Thus foo.bar.(baz, faz).car is:
       # Access:(Symbol:foo, Symbol:bar, Tuple:(Symbol:baz, Symbol:faz), Symbol:car)
-    Access, 
-    # Comptime stuff
+    Access,
+    # Mark a value with a key, as in '.x = 10'
+    Designator,
+    # Comptime stuff. In order:
+      # Create a proc type/optional type, inline a subtree, comptime eval a subtree, mark a type as const,
+      # make an array type, evaluate subtree as a new enum/struct, force purification of a function,
+      # create a slice type
     Proc, Optional, Inline, Comptime, Const,
     Array, EnumDef, StructDef, Pure, Slice,
     # Control flow
@@ -94,10 +105,8 @@ type
     Break,
     # arg[0] is the type
     # arg[1] is a tuple of the values
-    ArrayLit,
-    # arg[0] is the type
-    # arg[1] is a tuple of tuples of (name, val)
-    StructLit,
+      # These may be designators for a struct type
+    CompoundLit,
     # arg[0] is the name of the enum
     # arg[1] is the value of the union
     EnumLit,
@@ -114,6 +123,7 @@ type
     # Each of these uses:
       # arg[0]: The location(s) to bind. May be a tuple of tuples and so on
       # arg[1]: The total type of the bind
+        # I.e (x:usize, i:isize) -> (x,y), (usize, isize)
       # arg[2]: Which locations are public
       # arg[3]: The value the expression begins as, or Undef for... undef
       # The types are expanded out from the initial expression to be in arg[2]
@@ -135,7 +145,7 @@ type
     # arg[1]: The body of the test
     Test,
     # Atoms. Simply store their own stuff
-    Int, Float, Symbol, String, Char
+    Int, Float, Symbol, String, Char, Bool,
     # Atom, but doesn't need to store anything
     Null,
   List* = seq[Expr]
@@ -144,7 +154,7 @@ type
   Expr* = object
     pos*: FilePos
     case cmd*: Command
-    of Sink, Undef: discard
+    of Sink, Undef, Null: discard
     # The atoms are themselves
     of Int:
       intVal*: int
@@ -152,15 +162,20 @@ type
     # The evaluator must evaluate that path into a float
     of Float:
       floatVal*: float
+    of Bool:
+      boolVal*: bool
     of Symbol:
       symbol*: string
-    of Block:
+    of Block, Test:
       label*: Option[string]
       subtree*: List
     of String:
       strVal*: string
     of Char:
       charVal*: string
+    of Designator:
+      key*: string
+      val*: ref Expr
     # Anything else needs to be interpreted from args
     else:
       args*: List
