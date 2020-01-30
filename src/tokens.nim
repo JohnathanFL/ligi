@@ -148,6 +148,10 @@ const Literals*: set[Tag] = {
   NullLit, IntLit, StringLit
 }
 
+const Closers*: set[Tag] = {
+    RParen, RBracket, RBrace
+}
+
 # In foo.bar.baz, these are the bar/baz
 const ValidSwizzles*: set[Tag] = {
   Symbol, IntLit

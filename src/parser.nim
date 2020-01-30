@@ -51,6 +51,9 @@ template tryMatch(what: set[Tag]): Option[Token] = self.tryMatch(what)
 template tryMatch(what: Tag): Option[Token] = tryMatch {what}
 template match(what: set[Tag]): Token = self.match(what)
 template match(what: Tag): Token = match {what}
+template prev(lev: BinLevel): BinLevel =
+    var l = lev
+    l.
 
 proc parseBinLevel(self: var Parser, level: static[BinLevel] = Assignment): Expr
 
@@ -60,13 +63,41 @@ proc parseCondLoop(self: var Parser): Loop
 
 proc parseCall(self: var Parser): Expr
 proc parseAccess(self: var Parser): Expr
-proc parseUnary(self: var Parser): Expr
+proc parseUnary(self: var Parser): Expr =
+    
+proc parseBinLevel(self: var Parser, level: static[BinLevel] = Assignment): Expr =
+    result = when level == BinLevel.high: self.parseUnary() else: self.parseBinLevel(level
 
-proc parseReturn(self: var Parser): Return
-proc parseBreak(self: var Parser): Break
-proc parseAssert(self: var Parser): Assert
-proc parseExpr(self: var Parser): Expr
-proc parseStmt(self: var Parser): Stmt
+proc parseReturn(self: var Parser): Return =
+    discard match Return
+    new result
+    # Because we can assume a return will always be right before a }
+    if not nextIs RBracket:
+        result.val = self.parseBinLevel(below Assignment)
+
+# break [label[,expr]] # (Can only break with an expr if there's a label)
+proc parseBreak(self: var Parser): Break =
+    discard match Break
+    new result
+    if nextIs Label:
+        result.label.new
+        result.label[] = match(Label).lexeme
+        if self.tryMatch(Comma).isSome:
+            result.val = self.parseBinLevel(below Assignment)
+    
+proc parseAssert(self: var Parser): Assert =
+    discard match Assert
+    new result
+    result.val = self.parseBinLevel(below Assignment)
+    
+proc parseStmt(self: var Parser): Stmt =
+    case self.cur.tag:
+        of Let, Var, CVar, Property, Field:
+            return self.parseBindStmt()
+        of Assert: return self.parseAssert()
+        of Break: return self.parseBreak()
+        of Return: return self.parseReturn()
+        else: return self.parseBinLevel()
 
 # Only braced blocks may be labeled.
 proc parseBlock(self: var Parser, braced: static[bool] = false): Block =
