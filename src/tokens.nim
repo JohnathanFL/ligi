@@ -1,3 +1,4 @@
+import strutils
 
 type
   Tag* {.pure.} = enum
@@ -21,13 +22,11 @@ type
     BitOrAssign = "|="
     BitXor = "^"
     BitXorAssign = "^="
-    Block = "block"
     Break = "break"
     CharLit = "CHARLIT"
     ClosedRange = "..="
     Comma = ","
     Comptime = "comptime"
-    Concept = "concept"
     Const = "const"
     CVar = "cvar"
     Div = "/"
@@ -44,7 +43,7 @@ type
     Fn = "fn"
     For = "for"
     Greater = ">"
-    GreaterEql = ">="
+    GreaterEq = ">="
     If = "if"
     In = "in"
     NotIn = "notin"
@@ -54,7 +53,7 @@ type
     LBrace = "{"
     LBracket = "["
     Less = "<"
-    LessEql = "<="
+    LessEq = "<="
     Let = "let"
     Loop = "loop"
     LParen = "("
@@ -70,7 +69,6 @@ type
     Pound = "#"
     Proc = "proc"
     Property = "property"
-    PureFn = "purefn"
     Pure = "pure"
     RBrace = "}"
     RBracket = "]"
@@ -113,10 +111,10 @@ template below*(level: BinLevel): BinLevel =
 
 # All expression-level binary operators.
 # FieldAccess and such are not included here as they are parsed below even unary
-const binOps*: array[BinLevel, set[Tag]] = [
+const BinOps*: array[BinLevel, set[Tag]] = [
   {Assign, AddAssign, SubAssign, MulAssign, DivAssign, BitOrAssign, BitAndAssign, ShlAssign, ShrAssign},
   {Equal, NotEqual, Assert},
-  {Less, Greater, GreaterEql, LessEql, Spaceship},
+  {Less, Greater, GreaterEq, LessEq, Spaceship},
   {Or, Xor},
   {And},
   {In, NotIn},
@@ -128,7 +126,7 @@ const binOps*: array[BinLevel, set[Tag]] = [
 
   
 
-const unaryOps*: set[Tag] = {
+const UnaryOps*: set[Tag] = {
   Sub, BitNot, Not,
   Const, Comptime, # Used for type expressions
   Array, Tag.Slice, Optional,
@@ -137,39 +135,36 @@ const unaryOps*: set[Tag] = {
   Mul
 }
 
-const callOps*: set[Tag] = { LParen, LBracket }
+const CallOps*: set[Tag] = { LParen, LBracket }
 
-const bindSpecs*: set[Tag] = {
+const BindSpecs*: set[Tag] = {
   Let, Var, CVar, Field, Property, Enum
 }
 
-const atoms*: set[Tag] = {
+const Atoms*: set[Tag] = {
   Symbol, NullLit, IntLit, StringLit
 }
-const literals*: set[Tag] = {
+const Literals*: set[Tag] = {
   NullLit, IntLit, StringLit
 }
 
 # In foo.bar.baz, these are the bar/baz
-const validSwizzles*: set[Tag] = {
+const ValidSwizzles*: set[Tag] = {
   Symbol, IntLit
 }
 
-const validSymbolBeginnings*: set[char] = {
-  '_', '@', 'a'..'z', 'A'..'Z'
-}
-const validSymbolChars*: set[char] = validSymbolBeginnings + {'0'..'9'}
+const ValidSymbolBeginnings*: set[char] = {'_', '@'} + Letters
+const ValidSymbolChars*: set[char] = ValidSymbolBeginnings + Digits
 # A stroke of insanity: I'll now parse float lits as field accesses into ints
-const validNumLitChars*: set[char] = {'0'..'9'}
 
 type
-  FilePos* = object
-    line*: uint
-    col*: uint
-  Tok* = object
+  FilePos* = tuple[line:uint, col:uint]
+  Token* = object
+    pos*: FilePos
     case tag*: Tag
-    of Tag.Symbol, Tag.Label, Tag.IntLit, StringLit, CharLit:
+    of Tag.Symbol, Tag.Label,  StringLit, CharLit:
       lexeme*: string
+    of Tag.IntLit:
+      val*: uint
     else: discard
-  Token* = tuple[what: Tok, where: FilePos]
 

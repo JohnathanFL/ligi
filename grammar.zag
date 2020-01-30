@@ -20,7 +20,7 @@
   (: The only real problem is if, for some reason, you needed to write an expression on one line
   (: then have the next line start with a unary '-'. In that case, just use () to disambiguate it.
 
-  (: Zag is semi-whitespace sensitive. Call/index operators must be on the same line as their preceeding symbol,
+  (: Zag is semi-whitespace sensitive. Call/index/brace operators must be on the same line as their preceeding symbol,
   (: So you can unambiguously write things like
   let 
     x = 10,
@@ -53,6 +53,7 @@
   (: You can concatenate arrays in 2 circumstances:
   (: 1. When you can determine the entire size and concatenation at compiletime
   cvar concatArray = [98, 99, 100]
+  (: Entire loop is evaluated at compiletime
   comptime for 0..98 -> i {
     concatArray = [i] + concatArray
   }
@@ -65,8 +66,11 @@
   (: as it's able to determine the size statically
 
   (: Array concatenation is still very tentative.
+
+  
   (: If you want to add 2 sets of numbers at the same time, use tuples:
   assert (0, 1, 2) + (0, -1, -2) == (0, 0, 0)
+  (: I plan to make this use SIMD-optimizations where possible
 
   (: Zag has builtin optionals
   let someVal: ?usize = 10

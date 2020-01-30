@@ -4,174 +4,124 @@ import strutils
 import tokens
 
 type
-  Lexer* = object
+  Lexer* = ref object
     input: Stream
-    line*: uint
-    col*: uint
-    next: array[3, char] # Lookahead(3). 3 is only for ===
+    pos: FilePos
+    cur: char
 
+# Return the old char
 proc advance(self: var Lexer): char =
-  result = self.next[0]
-  self.next[0] = self.next[1]
-  self.next[1] = self.next[2]
-  self.next[2] = self.input.readChar()
+  result = self.cur
+  self.cur = self.input.readChar()
+  #echo "\tAdvanced past ", result
 
-  if self.next[0] == '\n':
-    inc self.line
-    self.col = 0
+  if result == '\n':
+    inc self.pos.line
+    self.pos.col = 1
   else:
-    inc self.col
-  #stdout.write self.next[0]
-
-proc advanceBy(self: var Lexer, by: int): void =
-  for i in 0..<by:
-    discard self.advance()
+    inc self.pos.col
 
 proc newLexer*(stream: Stream): Lexer =
   result = Lexer(
-    line: 1,
-    col: 1,
-    next: [0.char, 0.char, 0.char],
+    pos: (line:0.uint, col:0.uint),
     input: stream,
+    cur: '\0'
   )
+  discard result.advance
+  result.pos.line = 1
+  result.pos.col = 1
 
-  result.advanceBy(3)
-  result.line = 1
-  result.col = 1
+template nextChar():char = self.cur # I'm gonna get diabetes soon with all this sugar
+template nextIs(c: char): bool = self.cur == c
 
-
-proc nextChar(self: var Lexer): char {.inline.} =
-  return self.next[0]
-proc peek(self: var Lexer): char {.inline.} =
-  return self.next[1]
-
-proc nextEql(self: var Lexer, pat: string): bool {.inline.} =
-  for i, c in pat:
-    if self.next[i] != c: return false
-  return true
-
-
-proc scan*(self: var Lexer): Token =
+# Must be a template so the LParen can be returned
+template skip(self: var Lexer) =
   var doneSkipping = false
-  while not doneSkipping:
+  while not doneSkipping: # Whitespace and comments
     doneSkipping = true
-    while self.nextChar.isSpaceAscii: discard self.advance()
-    if self.nextEql("(:") or self.nextEql "(=": # TODO: Treat doc comments as literals
-      doneSkipping = false # We found a comment that may have whitespace after it.
-      var depth = 1
-      while depth > 0:
-        discard self.advance()
-        if self.nextEql ":)":
-          dec depth
-          self.advanceBy 2
-        elif self.nextChar == '\n': depth = 0 # Note we don't advance here. We let the main line logic take it.
-        elif self.nextEql "(:":
-          inc depth
-          self.advanceBy 2
-  # We are now definitely not about to start a comment or be in whitespace, but may be EOF
-
-  # The token starts here, so we copy the position here
-  result.where.line = self.line
-  result.where.col = self.col
-  if self.nextChar == '\0':
-    result.what = Tok(tag: EOF)
-    return
-
-
-  if self.nextChar in validSymbolBeginnings:
-    const words: seq[Tag] = @[
-      Alias, And, Array, Assert, Break, Comptime, Concept, Const, CVar, DoWhile,
-      ElIf, Else, Enum, Enum, Field, Finally, Fn, For, If, In,
-      Inline, Let, Loop, Not, NotIn, NullLit, Or, Proc, Property, Pure,
-      PureFn, Return, Sink, Struct, Tag.Slice, Undef, Use, Var, Void, While,
-      Xor,
-    ]
+    while self.cur in Whitespace: discard self.advance()
+    let pos = self.pos # in case we have a Tag.LParen
+    if nextIs '(':
+      discard self.advance()
+      if nextIs ':':
+        doneSkipping = false
+        while nextChar() != '\n': discard self.advance()
+      else: # Oopsie! We just consumed a Tag.LParen. Better rectify that.
+        return Token(pos: pos, tag: Tag.LParen)
+proc scan*(self: var Lexer): Token =
+  self.skip() # comments/whitespace
+  let pos = self.pos
+  if nextChar() in ValidSymbolBeginnings: # Symbol or keyword
     var lexeme = ""
-    while self.nextChar in validSymbolChars: lexeme &= self.advance()
+    while nextChar() in ValidSymbolChars: lexeme &= self.advance()
+
+    const words: set[Tag] = {
+      Alias, And, Array, Assert, Break, Comptime, Const, CVar, DoWhile, ElIf, Else, Enum,
+      Field, Finally, Fn, For, If, In, NotIn, Inline, Let, Loop, Not, NullLit, Proc, Property,
+      Pure, Return, Tag.Slice, Struct, Test, Undef, Use, Var, Void, While, Xor
+    }
     for word in words:
       if $word == lexeme:
-        result.what = Tok(tag: word)
-        return
-    result.what = Tok(tag: Symbol, lexeme: lexeme)
-  elif self.nextChar in '0'..'9':
+        return Token(pos: pos, tag: word)
+    return Token(pos: pos, tag: Symbol, lexeme: lexeme)
+  elif nextChar() in Digits: # IntLit
     var lexeme = ""
-    while self.nextChar in validNumLitChars:
-      lexeme &= self.advance()
-    result.what = Tok(tag: Tag.IntLit)
-
-    result.what.lexeme = lexeme
-  elif self.nextEql "`":
-    var lexeme = "" & self.advance() # Get the '`' in there
-    while self.nextChar in validSymbolChars: lexeme &= self.advance()
-    result.what = Tok(tag: Label, lexeme: lexeme)
-  elif self.nextEql "#\"":
-    #Stropping
-    var lexeme = ""
-    self.advanceBy(2)
-    # TODO: Iron out the exact rules for what's allowed in a strop
-    while self.nextChar != '"': lexeme &= self.advance
-    discard self.advance
-    result.what = Tok(tag: Symbol, lexeme: lexeme)
-  elif self.nextChar == '"':
-    var lexeme = ""
-    discard self.advance()
-    while self.nextChar notin {'"', '\n'}:
-      lexeme &= self.nextChar
-      if self.nextChar == '\\':
-        discard self.advance
-        lexeme &= self.nextChar
-      discard self.advance
-    if self.nextChar == '\n':
-      echo "ERROR: Newline terminated string literal at ", result.where
-    discard self.advance # Skip the '"'
-    result.what = Tok(tag: StringLit, lexeme: lexeme)
+    while nextChar() in Digits: lexeme &= self.advance()
+    return Token(pos: pos, tag: IntLit, val: lexeme.parseInt.uint)
+  elif nextIs  '`': # Label
+    var lexeme = $self.advance()
+    while nextChar() in ValidSymbolChars: lexeme &= self.advance()
+    return Token(pos: pos, tag: Label, lexeme: lexeme)
+  # Begin operator parsing
+  # Remember '(' is already handled by the skipper
   else:
-    const ops: seq[Tag] = @[
-      # Grouped by starting character
-      AddAssign, Add,
-
-      SubAssign, StoreIn, Sub,
-
-      MulAssign, Mul,
-      DivAssign, Div,
-      NotEqual,
-
-      Assert, Equal, Assign,
-
-      AShr, ShrAssign, Shr, GreaterEql, Greater,
-
-      ShlAssign, Shl, Spaceship, LessEql, Less,
-
-      BitAndAssign, BitAnd,
-
-      BitOrAssign, BitOr,
-
-      BitNotAssign, BitNot,
-
-      BitXorAssign, BitXor,
-      
-      ClosedRange, OpenRange, FieldAccess,
-
-      # All unrelated single characters
-      Pound,
-      Comma,
-      Separator,
-      Optional,
-      Mod,
-      LBrace,
-      RBrace,
-      LBracket,
-      RBracket,
-      LParen,
-      RParen,
-      Semicolon,
-    ]
-    for t in ops:
-      if self.nextEql $t:
-        result.what.tag = t
-        # -1 because \0
-        self.advanceBy (($t).len)
-        break
-      result.what.tag = Tag.INVALID_TAG
-  #echo "Scanned a ", result
-
+    let cur = self.advance()
+    case cur:
+      of '=':
+        if nextIs '=':
+          discard self.advance()
+          return Token(pos: pos, tag: Tag.Equal)
+        else: return Token(pos: pos, tag: Tag.Assign)
+      of '+':
+        if nextIs '=':
+          discard self.advance()
+          return Token(pos: pos, tag: Tag.AddAssign)
+        else: return Token(pos: pos, tag: Tag.Add)
+      of '-':
+        if nextIs '=':
+          discard self.advance()
+          return Token(pos: pos, tag: Tag.SubAssign)
+        elif nextIs '>':
+          discard self.advance()
+          return Token(pos: pos, tag: Tag.StoreIn)
+        else: return Token(pos: pos, tag: Tag.Sub)
+      of '*':
+        if nextIs '=':
+          discard self.advance()
+          return Token(pos: pos, tag: Tag.MulAssign)
+        else: return Token(pos: pos, tag: Tag.Mul)
+      of '/':
+        if nextIs '=':
+          discard self.advance()
+          return Token(pos: pos, tag: Tag.DivAssign)
+        else: return Token(pos: pos, tag: Tag.Div)
+      # All &, |, etc are TODO atm
+      of '.':
+        if nextIs '.':
+          discard self.advance()
+          if nextIs '=':
+            discard self.advance()
+            return Token(pos: pos, tag: Tag.ClosedRange)
+          else: return Token(pos: pos, tag: Tag.OpenRange)
+        else: return Token(pos: pos, tag: Tag.FieldAccess)
+      of '>':
+        if nextIs '=':
+          discard self.advance()
+          return Token(pos: pos, tag: Tag.GreaterEq)
+        else: return Token(pos: pos, tag: Tag.Greater)
+      of '<':
+        if nextIs '=':
+          discard self.advance()
+          return Token(pos: pos, tag: Tag.LessEq)
+        else: return Token(pos: pos, tag: Tag.Less)
+      else: quit "UNEXPECTED CHARACTER AT " & $self.pos
