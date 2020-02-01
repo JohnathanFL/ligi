@@ -8,16 +8,22 @@ import tokens
 # (And yeah, it is somewhat ironic to use this style while building a language without implicit nils)
 type
   Command*{.pure.} = enum
-    Assert, Return, Break,
-    
-    Add, Sub, Mul, Div, Mod,
 
-    Assign,
-
-    Let, Var, CVar, Field, Property, Enum
-
-    Const, Comptime, Inline, Pure, StructDef, EnumDef, 
-  
+    Access, Add, AddAssign, Alias, And,
+    Array, AShr, Assert, Assign, BitAnd,
+    BitAndAssign, BitNot, BitNotAssign, BitOr, BitOrAssign,
+    BitXor, BitXorAssign, Break, Char, ClosedRange,
+    Comptime, Const, CVar, Div, DivAssign,
+    DoWhile, Enum, EnumDef, Equal, Field,
+    For, Greater, GreaterEq, If, In,
+    Inline, Int, Less, LessEq, Let,
+    Loop, Mod, Mul, MulAssign, Not,
+    NotEqual, NotIn, Null, OpenRange, Optional,
+    Or, Property, Pure, Return, Shl,
+    ShlAssign, Shr, ShrAssign, Sink, Slice,
+    Spaceship, String, StructDef, Sub, SubAssign,
+    Symbol Test, Undef, Use, Var,
+    Void, While, Xor,
   Stmt* = ref object of RootObj
     pos*: tuple[line: uint, col: uint]
     cmd*: Command

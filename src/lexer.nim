@@ -57,7 +57,7 @@ proc scan*(self: var Lexer): Token =
 
     const words: set[Tag] = {
       Alias, And, Array, Assert, Break, Comptime, Const, CVar, DoWhile, ElIf, Else, Enum,
-      Field, Finally, Fn, For, If, In, NotIn, Inline, Let, Loop, Not, NullLit, Proc, Property,
+      Field, Finally, Fn, For, If, In, NotIn, Inline, Let, Loop, Not, NullLit, Property,
       Pure, Return, Tag.Slice, Struct, Test, Undef, Use, Var, Void, While, Xor
     }
     for word in words:
@@ -113,7 +113,7 @@ proc scan*(self: var Lexer): Token =
             discard self.advance()
             return Token(pos: pos, tag: Tag.ClosedRange)
           else: return Token(pos: pos, tag: Tag.OpenRange)
-        else: return Token(pos: pos, tag: Tag.FieldAccess)
+        else: return Token(pos: pos, tag: Tag.Access)
       of '>':
         if nextIs '=':
           discard self.advance()

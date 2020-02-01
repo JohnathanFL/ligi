@@ -1,4 +1,5 @@
 import strutils
+import nodes
 
 type
   Tag* {.pure.} = enum
@@ -6,96 +7,107 @@ type
     # Float literals are now parsed as field accesses into an int
     # (i.e every int has an infinite number of fields, each named for an int)
     # FloatLit = "FLOATLIT"
-    Add = "+"
-    AddAssign = "+="
-    Alias = "alias"
-    And = "and"
-    Array = "array"
-    AShr = ">>>"
-    Assert = "assert"
-    Assign = "="
-    BitAnd = "&"
-    BitAndAssign = "&="
-    BitNot = "~"
-    BitNotAssign = "~="
-    BitOr = "|"
-    BitOrAssign = "|="
-    BitXor = "^"
-    BitXorAssign = "^="
-    Break = "break"
-    CharLit = "CHARLIT"
-    ClosedRange = "..="
+
+    
+
+
+    
+    Access = (Command.Access , ".")
+    Add = (Command.Add , "+")
+    AddAssign = (Command.AddAssign , "+=")
+    Alias = (Command.Alias , "alias")
+    And = (Command.And , "and")
+    Array = (Command.Array , "array")
+    AShr = (Command.AShr , ">>>")
+    Assert = (Command.Assert , "assert")
+    Assign = (Command.Assign , "=")
+    BitAnd = (Command.BitAnd , "&")
+    BitAndAssign = (Command.BitAndAssign , "&=")
+    BitNot = (Command.BitNot , "~")
+    BitNotAssign = (Command.BitNotAssign , "~=")
+    BitOr = (Command.BitOr , "|")
+    BitOrAssign = (Command.BitOrAssign , "|=")
+    BitXor = (Command.BitXor , "^")
+    BitXorAssign = (Command.BitXorAssign , "^=")
+    Break = (Command.Break , "break")
+    CharLit = (Command.Char, "CHARLIT")
+    ClosedRange = (Command.ClosedRange , "..=")
+    Comptime = (Command.Comptime , "comptime")
+    Const = (Command.Const , "const")
+    CVar = (Command.CVar , "cvar")
+    Div = (Command.Div , "/")
+    DivAssign = (Command.DivAssign , "/=")
+    DoWhile = (Command.DoWhile , "dowhile")
+    Equal = (Command.Equal , "==")
+    Field = (Command.Field , "field")
+    For = (Command.For , "for")
+    Greater = (Command.Greater , ">")
+    GreaterEq = (Command.GreaterEq , ">=")
+    If = (Command.If , "if")
+    In = (Command.In , "in")
+    Inline = (Command.Inline , "inline")
+    IntLit = (Command.Int , "INTLIT")
+    Less = (Command.Less , "<")
+    LessEq = (Command.LessEq , "<=")
+    Let = (Command.Let , "let")
+    Loop = (Command.Loop , "loop")
+    Mod = (Command.Mod , "%")
+    Mul = (Command.Mul , "*")
+    MulAssign = (Command.MulAssign , "*=")
+    Not = (Command.Not , "not")
+    NotEqual = (Command.NotEqual , "!=")
+    NotIn = (Command.NotIn , "notin")
+    NullLit = (Command.Null , "null")
+    OpenRange = (Command.OpenRange , "..")
+    Optional = (Command.Optional , "?")    # These shall be actual operators
+    Or = (Command.Or , "or")
+    Property = (Command.Property , "property")
+    Pure = (Command.Pure , "pure")
+    Return = (Command.Return , "return")
+    Shl = (Command.Shl , "<<")
+    ShlAssign = (Command.ShlAssign , "<<=")
+    Shr = (Command.Shr , ">>")
+    ShrAssign = (Command.ShrAssign , ">>=")
+    Sink = (Command.Sink , "_")
+    Slice = (Command.Slice , "slice")
+    Spaceship = (Command.Spaceship , "<=>") # Spaceship only tentative
+    StringLit = (Command.String , "STRLIT")
+    Struct = (Command.StructDef , "struct")
+    Sub = (Command.Sub , "-")
+    SubAssign = (Command.SubAssign , "-=")
+    Symbol = (Command.Symbol , "SYM")
+    Test = (Command.Test , "test") # TODO
+    Undef = (Command.Undef , "undef")
+    Use = (Command.Use , "use")
+    Var = (Command.Var , "var")
+    Void = (Command.Void , "void") # Can't be a symbol since we need to be able to do 'fn -> void' without a bind
+    While = (Command.While , "while")
+    Xor = (Command.Xor , "xor")
+
+    
+    # Punctuation
+    # These don't map (directly) to any actual commands, and only serve to disambiguate the syntax
+    # (They're mapped >100 since no commands are that high)
+    StoreIn = (100, "->")
+    RParen = ")"
+    Pound = "#"
+    LParen = "("
+    Label = "LABEL"
+    Fn = "fn"
+    Finally = "finally"
+    EOF = "EOF"
     Comma = ","
-    Comptime = "comptime"
-    Const = "const"
-    CVar = "cvar"
-    Div = "/"
-    DivAssign = "/="
-    DoWhile = "dowhile"
     ElIf = "elif"
     Else = "else"
-    Enum = "enum"
-    EOF = "EOF"
-    Equal = "=="
-    FieldAccess = "."
-    Field = "field"
-    Finally = "finally"
-    Fn = "fn"
-    For = "for"
-    Greater = ">"
-    GreaterEq = ">="
-    If = "if"
-    In = "in"
-    NotIn = "notin"
-    Inline = "inline"
-    IntLit = "INTLIT"
-    Label = "LABEL"
     LBrace = "{"
     LBracket = "["
-    Less = "<"
-    LessEq = "<="
-    Let = "let"
-    Loop = "loop"
-    LParen = "("
-    Mod = "%"
-    Mul = "*"
-    MulAssign = "*="
-    NotEqual = "!="
-    Not = "not"
-    NullLit = "null"
-    OpenRange = ".."
-    Optional = "?"    # These shall be actual operators
-    Or = "or"
-    Pound = "#"
-    Proc = "proc"
-    Property = "property"
-    Pure = "pure"
     RBrace = "}"
     RBracket = "]"
-    Return = "return"
-    RParen = ")"
     Semicolon = ";"
     Separator = ":"
-    Shl = "<<"
-    ShlAssign = "<<="
-    Shr = ">>"
-    ShrAssign = ">>="
-    Sink = "_"
-    Slice = "slice"
-    Spaceship = "<=>" # Spaceship only tentative
-    StoreIn = "->"
-    StringLit = "STRLIT"
-    Struct = "struct"
-    Sub = "-"
-    SubAssign = "-="
-    Symbol = "SYM"
-    Test = "test" # TODO
-    Undef = "undef"
-    Use = "use"
-    Var = "var"
-    Void = "void"
-    While = "while"
-    Xor = "xor"
+    
+    Enum = "enum" # Cannot be mapped directly, as it could be either enum or enumdef
+
 
     INVALID_TAG = "INVALID"
 
@@ -112,49 +124,49 @@ template below*(level: BinLevel): BinLevel =
 # All expression-level binary operators.
 # FieldAccess and such are not included here as they are parsed below even unary
 const BinOps*: array[BinLevel, set[Tag]] = [
-  {Assign, AddAssign, SubAssign, MulAssign, DivAssign, BitOrAssign, BitAndAssign, ShlAssign, ShrAssign},
-  {Equal, NotEqual, Assert},
-  {Less, Greater, GreaterEq, LessEq, Spaceship},
-  {Or, Xor},
-  {And},
-  {In, NotIn},
-  {OpenRange, ClosedRange},
-  {Add, Sub},
-  {Mul, Div, Mod},
-  {BitOr, BitAnd, BitXor},
+  {Tag.Assign, Tag.AddAssign, Tag.SubAssign, Tag.MulAssign, Tag.DivAssign, Tag.BitOrAssign, Tag.BitAndAssign, Tag.ShlAssign, Tag.ShrAssign},
+  {Tag.Equal, Tag.NotEqual, Tag.Assert},
+  {Tag.Less, Tag.Greater, Tag.GreaterEq, Tag.LessEq, Tag.Spaceship},
+  {Tag.Or, Tag.Xor},
+  {Tag.And},
+  {Tag.In, Tag.NotIn},
+  {Tag.OpenRange, Tag.ClosedRange},
+  {Tag.Add, Tag.Sub},
+  {Tag.Mul, Tag.Div, Tag.Mod},
+  {Tag.BitOr, Tag.BitAnd, Tag.BitXor},
 ]
 
   
 
 const UnaryOps*: set[Tag] = {
-  Sub, BitNot, Not,
-  Const, Comptime, # Used for type expressions
-  Array, Tag.Slice, Optional,
-  Pure, Inline, Proc,
+  Tag.Sub, Tag.BitNot, Tag.Not,
+  Tag.Const, Tag.Comptime, # Used for type expressions
+  Tag.Array, Tag.Slice, Tag.Optional,
+  Tag.Pure, Tag.Inline,
   # As pointer
-  Mul
+  Tag.Mul
 }
 
-const CallOps*: set[Tag] = { LParen, LBracket }
+const CallOps*: set[Tag] = { Tag.LParen, Tag.LBracket }
 
 const BindSpecs*: set[Tag] = {
-  Let, Var, CVar, Field, Property, Enum
+  Tag.Let, Tag.Var, Tag.CVar, Tag.Field, Tag.Property, Tag.Enum
 }
 
 const Atoms*: set[Tag] = {
-  Symbol, NullLit, IntLit, StringLit
+  Tag.Symbol, Tag.NullLit, Tag.IntLit, Tag.StringLit
 }
 const Literals*: set[Tag] = {
-  NullLit, IntLit, StringLit
+  Tag.NullLit, Tag.IntLit, Tag.StringLit
 }
 
 const Closers*: set[Tag] = {
-    RParen, RBracket, RBrace
+    Tag.RParen, Tag.RBracket, Tag.RBrace
 }
 
 # In foo.bar.baz, these are the bar/baz
 const ValidSwizzles*: set[Tag] = {
-  Symbol, IntLit
+  Tag.Symbol, Tag.IntLit
 }
 
 const ValidSymbolBeginnings*: set[char] = {'_', '@'} + Letters
