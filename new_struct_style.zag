@@ -1,0 +1,38 @@
+(: Experimental syntax change:
+(: All new types now use 'struct', leaving 'enum' free for only the enum-bind
+(: Thus '.tag' becomes a reserved field in all types and is used for union tag
+
+
+(: Question: Should this change allow both enum and field in the same thing?
+(: The only real obstacle in this is enum literals
+
+
+(: With:
+
+(: Making a simple calculator
+let Token = struct {
+  enum Add, Sub, Mul, Div
+  enum Num: f32
+
+  field pos: struct { field line, col: usize }
+}
+
+var t: Token
+
+(: Option one:
+(: Require an initializer for the enum no matter what
+t = #Add((), [.pos = [.line = 1, .col = 10]])
+t = #Num(10.0, [.pos = [.line = 1, .col = 10]])
+
+(: Very verbose when we don't have an inner value for the union
+
+(: Option two:
+(: Allow omitting the parentheses when there is no inner value
+t = #Add[.pos = [.line = 1, .col = 10]]
+(: Still require parentheses for initializing an innner value as in option one
+
+(: Less verbose when uneeded, but possibly confusing
+
+(: Both of the above options would still allow for a plain
+t = #Add
+(: (where .pos is simply undef and needs to be written before a read)
