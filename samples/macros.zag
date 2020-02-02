@@ -1,0 +1,25 @@
+(: Experimental feature: untyped macros
+
+
+(: TODO: Explain the untyped stuff again
+
+
+
+(: Experimental feature: The $expansion operator
+(: You use it to expand an untyped macro, or quite a few other things:
+
+let Vec2 = struct {
+  field x: f32, y: f32
+}
+let v = [:Vec2: .x = 10.0, .y = 20.0]
+
+cvar fieldName = "x"
+assert v.$fieldName == 10.0
+fieldName = "y"
+assert v.$fieldName == 20.0
+
+(: Obviously, the target above must resolve to a valid swizzler and be comptime known
+(: I think it'll be quite useful in making macros that loop over fields of various objects
+
+(: TODO: Should it require the argument to be untyped for that resolving?
+
