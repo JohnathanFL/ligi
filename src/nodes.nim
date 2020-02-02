@@ -4,17 +4,17 @@ import tables
 import tokens
 
 # Using pure refs instead of Options for slightly cleaner code (maybe)
-# I'll try to annotate nillable with #?
+# I'll try to annotate nillable with #?[, condition for nil]
 # (And yeah, it is somewhat ironic to use this style while building a language without implicit nils)
 type
   Command*{.pure.} = enum
-
+    # Those mapped directly to a token
     Access, Add, AddAssign, Alias, And,
     Array, AShr, Assert, Assign, BitAnd,
     BitAndAssign, BitNot, BitNotAssign, BitOr, BitOrAssign,
     BitXor, BitXorAssign, Break, Char, ClosedRange,
     Comptime, Const, CVar, Div, DivAssign,
-    DoWhile, Enum, EnumDef, Equal, Field,
+    DoWhile, Equal, Field,
     For, Greater, GreaterEq, If, In,
     Inline, Int, Less, LessEq, Let,
     Loop, Mod, Mul, MulAssign, Not,
@@ -24,14 +24,19 @@ type
     Spaceship, String, StructDef, Sub, SubAssign,
     Symbol Test, Undef, Use, Var,
     Void, While, Xor,
+
+    # Those...not
+    Tuple, Enum, EnumDef,
   Stmt* = ref object of RootObj
     pos*: tuple[line: uint, col: uint]
+    # Remember that this is present in BinExpr/etc
     cmd*: Command
   Assert* = ref object of Stmt
     expr*: Expr
   Break* = ref object of Stmt
     val*: Expr #?
-    label*: ref string #?
+    # label.len == 0 just means the next block up
+    label*: string #?
   Return* = ref object of Stmt
     val*: Expr #?
 
@@ -42,14 +47,11 @@ type
     loc*: string
     ty*: Expr
     isPub*: bool
-  # As in let (_, x) = (1, 2).
   # We want to just discard any writes to this.
-  # It becomes
-    # BindTuple
-      # BindSink
-      # BindSym(x, undef, false)
+  # Has to be its own thing rather than Symbol(_) to avoid constant
+  # 'is sym == _' checks
+  # Note this technically means `let _ = 10` is just as valid as `_ = 10`
   BindSink* = ref object of BindLoc
-  # Note this technically means `let _ = 10` is valid.
   Bind* = ref object of Stmt
     # We know the bind type from Stmt.cmd
     loc*: BindLoc
@@ -57,11 +59,16 @@ type
 
   # Anything that can yield a value
   Expr* = ref object of Stmt
+  Tuple* = ref object of Expr
+    children*: seq[Expr]
+  Sink* = ref object of Expr
+  Null* = ref object of Expr
 
   # Can yield a value from either a break or an unconsumed value
   Block* = ref object of Expr
     children*: seq[Stmt]
-    label*: ref string
+    # label.len == 0 just means unlabeled
+    label*: string 
 
   # The atoms
   
@@ -71,7 +78,9 @@ type
     val*: uint
   String* = ref object of Expr
     val*: string
-  
+
+  # Note that this also includes field access.
+  # This is because an access could include calls and such
   BinExpr* = ref object of Expr
     lhs*: Expr
     rhs*: Expr

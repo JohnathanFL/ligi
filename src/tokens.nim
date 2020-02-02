@@ -153,6 +153,7 @@ const BindSpecs*: set[Tag] = {
   Tag.Let, Tag.Var, Tag.CVar, Tag.Field, Tag.Property, Tag.Enum
 }
 
+# Note that tuples are technically atoms, though they aren't included here
 const Atoms*: set[Tag] = {
   Tag.Symbol, Tag.NullLit, Tag.IntLit, Tag.StringLit
 }
