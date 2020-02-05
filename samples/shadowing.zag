@@ -1,0 +1,19 @@
+(: Potential feature: adding Shadowing back
+(: Then we could also allow for function overloading (search through shadows for that function
+(: until you find the proper overload)
+
+(: Problem: Allowing mutually recursive types
+
+(: Potential solution: Allowing you to access the binds being assigned in the 
+
+(: Potential solution: Allow lets to be assigned to at any point, as long as it only happens once:
+
+let Foo, Bar
+Foo = struct {
+  field b: *Bar
+}
+Bar = struct {
+  field f: *Foo
+}
+
+(: This seems like the best way to allow this (and may be added regardless of Shadowing)
