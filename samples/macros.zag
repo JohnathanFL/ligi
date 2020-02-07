@@ -6,6 +6,7 @@
 
 
 (: Experimental feature: The $expansion operator
+(: Will be parsed at the atom level (i.e below even `.`)
 (: You use it to expand an untyped macro, or quite a few other things:
 
 let Vec2 = struct {
@@ -18,8 +19,33 @@ assert v.$fieldName == 10.0
 fieldName = "y"
 assert v.$fieldName == 20.0
 
+(: This would then replace the old #"strop" operator:
+let $"pure" = true
+(: However this will somewhat complicate parsing, so it probably won't be in the senior sem project
+
+(: You can also do this with ints and tuples
+let tup = (0, 1, 4)
+cvar fieldNum = 2
+assert tup.$fieldNum == 4
+
+(: Worth noting that expanding an int will also work with strings
+cvar strNum = "2"
+assert tup.$strNum == 4
+
 (: Obviously, the target above must resolve to a valid swizzler and be comptime known
 (: I think it'll be quite useful in making macros that loop over fields of various objects
 
 (: TODO: Should it require the argument to be untyped for that resolving?
+
+
+
+(: This then also allows concatenating two untyped blocks:
+var x
+let block1:untyped = {x = 0}
+let block2:untyped = {x += 1}
+let fullBlock:untyped = {$block1 $block2}
+$fullBlock
+
+(: Note that the above does **not** allow for declarations being available in other macros
+(: This may or may not be changed later
 
