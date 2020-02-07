@@ -27,12 +27,15 @@ This repo is for the zag interpreters (comptime and runtime) and compiler. (Comp
     * As with C/C++, the parentheses around control structure conditions are completely unneeded.
       * Zag follows Rust's example in `<keyword> <expr> <block>` syntax for control structures, rather than `<keyword> ( <expr> ) <block>`
 * Nim
-    * Nim has a beautiful syntax and amazingly powerful pure-nim macros, but many features (such as unions) leave much to be desired. Whitespace sensitivity is also less desirable for some.
-    * Zag is mostly whitespace insensitive and merges unions and enums Rust-style to make them less of a headache.
+    * Nim has a beautiful syntax and amazingly powerful pure-nim macros, but many features (such as unions) leave much to be desired. 
+    * Whitespace sensitivity is also less desirable for some.    
+      * * Zag is mostly whitespace insensitive and 
+    * Nim unions (`case` types) can be convoluted to work with
+      * Zag merges unions and enums Rust-style to make them less of a headache.
 * Python
-  * Another language with beautiful syntax, but its very slow and has no (builtin) macros.
+  * Another language with beautiful syntax, but it's very slow and has no (builtin) macros.
   * Its interpreted nature makes for wonderful REPL opportunities.
-  * Zag will have both an interpreter *and* a compiler. Code can be inspected in interpreted mode to examine logic more closely before being compiled down. It is also planned to have a runtime REPL that can interact with compiled code for debugging purposes.
+    * Zag will be a dual interpreted and compiled language. Programs are normally compiled for speed, but an interpreter for both debugging and scripting will be maintained.
 * Java
   * Ugly and bloated. 
     * Zag seeks a simple, flowing syntax with as little punctuation as needed to get the point across.
@@ -79,6 +82,10 @@ are not ambiguous. The above resolves to a statement that creates two new mutabl
 #### Semicolon optional
 Semicolons are only ever needed for removing ambiguity, as with multiple statements on the same line.
 
+#### No more `*` and `&`
+To make it easier to tell what you're taking the address of or dereferencing, Zag uses postfix versions of `*` and `&`.
+* To take the address of val: `val.addr`
+* To dereference  ptr: `ptr.deref`
 
 #### Builtin types
 * Integers
@@ -90,13 +97,27 @@ Semicolons are only ever needed for removing ambiguity, as with multiple stateme
 * `bool`: Always either `true` or `false`
 * `char`: A `u32`, intended for representing UTF-32 codepoints.
   * `.isASCII`: Property on all char variables to tell if it fits in a standard ASCII byte.
-* `str`: Character string. An alias for `slice const u8` (more on `slice` later)
+* `str`: Character string. An alias for `slice const u8`
   * `.len`: The length of the string. All strings in Zag are null-terminated to preserve compatability with C.
+* `undef`: Malleable type. It means that variable takes on the type of the first write that happens to it. All variables are bound with this unless otherwise specified
+  ```zag
+  var x: undef
+  assert x.@type == usize
+  x = 10
+  assert x.@type == usize
+  ```
+* `untyped`: Macro type. It stores an *untype*checked subtree of the AST. Can be expanded into the current AST with `$`.
 
 #### Compound types
+* `const <type>`: Create a type that is only ever assigned to once
+* `comptime <type>`: Create a type whose value must always be known by compiletime
 * `array (<size>, <type>)`: Create an array of a specified type and size
   * `array <type>`: Create an array of a specified type, inferring the size
+  * `.len`: Get the length of the array
 * `slice <type>`: Create a slice (basically a `struct{ptr,len}` to an arbitrary array)
+  * `slice const u8` is the type of a string literal.
+  * `.ptr`: Get the pointer to the slice's data
+  * `.len`: Get the length of the slice
 
 #### Bind statements are everywhere
 All Zag binds follow the general format `<spec> <location>[: <type_expr>] [= init_expr]`
@@ -208,6 +229,29 @@ This is also used to enable function overloading, but that's for later.
   ```
   #EnumTag[<struct init>]
   ```
+* `$`: Special "expansion" operator. It's primarily used for macros
+  * When used on a string literal, it turns that string into a symbol. (AKA stropping)
+    * To bind `10` to the symbol `pure`: `let $"pure" = 10`
+  * When used on a *compiletime-known* *variable*, it can be used to access a field/method with that name
+  	```zag
+  	let fieldName = "x"
+  	my2DVector.$fieldName = 10
+  	assert my2DVector.x == 10
+  	```
+    * This also works with integers and tuple accesses
+    	```zag
+    	let tup = (1, 4, 6)
+    	let i = 2
+    	assert tup.$i == 6
+    	```
+  * When used on an `untyped` variable, it expands it into the current scope
+  	```zag
+  	let code: untyped = printf("Hello, world!\n", ())
+  	$code
+  	$code
+  	$code
+  	(: Printed "Hello, world!" 3 times
+  	```
 #### Binary operators
 Here are all of Zag's binary operators:
 * `+, -, *, /, %, <<, >>, >>>`: All work as expected.
