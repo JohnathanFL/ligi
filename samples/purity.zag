@@ -1,0 +1,20 @@
+(: This document is to discuss the semantics of the 'pure' operator in Zag
+  (: Relates to comptime.zag :)
+
+(: In its essence, 'pure' shall ensure that a subtree has no dependencies on non-explicitly-comptime
+(: external variables
+
+(: 1. When applied to a normal subtree, it simply means that the subtree will always be the same each run
+  (: In effect, this makes it the same as 'comptime' in this instance :)
+{
+  let x = pure {
+    let y = 10
+    let z = 50
+    y + z * 500
+  }
+}
+
+(: 2. When applied to a fn, it ensures the function's result will always be the same, given the same args
+{
+  let add = pure fn lhs, rhs -> res = lhs + rhs (: + is a pure operator, so this works
+}
