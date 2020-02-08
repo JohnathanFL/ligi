@@ -85,15 +85,31 @@ method prettyPrint*(self: Swizzle) =
 method prettyPrint*(self: Call) =
   return
 method prettyPrint*(self: BinExpr) =
-  pecho self.cmd, self.pos, "("
-  indent:
+  pecho self.cmd, self.pos
+  becho:
     prettyPrint self.lhs
     prettyPrint self.rhs
-  pecho ")"
 method prettyPrint*(self: UnaryExpr) =
-  return
+  pecho self.cmd
+  becho: prettyPrint self.target
 method prettyPrint*(self: If) =
-  return
+  pecho "If"
+  becho:
+    for arm in self.arms:
+      pecho "Arm"
+      becho:
+        prettyPrint arm.cond
+        if arm.capture != nil:
+          pecho "->"
+          prettyPrint arm.capture
+        pecho "=>"
+        prettyPrint arm.val
+    if self.default != nil:
+      pecho "Else"
+      becho: prettyPrint self.default
+    if self.final != nil:
+      pecho "Finally"
+      becho: prettyPrint self.final
 method prettyPrint*(self: Loop) =
   return
 method prettyPrint*(self: For) =
