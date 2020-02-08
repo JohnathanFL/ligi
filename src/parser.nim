@@ -211,9 +211,13 @@ proc parseBinLevel(self: var Parser, level: static[BinLevel] = Assignment): Expr
     when level == BinLevel.high: self.parseUnary() else: self.parseBinLevel((level.uint + 1).BinLevel)
   result = term()
   if nextIs BinOps[level]:
-    echo "NextIs ", self.cur.tag
-    let op = match(BinOps[level])
-    result = BinExpr(pos: op.pos, cmd: op.tag.BinCmd, lhs: result, rhs: self.parseBinLevel(level))
+    var prevOp = self.cur.tag
+    while nextIs BinOps[level]:
+      let op = match BinOps[level]
+      var res = BinExpr(pos: op.pos, cmd: op.tag.BinCmd, lhs: result, rhs: term())
+        
+      result = res
+      prevOp = op.tag
 
 # We can assume that a return will always be immediately before a '}'
 # because no code could logically be found after it, and a return is always
