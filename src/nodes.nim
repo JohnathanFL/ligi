@@ -42,6 +42,7 @@ type
   Atom* = ref object of Expr
   Sink* = ref object of Atom
   Null* = ref object of Atom
+  NillTup* = ref object of Atom # (). Used to pass nothing in a position
   Undef* = ref object of Atom
   Symbol* = ref object of Atom
     sym*: string
@@ -92,31 +93,33 @@ type
   Loop* = ref object of Expr
     body*: Block
     counter*: Bind #?
-  For* = ref object of Loop
-    range*: Expr
+  # Either for or while
+  CondLoop* = ref object of Loop
+    expr*: Expr
+    exprIsRange*: bool # i.e is this a for loop?
     capture*: Bind #?
-  While* = ref object of Loop
-    cond*: Expr
-    capture*: Bind #?
-  DoWhile* = ref object of Loop
+  Until* = ref object of Loop
     cond*: Expr
     # Can't capture since the first run tests nothing.
 
 
-  # Technically
-  # `fn a, b: usize -> res:usize {...}`
-  # is actually
-  # `FnType Block`
 
-  # This also means that when declaring a function type, you *must* give names to all (though they aren't checked)
-  # Essentially, this is forcible documentation.
-  # Compile errors will continue until documentation improves.
-  FnType* = ref object of Expr
+  # A function is always of the form `fn [args] -> bind`
+    # `fn a,b -> c = a + b` is a complete definition for a function that returns a value
+    # `fn -> c = 10` is as well
+    # `fn -> _ = printf(str)` is a complete definition for a function that returns nothing
+      # i.e void foo(void) in C becomes let foo = fn -> _ = {...}
+      # TODO: Maybe allow `void` to be used where `_` is, so `fn -> void = {}` is valid?
+        # Update 5 mins later: We doin it. `void` is now a synonym for `_`
+  # Thus a function is also its own type. When using it as a type, you simply don't need to give a body
+    # You *could*, but how 'bout just not being a dumdum?
+  # This also means that when declaring a function type, you *must* give names to all
+  # arguments (though they aren't checked for equality)
+    # Essentially, this is forcible documentation.
+      # Compile errors will continue until documentation improves.
+  Fn* = ref object of Expr
     args*: seq[Bind]
-    ret*: Bind #?
-  FnDef* = ref object of Expr
-    ty*: FnType
-    body*: Block
+    ret*: Bind
 
 proc add*(self: Block, s: Stmt) =
   self.children.add s

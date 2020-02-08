@@ -66,9 +66,10 @@ proc parseBlock(self: var Parser, braced: static[bool] = true): Block
 
 # Only the location of the bind itself
 # Note that this means you must specify types on a symbol-by-symbol basis. You can't do it for an entire tuple
-# '_' | ('bindloc{',' bindloc}')' | symbol ['*'][':' expr]
+# 'void' is allowed as a synonym for '_' for use in functions. Just don't be a dumdum.
+# ('_'|'void') | ('bindloc{',' bindloc}')' | symbol ['*'][':' expr]
 proc parseBindLoc(self: var Parser): BindLoc =
-  if tryMatch Tag.Sink:
+  if tryMatch {Tag.Sink, Tag.Void}:
     result = BindSink()
   elif tryMatch Tag.LParen:
     var res = BindTuple(locs: @[])
@@ -127,24 +128,53 @@ proc parseIf(self: var Parser): If =
     result.final = self.parseBlock()
 
 # 'loop' [ '->' bind ] block [ 'finally' block ]
-proc parseLoop(self: var Parser): Loop = return
+proc parseLoop(self: var Parser): Loop =
+  let pos = match(Tag.Loop).pos
+  result = Loop(pos: pos)
+  if tryMatch Tag.StoreIn:
+    result.counter = self.parseBind(spec=BindCmd.Let, mayDefault=false)
+  result.body = self.parseBlock()
 
 # ('while'|'for') expr [ '->' bind [ ',' bind ] ] block [ 'finally' block ]
-proc parseCondLoop(self: var Parser): Loop = return
-
+proc parseCondLoop(self: var Parser): CondLoop =
+  let tok = match {Tag.While, Tag.For}
+  let pos = tok.pos
+  let exprIsRange = tok.tag == Tag.For
+  result = CondLoop(pos: pos, exprIsRange:exprIsRange)
+  result.expr = self.parseBinLevel(below Assignment)
+  if tryMatch Tag.StoreIn:
+    # First comes capture, then counter
+    if tryMatch Tag.Var:
+      result.capture = self.parseBind(spec=BindCmd.Var, mayDefault=false)
+    else:
+      result.capture = self.parseBind(spec=BindCmd.Let, mayDefault=false)
+    if tryMatch Comma:
+      result.counter = self.parseBind(spec=BindCmd.Let, mayDefault=false)
+  result.body = self.parseBlock()
+proc parseUntilLoop(self: var Parser): Until =
+  let pos = match(Tag.Until).pos
+  result = Until(pos: pos, cond: self.parseBinLevel(below Assignment))
+  if tryMatch Tag.StoreIn: result.counter = self.parseBind(spec=BindCmd.Let, mayDefault=false)
+  result.body = self.parseBlock()
 # Thus sinks, nulls, symbols, ints, and tuples are the 'atoms' that make up the language
-# sink | null | symbol | string | int | '('expr{ ',' expr }')'
+# symbol | string | int | '('expr{ ',' expr }')'
 proc parseAtom(self: var Parser): Expr =
   if nextIs Tag.LParen: # Tuple
+    # Tuple parsing has 3 forms:
+      # (): NillTup. No value at all.
+      # (expr): We skip making this a tuple.
+      # (expr, expr,...): A normal tuple
     let pos = match(Tag.LParen).pos
-    var res = Tuple(pos: pos, children: @[])
-    result = res
+    var children: seq[Expr] = @[]
     # Thus Tuple(children=[]) is valid (null tuple)
     while not nextIs Tag.RParen:
-      res.children.add self.parseBinLevel(below Assignment)
+      children.add self.parseBinLevel(below Assignment)
       # Require a comma after each item to continue
       if not tryMatch Tag.Comma: break
     discard match Tag.RParen
+    if children.len == 0: return NillTup(pos: pos)
+    elif children.len == 1: return children[0]
+    else: return Tuple(pos: pos, children: children)
   else:
     let atom = match Atoms
     case atom.tag:
@@ -163,7 +193,6 @@ proc parseCall(self: var Parser, subject: Expr): Call =
   let opener = match CallOps
   let closer = if opener.tag == Tag.LParen: Tag.RParen else: Tag.RBracket
   let isIndex = opener.tag == Tag.LBracket
-
   result = Call(pos: opener.pos, isIndex:isIndex, subject: subject, args: @[])
 
   while not nextIs closer:
@@ -184,17 +213,29 @@ proc parseSwizzle(self: var Parser): Expr =
     # May its glory be greater than its glory!
     result = Swizzle(pos: pos, subject: result, path: self.parseSwizzle())
 
+# 'fn' [bind{',', bind}] -> bind
+proc parseFn(self: var Parser): Fn =
+  result = Fn(pos: match(Tag.Fn).pos, args: @[])
+  while not nextIs StoreIn:
+    # TODO: Look into allowing default args and its implications
+    result.args.add self.parseBind(spec=BindCmd.Let, mayDefault=false)
+    if not tryMatch Comma: break
+  discard match StoreIn
+  result.ret = self.parseBind(spec=BindCmd.Var, mayDefault=true)
+
 # Thus only atoms and parenthesized expressions can be accessed/called/indexed
 # if | for | while | loop | block | swizzle | undef | null | sink
 proc parseBase(self: var Parser): Expr =
   case self.cur.tag:
     of Tag.If: return self.parseIf()
     of Tag.For, Tag.While: return self.parseCondLoop()
+    of Tag.Fn: return self.parseFn()
+    of Tag.Until: return self.parseUntilLoop()
     of Tag.Loop: return self.parseLoop()
     of Tag.Label, Tag.LBrace: return self.parseBlock()
     of Tag.Undef: return Undef(pos: match(Tag.Undef).pos)
     of Tag.NullLit: return Null(pos: match(Tag.NullLit).pos)
-    of Tag.Sink: return Sink(pos: match(Tag.Sink).pos)
+    of Tag.Sink, Tag.Void: return Sink(pos: match(Tag.Sink).pos)
     else: return self.parseSwizzle()
 
 # {unaryop} access

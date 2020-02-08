@@ -33,7 +33,7 @@ const UnaryOps*: set[Tag] = {
   Tag.Sub, Tag.BitNot, Tag.Not,
   Tag.Const, Tag.Comptime, # Used for type expressions
   Tag.Array, Tag.Slice, Tag.Optional,
-  Tag.Pure, Tag.Inline,
+  Tag.Pure, Tag.Inline, Tag.Struct, Tag.Enum,
   # As pointer
   Tag.Mul
 }

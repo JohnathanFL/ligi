@@ -34,7 +34,13 @@ proc newLexer*(stream: Stream): Lexer =
 
 template nextChar():char = self.cur # I'm gonna get diabetes soon with all this sugar
 template nextIs(c: char): bool = self.cur == c
+template match(c: char) =
+  if not nextIs c:
+    quit "Expected a " & $c & " at " & $self.pos
+  discard self.advance()
 
+# TODO: In order to properly do this, I'll need 2-char lookahead
+# Otherwise a line string lit followed by a '(' will discard the original stringlit
 # Must be a template so the LParen can be returned
 template skip(self: var Lexer) =
   var doneSkipping = false
@@ -57,7 +63,7 @@ proc scan*(self: var Lexer): Token =
     while nextChar() in ValidSymbolChars: lexeme &= self.advance()
 
     const words: set[Tag] = {
-      Alias, And, Array, Assert, Break, Comptime, Const, CVar, DoWhile, ElIf, Else, Enum,
+      Alias, And, Array, Assert, Break, Comptime, Const, CVar, Until, ElIf, Else, Enum,
       Field, Finally, Fn, For, If, In, NotIn, Inline, Let, Loop, Not, NullLit, Property,
       Pure, Return, Tag.Slice, Struct, Test, Undef, Use, Var, Void, While, Xor, Sink
     }
@@ -73,6 +79,31 @@ proc scan*(self: var Lexer): Token =
     var lexeme = $self.advance()
     while nextChar() in ValidSymbolChars: lexeme &= self.advance()
     return Token(pos: pos, tag: Label, lexeme: lexeme)
+  elif nextIs '"': # StringLit
+    var lexeme = ""
+    match '"'
+    while nextChar() != '"':
+      if nextChar() == '\\':
+        discard self.advance()
+        lexeme &= self.advance()
+      elif nextChar() == '\n':
+        quit "ERROR: Newline-terminated string literal at " & $self.pos & ", use '\\\\ ' for multiline strings!"
+      else: lexeme &= self.advance()
+    match '"'
+    return Token(pos: pos, tag: StringLit, lexeme: lexeme)
+  elif nextIs '\\': # Line StringLit
+    var lexeme = ""
+
+    while nextIs '\\':
+      # Line StringLit always goes '\\ ' (Note the extra space)
+      match '\\'
+      match '\\'
+      match ' '
+      while not nextIs '\n': lexeme &= self.advance()
+      match '\n'
+      self.skip()
+      if nextIs '\\': lexeme &= '\n'
+    return Token(pos: pos, tag: StringLit, lexeme: lexeme)
   # Begin operator parsing
   # Remember '(' is already handled by the skipper
   else:
@@ -89,6 +120,7 @@ proc scan*(self: var Lexer): Token =
       of ':': ret Tag.Separator
       of '%': ret Tag.Mod
       of '?': ret Tag.Optional
+      of ',': ret Tag.Comma
       of '=':
         if nextIs '=':
           discard self.advance()

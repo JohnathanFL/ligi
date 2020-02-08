@@ -16,16 +16,17 @@ template becho(body: untyped) =
   indent: body
   pecho ")"
 
-
 method prettyPrint*(self: Stmt) {.base.} =
   quit "HIT BASE STMT"
 method prettyPrint*(self: BindLoc) {.base.} =
   quit "HIT BASE BINDLOC"
+proc prettyPrint*[T](self: seq[T]) =
+  for stmt in self:
+    prettyPrint stmt
 
 method prettyPrint*(self: BindTuple) =
   pecho "Tuple"
-  becho:
-    for child in self.locs: prettyPrint child
+  becho: prettyPrint self.locs
 method prettyPrint*(self: BindSym) =
   let pub = if self.isPub: "*" else: ""
   if self.ty != nil:
@@ -39,27 +40,25 @@ method prettyPrint*(self: BindSink) =
 
 method prettyPrint*(self: Block) =
   pecho "Block", self.label, self.pos
-  becho:
-    for child in self.children: prettyPrint child
+  becho: prettyPrint self.children
 method prettyPrint*(self: Assert) =
-  pecho "Assert"
+  pecho "Assert", self.pos
   becho:
     prettyPrint self.expr
 method prettyPrint*(self: Break) =
   if self.val != nil:
-    pecho "Break ", self.label, ":"
+    pecho "Break ", self.label, self.pos, ":"
     becho:
       prettyPrint self.val
   else:
-    pecho "Break ", self.label
+    pecho "Break ", self.label, self.pos
     
 method prettyPrint*(self: Return) =
+  pecho "Return", self.pos
   if self.val != nil:
-    pecho "Return"
     becho: prettyPrint self.val
-  else: pecho "Return"
 method prettyPrint*(self: Bind) =
-  pecho self.cmd
+  pecho self.cmd, self.pos
   becho:
     prettyPrint self.loc
     if self.init != nil:
@@ -69,21 +68,28 @@ method prettyPrint*(self: Bind) =
 method prettyPrint*(self: Expr) =
   quit "HIT BASE EXPR"
 method prettyPrint*(self: Tuple) =
-  pecho "Tuple"
-  becho:
-    for child in self.children: prettyPrint child
+  pecho "Tuple", self.pos
+  becho: prettyPrint self.children
 method prettyPrint*(self: Atom) =
-  quit "HIT BASE ATOM"
+  quit "HIT BASE ATOM" & $self.pos
 method prettyPrint*(self: Sink) = pecho "@_@"
 method prettyPrint*(self: Null) = pecho "null"
+method prettyPrint*(self: NillTup) = pecho "()"
 method prettyPrint*(self: Undef) = pecho "undef"
 method prettyPrint*(self: Symbol) = pecho self.sym
 method prettyPrint*(self: Int) = pecho self.val
 method prettyPrint*(self: String) = pecho '"', self.val, '"'
 method prettyPrint*(self: Swizzle) =
-  return
+  pecho "Swizzle", self.pos
+  becho:
+    prettyPrint self.subject
+    pecho "."
+    prettyPrint self.path
 method prettyPrint*(self: Call) =
-  return
+  pecho "Call", self.pos
+  becho:
+    prettyPrint self.subject
+    becho: prettyPrint self.args
 method prettyPrint*(self: BinExpr) =
   pecho self.cmd, self.pos
   becho:
@@ -111,15 +117,36 @@ method prettyPrint*(self: If) =
       pecho "Finally"
       becho: prettyPrint self.final
 method prettyPrint*(self: Loop) =
-  return
-method prettyPrint*(self: For) =
-  return
-method prettyPrint*(self: While) =
-  return
-method prettyPrint*(self: DoWhile) =
-  return
-method prettyPrint*(self: FnType) =
-  return
-method prettyPrint*(self: FnDef) =
-  return
+  pecho "Loop"
+  becho:
+    if self.counter != nil:
+      pecho "->"
+      prettyPrint self.counter
+    prettyPrint self.body
+method prettyPrint*(self: CondLoop) =
+  if self.exprIsRange: pecho "For"
+  else: pecho "While"
+  becho:
+    prettyPrint self.expr
+    if self.capture != nil: # If self.counter != nil, then self.capture !== nil
+      pecho "->"
+      becho:
+        prettyPrint self.capture
+        if self.counter != nil: prettyPrint self.counter
+    prettyPrint self.body
+method prettyPrint*(self: Until) =
+  pecho "Until"
+  becho:
+    prettyPrint self.cond
+    if self.counter != nil:
+      pecho "->"
+      becho: prettyPrint self.counter
+    prettyPrint self.body
+    
+method prettyPrint*(self: Fn) =
+  pecho "Fn"
+  becho:
+    prettyPrint self.args
+    pecho "->"
+    prettyPrint self.ret
 

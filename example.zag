@@ -1,17 +1,54 @@
 (: Testy commenty
 
-a / b * c
-
-let x = 0
-let y: bool = true
+var x = 5 + 6 - 1 / 2 * 3 - 4
+var y: bool = true
 let _ = 50
-
-_ = 60
-
-x += 1
-
+(_, x, y) = (10, 30, 50)
 assert x == 25
+`testy {}
 
-`testy {
-  
+let stringy = \\ I'm
+(: Test comment
+   \\ Baaaack
+
+if x == 1 -> _ {
+  printf("Was 1", ())
+} elif x == 2 -> _ {
+  printf("Was 2", ())
+} else {
+  printf("Was neither", ())
+} finally {
+  printf("Was either 1 or 2", ())
 }
+
+loop -> counter {
+  printf("Iteration {}", counter)
+}
+
+for 0..=10 {}
+for 11..=20 -> i {}
+for 11..=20 -> var i {}
+for 21..=30 -> i, counter {}
+for 21..=30 -> var i, counter {}
+(: Not bothering to test while since it's the same code as for
+
+until x == 0 {
+  printf("X ain't 0!", ())
+  x -= 1
+}
+
+(: TODO: Should this be allowed?
+(: It parses at the moment, but should it?
+x = 0 = 10
+
+
+let Vec2 = struct {
+  field
+    x: f32,
+    y: f32
+}
+
+(: A function that returns a value
+let add = pure fn a, b: undef -> c = a + b
+(: A function that doesn't
+let greet = fn -> void = printf("Saluton, mondo!")

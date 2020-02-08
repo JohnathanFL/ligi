@@ -28,7 +28,7 @@ type Tag* {.pure.} = enum
   CVar = "cvar"
   Div = "/"
   DivAssign = "/="
-  DoWhile = "dowhile"
+  Until = "until"
   Enum = "enum"
   Equal = "=="
   Field = "field"
