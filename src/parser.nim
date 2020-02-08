@@ -31,7 +31,7 @@ proc advance(self: var Parser): Token =
   result = self.cur
   self.lastPos = self.cur.pos
   self.cur = self.lexer.scan()
-  echo "Advanced to ", self.cur
+  #echo "Advanced to ", self.cur
 
 
 proc nextIs(self: var Parser, what: set[Tag]): bool =
@@ -86,7 +86,7 @@ proc parseBindLoc(self: var Parser): BindLoc =
     if tryMatch Tag.Separator:
       res.ty = self.parseBinLevel(below Assignment)
     result = res
-    echo "BindLoc was a symbol"
+    #echo "BindLoc was a symbol"
 # Parse the bind itself
 proc parseBind(self: var Parser, spec: BindCmd, mayDefault = true): Bind =
   result = Bind(pos: self.cur.pos, cmd: spec, loc: self.parseBindLoc())
@@ -285,7 +285,6 @@ proc parseBreak(self: var Parser): Break =
 
 # 'assert' expr
 proc parseAssert(self: var Parser): Assert =
-  echo "IN ASSERT"
   discard match Tag.Assert
   new result
   result.expr = self.parseBinLevel(below Assignment)
