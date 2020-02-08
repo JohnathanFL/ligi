@@ -1,4 +1,17 @@
 (: Testy commenty
+
+a / b * c
+
 let x = 0
+let y: bool = true
+let _ = 50
+
+_ = 60
 
 x += 1
+
+assert x == 25
+
+`testy {
+  
+}

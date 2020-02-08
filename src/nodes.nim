@@ -1,36 +1,13 @@
-import options
 import tables
+import cmds
 
-import tokens
 
 # Using pure refs instead of Options for slightly cleaner code (maybe)
 # I'll try to annotate nillable with #?[, condition for nil]
 # (And yeah, it is somewhat ironic to use this style while building a language without implicit nils)
 type
-  Command*{.pure.} = enum
-    # Those mapped directly to a token
-    Access, Add, AddAssign, Alias, And,
-    Array, AShr, Assert, Assign, BitAnd,
-    BitAndAssign, BitNot, BitNotAssign, BitOr, BitOrAssign,
-    BitXor, BitXorAssign, Break, Char, ClosedRange,
-    Comptime, Const, CVar, Div, DivAssign,
-    DoWhile, Equal, Field,
-    For, Greater, GreaterEq, If, In,
-    Inline, Int, Less, LessEq, Let,
-    Loop, Mod, Mul, MulAssign, Not,
-    NotEqual, NotIn, Null, OpenRange, Optional,
-    Or, Property, Pure, Return, Shl,
-    ShlAssign, Shr, ShrAssign, Sink, Slice,
-    Spaceship, String, StructDef, Sub, SubAssign,
-    Symbol Test, Undef, Use, Var,
-    Void, While, Xor,
-
-    # Those...not
-    Tuple, Enum, EnumDef,
   Stmt* = ref object of RootObj
     pos*: tuple[line: uint, col: uint]
-    # Remember that this is present in BinExpr/etc
-    cmd*: Command
   Assert* = ref object of Stmt
     expr*: Expr
   Break* = ref object of Stmt
@@ -53,6 +30,7 @@ type
   # Note this technically means `let _ = 10` is just as valid as `_ = 10`
   BindSink* = ref object of BindLoc
   Bind* = ref object of Stmt
+    cmd*: BindCmd
     # We know the bind type from Stmt.cmd
     loc*: BindLoc
     init*: Expr #?
@@ -61,8 +39,16 @@ type
   Expr* = ref object of Stmt
   Tuple* = ref object of Expr
     children*: seq[Expr]
-  Sink* = ref object of Expr
-  Null* = ref object of Expr
+  Atom* = ref object of Expr
+  Sink* = ref object of Atom
+  Null* = ref object of Atom
+  Undef* = ref object of Atom
+  Symbol* = ref object of Atom
+    sym*: string
+  Int*  = ref object of Atom
+    val*: uint
+  String* = ref object of Atom
+    val*: string
 
   # Can yield a value from either a break or an unconsumed value
   Block* = ref object of Expr
@@ -72,23 +58,31 @@ type
 
   # The atoms
   
-  Symbol* = ref object of Expr
-    sym*: string
-  Int*  = ref object of Expr
-    val*: uint
-  String* = ref object of Expr
-    val*: string
+
+  Swizzle* = ref object of Expr
+    subject*: Expr
+    path*: Expr
+
+  Call* = ref object of Expr
+    isIndex*: bool
+    subject*: Expr
+    args*: seq[Expr]
 
   # Note that this also includes field access.
   # This is because an access could include calls and such
   BinExpr* = ref object of Expr
+    cmd*: BinCmd
     lhs*: Expr
     rhs*: Expr
   UnaryExpr* = ref object of Expr
+    cmd*: UnaryCmd
     target*: Expr
 
+  # TODO: When matches or whatever are added, why not just parse them directly into these?
+  # They're the exact same idea anyway
   IfArm* = object
     cond*: Expr
+    capture*: Bind
     val*: Block
   If* = ref object of Expr
     arms*: seq[IfArm]

@@ -1,6 +1,7 @@
 import streams
 import strutils
 
+import tags
 import tokens
 
 type
@@ -58,7 +59,7 @@ proc scan*(self: var Lexer): Token =
     const words: set[Tag] = {
       Alias, And, Array, Assert, Break, Comptime, Const, CVar, DoWhile, ElIf, Else, Enum,
       Field, Finally, Fn, For, If, In, NotIn, Inline, Let, Loop, Not, NullLit, Property,
-      Pure, Return, Tag.Slice, Struct, Test, Undef, Use, Var, Void, While, Xor
+      Pure, Return, Tag.Slice, Struct, Test, Undef, Use, Var, Void, While, Xor, Sink
     }
     for word in words:
       if $word == lexeme:
@@ -75,53 +76,64 @@ proc scan*(self: var Lexer): Token =
   # Begin operator parsing
   # Remember '(' is already handled by the skipper
   else:
+    template ret(t: Tag): untyped = return Token(pos: pos, tag: t)
     let cur = self.advance()
     case cur:
+      of '\0': ret Tag.EOF
+      of '{': ret Tag.LBrace
+      of '}': ret Tag.RBrace
+      of '(': ret Tag.LParen
+      of ')': ret Tag.RParen
+      of '[': ret Tag.LBracket
+      of ']': ret Tag.RBracket
+      of ':': ret Tag.Separator
+      of '%': ret Tag.Mod
+      of '?': ret Tag.Optional
       of '=':
         if nextIs '=':
           discard self.advance()
-          return Token(pos: pos, tag: Tag.Equal)
-        else: return Token(pos: pos, tag: Tag.Assign)
+          ret Tag.Equal
+        else: ret Tag.Assign
       of '+':
         if nextIs '=':
           discard self.advance()
-          return Token(pos: pos, tag: Tag.AddAssign)
-        else: return Token(pos: pos, tag: Tag.Add)
+          ret Tag.AddAssign
+        else: ret Tag.Add
       of '-':
         if nextIs '=':
           discard self.advance()
-          return Token(pos: pos, tag: Tag.SubAssign)
+          ret Tag.SubAssign
         elif nextIs '>':
           discard self.advance()
-          return Token(pos: pos, tag: Tag.StoreIn)
-        else: return Token(pos: pos, tag: Tag.Sub)
+          ret Tag.StoreIn
+        else: ret Tag.Sub
       of '*':
         if nextIs '=':
           discard self.advance()
-          return Token(pos: pos, tag: Tag.MulAssign)
-        else: return Token(pos: pos, tag: Tag.Mul)
+          ret Tag.MulAssign
+        else: ret Tag.Mul
       of '/':
         if nextIs '=':
           discard self.advance()
-          return Token(pos: pos, tag: Tag.DivAssign)
-        else: return Token(pos: pos, tag: Tag.Div)
+          ret Tag.DivAssign
+        else: ret Tag.Div
       # All &, |, etc are TODO atm
       of '.':
         if nextIs '.':
           discard self.advance()
           if nextIs '=':
             discard self.advance()
-            return Token(pos: pos, tag: Tag.ClosedRange)
-          else: return Token(pos: pos, tag: Tag.OpenRange)
-        else: return Token(pos: pos, tag: Tag.Access)
+            ret Tag.ClosedRange
+          else: ret Tag.OpenRange
+        else: ret Tag.Access
       of '>':
         if nextIs '=':
           discard self.advance()
-          return Token(pos: pos, tag: Tag.GreaterEq)
-        else: return Token(pos: pos, tag: Tag.Greater)
+          ret Tag.GreaterEq
+        else: ret Tag.Greater
       of '<':
         if nextIs '=':
           discard self.advance()
-          return Token(pos: pos, tag: Tag.LessEq)
-        else: return Token(pos: pos, tag: Tag.Less)
+          ret Tag.LessEq
+        else: ret Tag.Less
       else: quit "UNEXPECTED CHARACTER AT " & $self.pos
