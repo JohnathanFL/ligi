@@ -285,11 +285,8 @@ proc parseBreak(self: var Parser): Break =
 
 # 'assert' expr
 proc parseAssert(self: var Parser): Assert =
-  discard match Tag.Assert
-  new result
-  result.expr = self.parseBinLevel(below Assignment)
-
-
+  let pos = match(Tag.Assert).pos
+  result = Assert(pos: pos, expr: self.parseBinLevel(below Assignment))
 proc parseBlock(self: var Parser, braced: static[bool] = true): Block =
   new result
   when braced:
