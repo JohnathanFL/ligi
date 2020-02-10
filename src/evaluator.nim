@@ -80,7 +80,6 @@ type
   # Should never be instantiated.
   RecordType = ref object of Type
     statics: Table[string, tuple[ty: Type, val: Val]]
-    funcs: Table[string, Val] # Note these are stored separately from statics
     props: Table[string, tuple[get: Func, set: Func]]
   StructType = ref object of Type
     # Order will matter when we end up making this a compiler
@@ -117,4 +116,5 @@ type Context = ref object
   # Whenever a value changes from NoVal to some value, this needs to be checked for a hook.
   lazy: Table[string, Expr]
   # Note 'var's is a misnomer here. They could be constants.
+  # Note that while evaluating, this only has the vars that have been bound up to that point
   vars: Table[string, Val]
