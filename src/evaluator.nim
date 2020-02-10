@@ -14,15 +14,15 @@ type
     # For optionals
     NullVal
     TypeVal,
-    IntVal, BoolVal,
-    SliceVal, FuncVal, ArrayVal,
-    RangeVal,
+    IntVal, BoolVal, StringVal
+    SliceVal, FuncVal, ArrayVal
+    RangeVal
 
     # Holding an actual instance of a struct
-    StructVal,
+    StructVal
     # Holding an actual instance of an enum
-    EnumVal,
-    TupleVal, FuncVal
+    EnumVal
+    TupleVal
 
   # Doing it like this allows both passing refs around arbitrarily *and*
   # mutating the inner value without convoluted stuff.
@@ -34,15 +34,16 @@ type
         inner: AnyType
       of IntVal:
         integer: int
-      of StringVal
+      of StringVal:
         str: string
       of BoolVal:
         boolean: bool
       of SliceVal:
         start: uint
         stop: uint
-      of SliceVal, ArrayVal:
         mem: MemSlice
+      of ArrayVal:
+        backing: MemSlice
       of RangeVal:
         # Both inclusive here
         min: int
@@ -51,15 +52,15 @@ type
         fields: Table[string, Val]
       of EnumVal:
         tag: string
-        inner: Val
-     of TupleVal:
-       children: seq[Val]
-     of FuncVal:
-       # Map 1-1 with the argTypes in FuncType
-       argNames: seq[string]
-       retName: string
-       body: Expr
-        
+        contains: Val
+      of TupleVal:
+        children: seq[Val]
+      of FuncVal:
+        # Map 1-1 with the argTypes in FuncType
+        argNames: seq[string]
+        retName: string
+        body: Expr
+
 
   # Also used for 'undef' type
   # Can be instantiated, but just means that type has yet to be set
@@ -68,7 +69,7 @@ type
   # Reading from it is an error
   # All things return to the void, but none return from the void
   VoidType = ref object of AnyType
-  # Outside 
+  # Outside
   TypeType = ref object of AnyType
   # Any const/comptime mods applied to a TupleType will just go through to its members
   TupleType = ref object of AnyType
@@ -80,7 +81,7 @@ type
   # Should never be instantiated.
   RecordType = ref object of Type
     statics: Table[string, tuple[ty: Type, val: Val]]
-    props: Table[string, tuple[get: Func, set: Func]]
+    props: Table[string, tuple[get: Val, set: Val]]
   StructType = ref object of Type
     # Order will matter when we end up making this a compiler
     fields: OrderedTable[string, tuple[ty: Type, val: Val]]
@@ -93,7 +94,7 @@ type
     target: AnyType
   ArrayType = ref object of SliceType
     len: Val
-  OptionalType = ref object of SliceType
+  OptionalType = ref object of AnyType
     target: AnyType
   FuncType = ref object of AnyType
     argTypes: seq[AnyType]
@@ -110,10 +111,10 @@ type
 type Context = ref object
   # For resolving variables from above this scope
   parent: Context #?
-  # For mutually recursive things
-  # If the evaluator encounters something which references something that's in scope
-  # but not initialized yet, it pushes that expression tree here.
-  # Whenever a value changes from NoVal to some value, this needs to be checked for a hook.
+                  # For mutually recursive things
+                  # If the evaluator encounters something which references something that's in scope
+                  # but not initialized yet, it pushes that expression tree here.
+                  # Whenever a value changes from NoVal to some value, this needs to be checked for a hook.
   lazy: Table[string, Expr]
   # Note 'var's is a misnomer here. They could be constants.
   # Note that while evaluating, this only has the vars that have been bound up to that point
