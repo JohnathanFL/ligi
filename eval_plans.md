@@ -45,7 +45,19 @@ Each shall store a ref to its parent for looking up variables not defined in tha
 
 ### Mutual recursion
 Contexts shall store a list of values that can be lazily evaluated (`let`s, usually). 
-This is to allow mutually recursive things. In the following example:
+This is to allow mutually recursive things. 
+
+#### Functions
+In the following example:
+```
+let expr: fn , term, factor
+
+expr = 
+
+```
+
+#### Types
+In the following example:
 ```
 let Foo: type, Bar: type
 Foo = struct {field b: *Bar}

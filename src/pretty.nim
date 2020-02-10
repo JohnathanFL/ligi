@@ -72,24 +72,36 @@ method prettyPrint*(self: Tuple) =
   becho: prettyPrint self.children
 method prettyPrint*(self: Atom) =
   quit "HIT BASE ATOM" & $self.pos
+proc prettyPrint*(self: Call) =
+  if self.isIndex:
+    stdout.write " index by"
+  else:
+    stdout.write " call with"
+  becho:
+    prettyPrint self.args
+template commonCallable() =
+  if self.call != nil:
+    prettyPrint self.call
 method prettyPrint*(self: Sink) = pecho "@_@"
 method prettyPrint*(self: Null) = pecho "null"
 method prettyPrint*(self: NillTup) = pecho "()"
 method prettyPrint*(self: Undef) = pecho "undef"
-method prettyPrint*(self: Symbol) = pecho self.sym
-method prettyPrint*(self: Int) = pecho self.val
-method prettyPrint*(self: String) = pecho '"', self.val, '"'
+method prettyPrint*(self: Symbol) =
+  pecho self.sym
+  commonCallable()
+method prettyPrint*(self: Int) =
+  pecho self.val
+  commonCallable()
+method prettyPrint*(self: String) =
+  pecho '"', self.val, '"'
+  commonCallable()
 method prettyPrint*(self: Swizzle) =
   pecho "Swizzle", self.pos
   becho:
     prettyPrint self.subject
     pecho "."
     prettyPrint self.path
-method prettyPrint*(self: Call) =
-  pecho "Call", self.pos
-  becho:
-    prettyPrint self.subject
-    becho: prettyPrint self.args
+  commonCallable()
 method prettyPrint*(self: BinExpr) =
   pecho self.cmd, self.pos
   becho:

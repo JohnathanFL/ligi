@@ -5,11 +5,14 @@ var y: bool = true
 let _ = 50
 (_, x, y) = (10, 30, 50)
 assert x == 25
-`testy {}
+`testy {
+  break `testy
+}
 
-let stringy = \\ I'm
-(: Test comment
-   \\ Baaaack
+let stringy =
+  \\ I'm
+  (: Test comment
+  \\ Baaaack
 
 if x == 1 -> _ {
   printf("Was 1", ())
@@ -21,8 +24,9 @@ if x == 1 -> _ {
   printf("Was either 1 or 2", ())
 }
 
-loop -> counter {
-  printf("Iteration {}", counter)
+loop -> counter `thaLoop {
+  std.io.printf("The only iteration is #{}", counter)
+  break `theLoop
 }
 
 for 0..=10 {}
@@ -50,5 +54,23 @@ let Vec2 = struct {
 
 (: A function that returns a value
 let add = pure fn a, b: undef -> c = a + b
+(: Since {} is still an expression, you can also do
+let fib = pure fn n -> m = {
+  if n <= 2 { 1 }
+  else { fib(n-1) + fib(n-2) }
+}
+(: ...even though it could still be written
+let fib = pure fn n -> m = if n <= 2 { 1 } else { fib(n-1) + fib(n-2) }
+(: 'return val' is just an alias for 'retval = val; return'
+let foo = pure fn -> c = {
+  return 10 (: Note that like a break, a return must always preceed a } or a ; (preferably } )
+}
 (: A function that doesn't
 let greet = fn -> void = printf("Saluton, mondo!")
+(: Note that void and _ are considered synonyms in all usages of either.
+let greet = fn -> _ = printf("Saluton, mondo!")
+
+std.io.print("Hey").val
+
+(: You can do more than a mere access with `.`
+std.io.(printf("Hello!", _), write("test.txt", "Hello"))

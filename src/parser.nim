@@ -158,7 +158,7 @@ proc parseUntilLoop(self: var Parser): Until =
   result.body = self.parseBlock()
 # Thus sinks, nulls, symbols, ints, and tuples are the 'atoms' that make up the language
 # symbol | string | int | '('expr{ ',' expr }')'
-proc parseAtom(self: var Parser): Expr =
+proc parseAtom(self: var Parser): Callable =
   if nextIs Tag.LParen: # Tuple
     # Tuple parsing has 3 forms:
       # (): NillTup. No value at all.
@@ -173,7 +173,6 @@ proc parseAtom(self: var Parser): Expr =
       if not tryMatch Tag.Comma: break
     discard match Tag.RParen
     if children.len == 0: return NillTup(pos: pos)
-    elif children.len == 1: return children[0]
     else: return Tuple(pos: pos, children: children)
   else:
     let atom = match Atoms
@@ -188,12 +187,12 @@ proc parseAtom(self: var Parser): Expr =
 # I.e it parses (x,y) in foo(x,y), but not foo
 # It returns a call without a subject, so the caller must take care of that.
 # '(' expr {',' expr}  ')' | '[' expr {',' expr} ']'
-proc parseCall(self: var Parser, subject: Expr): Call =
+proc parseCall(self: var Parser): Call =
   # This is only ever called when we know we are calling
   let opener = match CallOps
   let closer = if opener.tag == Tag.LParen: Tag.RParen else: Tag.RBracket
   let isIndex = opener.tag == Tag.LBracket
-  result = Call(pos: opener.pos, isIndex:isIndex, subject: subject, args: @[])
+  result = Call(pos: opener.pos, isIndex:isIndex, args: @[])
 
   while not nextIs closer:
     result.args.add self.parseBinLevel(below Assignment)
@@ -203,10 +202,10 @@ proc parseCall(self: var Parser, subject: Expr): Call =
 # Glorified binary expression that's lower than any other binary expression
 # Note that as it is now, we allow arbitrary expressions inside swizzles.
 # atom [ call | index ] { '.' swizzle }
-proc parseSwizzle(self: var Parser): Expr =
+proc parseSwizzle(self: var Parser): Callable =
   # TODO: When we add '$', there needs to be another layer in between swizzle and atom
   result = self.parseAtom()
-  if self.canCall: result = self.parseCall(subject=result)
+  if self.canCall: result.call = self.parseCall()
   if nextIs Tag.Access:
     let pos = match(Tag.Access).pos
     # All praise the great recursion!
@@ -266,16 +265,16 @@ proc parseBinLevel(self: var Parser, level: static[BinLevel] = Assignment): Expr
 # TODO: Maybe just change this to a 'if next token is on next line' thing?
 # return (expr | '}')
 proc parseReturn(self: var Parser): Return =
-  discard match Tag.Return
-  new result
+  let pos = match(Tag.Return).pos
+  result = Return(pos:pos)
   if not nextIs RBrace:
     result.val = self.parseBinLevel(below Assignment)
 
 # See parseReturn for '}' logic
 # break [label[,expr]] # (Can only break with an expr if there's a label)
 proc parseBreak(self: var Parser): Break =
-  discard match Tag.Break
-  new result
+  let pos = match(Tag.Break).pos
+  result = Break(pos:pos)
   if nextIs Label:
     result.label = match(Label).lexeme
     if tryMatch Comma:

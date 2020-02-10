@@ -37,9 +37,11 @@ type
 
   # Anything that can yield a value
   Expr* = ref object of Stmt
-  Tuple* = ref object of Expr
+  Callable* = ref object of Expr
+    call*: Call
+  Tuple* = ref object of Callable
     children*: seq[Expr]
-  Atom* = ref object of Expr
+  Atom* = ref object of Callable
   Sink* = ref object of Atom
   Null* = ref object of Atom
   NillTup* = ref object of Atom # (). Used to pass nothing in a position
@@ -59,15 +61,17 @@ type
 
   # The atoms
   
-
-  Swizzle* = ref object of Expr
+  # Note this exists outside the main tree.
+  Call* = ref object
+    pos*: tuple[line: uint, col: uint]
+    isIndex*: bool
+    # Subject is taken from the context of its parent.
+    # This is to allow swizzling on the result of that call
+    #subject*: Expr
+    args*: seq[Expr]
+  Swizzle* = ref object of Callable
     subject*: Expr
     path*: Expr
-
-  Call* = ref object of Expr
-    isIndex*: bool
-    subject*: Expr
-    args*: seq[Expr]
 
   # Note that this also includes field access.
   # This is because an access could include calls and such
