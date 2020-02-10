@@ -92,11 +92,15 @@ To make it easier to tell what you're taking the address of or dereferencing, Za
   * `.max` and `.min`: (Used on the type itself) Get the max or min value of that type
   * `i[1-256]`: A signed integer of size 1-256 bits
   * `u[1-256]`: An unsigned integer of size 1-256 bits
-  * `isize`: An alias for `i{current platform bits}`
   * `usize`: An alias for `u{current platform bits}`
+    * All integer literals are `usize` by default.
+  * `isize`: An alias for `i{current platform bits}`
+    * All int literals negated by a unary `-` is `isize` by default.
 * `bool`: Always either `true` or `false`
 * `char`: A `u32`, intended for representing UTF-32 codepoints.
   * `.isASCII`: Property on all char variables to tell if it fits in a standard ASCII byte.
+  * All char literals (`a`, `b`, etc) are `char` by default. A comptime-known `char` may be implicitly castable to
+    `u8` (bytes, standard ASCII stuff), so `'a'` can easily implicitly cast to a `u8`.
 * `str`: Character string. An alias for `slice const u8`
   * `.len`: The length of the string. All strings in Zag are null-terminated to preserve compatability with C.
 * `undef`: Malleable type. It means that variable takes on the type of the first write that happens to it. All variables are bound with this unless otherwise specified
@@ -106,7 +110,15 @@ To make it easier to tell what you're taking the address of or dereferencing, Za
   x = 10
   assert x.@type == usize
   ```
-* `untyped`: Macro type. It stores an *untype*checked subtree of the AST. Can be expanded into the current AST with `$`.
+* `untyped`(TODO): Macro type. It stores an **untype**checked subtree of the AST. Can be expanded into the current AST with `$`.
+  For example:
+  ```
+  let subtree: untyped = printf("Hey again", ())
+  $subtree
+  $subtree
+  $subtree
+  (: OUTPUT: Hey againHey againHey again
+  ```
 
 #### Compound types
 * `const <type>`: Create a type that is only ever assigned to once
@@ -118,6 +130,21 @@ To make it easier to tell what you're taking the address of or dereferencing, Za
   * `slice const u8` is the type of a string literal.
   * `.ptr`: Get the pointer to the slice's data
   * `.len`: Get the length of the slice
+* `(type1{, type2})`: Tuples. The type of a tuple is simply the tuple of all the member types.
+  Thus the type of `(0, 1, 2)` is `(usize, usize, usize)`
+  * `.0`, `.1`, etc are used to access the nth element of that tuple.
+  * `.@tupLen`, `@tupNth(n)` are used for getting the length of a tuple and the nth element of that tuple, respectively.
+    * Useful for generics that take a tuple of arbitrary size.
+  * The `.` operator, other than for aformentioned tuple fields, redirects to all members and makes a new tuple of those values.
+    ```
+    assert ("Hello", "H", "World").len == (5, 1, 5)
+    ```
+  * Certain operators, such as `in`, are defined to act cartesian-style when going 1:M
+    ```
+    assert 1 in (4, 2, 0..=3, 10)
+    ```
+* `struct <block>`: Evaluate `<block>` to create a new struct. More on this later
+* `enum <block>`: Evaluate `<block>` to create a new enum/tagged-union.
 
 #### Bind statements are everywhere
 All Zag binds follow the general format `<spec> <location>[: <type_expr>] [= init_expr]`
