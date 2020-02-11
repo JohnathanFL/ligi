@@ -5,7 +5,7 @@ author        = "JohnathanFL"
 description   = "Ligi compiler"
 license       = "GPL-2.0"
 srcDir        = "src"
-bin           = @["li"]
+bin           = @["ligi"]
 
 
 

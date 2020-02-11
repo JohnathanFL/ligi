@@ -9,7 +9,7 @@ import evaluator
 import pretty
 
 when isMainModule:
-  var file = openFileStream "example.ligi"
+  var file = openFileStream "example.li"
   var lex = file.newLexer()
   #var tok = lex.scan()
   #while tok.tag != Tag.EOF:
