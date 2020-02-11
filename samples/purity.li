@@ -1,5 +1,5 @@
-(: This document is to discuss the semantics of the 'pure' operator in Zag
-  (: Relates to comptime.zag :)
+(: This document is to discuss the semantics of the 'pure' operator in Ligi
+  (: Relates to comptime.li :)
 
 (: In its essence, 'pure' shall ensure that a subtree has no dependencies on non-explicitly-comptime
 (: external variables

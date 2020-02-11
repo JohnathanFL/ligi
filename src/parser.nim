@@ -177,7 +177,7 @@ proc parseAtom(self: var Parser): Callable =
   else:
     let atom = match Atoms
     case atom.tag:
-      # All this need for Command., Tag., etc is exactly why Zag has #EnumLit
+      # All this need for Command., Tag., etc is exactly why Ligi has #EnumLit
       of Tag.Symbol: return Symbol(pos: atom.pos, sym: atom.lexeme)
       of Tag.IntLit: return Int(pos: atom.pos, val: atom.val)
       of Tag.StringLit: return String(pos: atom.pos, val: atom.lexeme)

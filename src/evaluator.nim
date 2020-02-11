@@ -83,7 +83,7 @@ type
     statics: Table[string, tuple[ty: Type, val: Val]]
     props: Table[string, tuple[get: Val, set: Val]]
   StructType = ref object of Type
-    # Order will matter when we end up making this a compiler
+    # Order will matter when we end up making this a compiler (memory layout)
     fields: OrderedTable[string, tuple[ty: Type, val: Val]]
   EnumType = ref object of Type
     # Order doesn't matter for tags
@@ -97,6 +97,7 @@ type
   OptionalType = ref object of AnyType
     target: AnyType
   FuncType = ref object of AnyType
+    # Note that we don't compare based on arg/ret names
     argTypes: seq[AnyType]
     retType: AnyType
   ConstType = ref object of AnyType
@@ -106,6 +107,8 @@ type
   IntType = ref object of AnyType
     signed: bool
     bits: uint
+
+type Stack = seq[Val]
 
 # Think of it like a stack frame
 type Context = ref object

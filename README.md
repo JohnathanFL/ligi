@@ -1,7 +1,7 @@
-# Zag - *Just don't be a dumdum*
+# Ligi - *Just don't be a dumdum*
 ###### (Name subject to change)
 
-This repo is for the zag interpreters (comptime and runtime) and compiler. (Compiler is TODO)
+This repo is for the ligi interpreters (comptime and runtime) and compiler. (Compiler is TODO)
 
 
 ### Principles
@@ -11,51 +11,51 @@ This repo is for the zag interpreters (comptime and runtime) and compiler. (Comp
 ### As compared to other languages
 * C and C++
     * C has incredible power, but requires programmers to either repeat themselves often or use ugly preprocessor macros.
-      * Zag replaces both preprocessor macros with pure Zag functions act directly on the AST.
+      * Ligi replaces both preprocessor macros with pure Ligi functions act directly on the AST.
     * C++ is a good language, but the template system and standard library have grown convoluted.
-      * Zag replaces templates with pure zag functions that take and return types.
-        * Example: C++'s `vector<int>` could be `Vector(isize)` in Zag.
+      * Ligi replaces templates with pure ligi functions that take and return types.
+        * Example: C++'s `vector<int>` could be `Vector(isize)` in Ligi.
     * Both are more difficult to parse, both for humans and machines.
       * See most vexing parse, C's variable declaration syntax, etc.
     * Both use ugly direct textual inclusions through `#include <file>`
-      * Zag `@import`s files as new structs, same as Zig. This means the current namespace isn't needlessly polluted and removes strange compile errors.
+      * Ligi `@import`s files as new structs, same as Zig. This means the current namespace isn't needlessly polluted and removes strange compile errors.
 * Rust
     * A great language with incredible compiletime guarentees. However, these guarentees are at the cost of both compile-times and flexibility.
-    * Zag will still have as many compiletime checks as possible, but will not sacrifice the programmer's flexibility.
+    * Ligi will still have as many compiletime checks as possible, but will not sacrifice the programmer's flexibility.
 * Zig
     * Another great language. However, I feel that it can be too verbose it times.
     * As with C/C++, the parentheses around control structure conditions are completely unneeded.
-      * Zag follows Rust's example in `<keyword> <expr> <block>` syntax for control structures, rather than `<keyword> ( <expr> ) <block>`
+      * Ligi follows Rust's example in `<keyword> <expr> <block>` syntax for control structures, rather than `<keyword> ( <expr> ) <block>`
 * Nim
     * Nim has a beautiful syntax and amazingly powerful pure-nim macros, but many features (such as unions) leave much to be desired. 
     * Whitespace sensitivity is also less desirable for some.    
-      * * Zag is mostly whitespace insensitive and 
+      * * Ligi is mostly whitespace insensitive and 
     * Nim unions (`case` types) can be convoluted to work with
-      * Zag merges unions and enums Rust-style to make them less of a headache.
+      * Ligi merges unions and enums Rust-style to make them less of a headache.
 * Python
   * Another language with beautiful syntax, but it's very slow and has no (builtin) macros.
   * Its interpreted nature makes for wonderful REPL opportunities.
-    * Zag will be a dual interpreted and compiled language. Programs are normally compiled for speed, but an interpreter for both debugging and scripting will be maintained.
+    * Ligi will be a dual interpreted and compiled language. Programs are normally compiled for speed, but an interpreter for both debugging and scripting will be maintained.
 * Java
   * Ugly and bloated. 
-    * Zag seeks a simple, flowing syntax with as little punctuation as needed to get the point across.
+    * Ligi seeks a simple, flowing syntax with as little punctuation as needed to get the point across.
   * Java's "value of reference" system is convoluted.
-    * Zag is entirely value based. If you want to copy a full struct to pass in, just do that.
+    * Ligi is entirely value based. If you want to copy a full struct to pass in, just do that.
   * No macro support.
-    * Zag has full AST-editing macro support.
+    * Ligi has full AST-editing macro support.
   * No support for first-class functions and functions must be inside a class.
     * I don't count Java's anonymous inner class hackery.
-    * Zag can define functions anywhere and pass them willy-nilly.
+    * Ligi can define functions anywhere and pass them willy-nilly.
       * There is, however, no direct support for passing runtime state into them to pass around.
   * Runs on a VM
-    * Zag is compiled down to native code.
+    * Ligi is compiled down to native code.
 * Kotlin
   * Despite my hatred of all things JVM, this is a decent language. However, it still runs on a VM
 * C#
   * C# has some pretty cool features, but I feel it suffers from some of the same problems as C++, not to mention the cost of GC and a VM/runtime.
-  * Zag's `property` bind is directly inspired (read: lifted) from C#
+  * Ligi's `property` bind is directly inspired (read: lifted) from C#
   * C#'s interfacecs are all well and good, but they can't be arbitrarily extended by other programmers.
-    * Zag follows Nim's concept of... `concept`s. A concept defines how a type must look (fields, methods) and how it must act (e.g for a Stack concept: call push then pop and get the same value back)
+    * Ligi follows Nim's concept of... `concept`s. A concept defines how a type must look (fields, methods) and how it must act (e.g for a Stack concept: call push then pop and get the same value back)
 
 
 ### Language Basics
@@ -83,7 +83,7 @@ are not ambiguous. The above resolves to a statement that creates two new mutabl
 Semicolons are only ever needed for removing ambiguity, as with multiple statements on the same line.
 
 #### No more `*` and `&`
-To make it easier to tell what you're taking the address of or dereferencing, Zag uses postfix versions of `*` and `&`.
+To make it easier to tell what you're taking the address of or dereferencing, Ligi uses postfix versions of `*` and `&`.
 * To take the address of val: `val.addr`
 * To dereference  ptr: `ptr.deref`
 
@@ -102,9 +102,9 @@ To make it easier to tell what you're taking the address of or dereferencing, Za
   * All char literals (`a`, `b`, etc) are `char` by default. A comptime-known `char` may be implicitly castable to
     `u8` (bytes, standard ASCII stuff), so `'a'` can easily implicitly cast to a `u8`.
 * `str`: Character string. An alias for `slice const u8`
-  * `.len`: The length of the string. All strings in Zag are null-terminated to preserve compatability with C.
+  * `.len`: The length of the string. All strings in Ligi are null-terminated to preserve compatability with C.
 * `undef`: Malleable type. It means that variable takes on the type of the first write that happens to it. All variables are bound with this unless otherwise specified
-  ```zag
+  ```ligi
   var x: undef
   assert x.@type == usize
   x = 10
@@ -147,13 +147,13 @@ To make it easier to tell what you're taking the address of or dereferencing, Za
 * `enum <block>`: Evaluate `<block>` to create a new enum/tagged-union.
 
 #### Bind statements are everywhere
-All Zag binds follow the general format `<spec> <location>[: <type_expr>] [= init_expr]`
+All Ligi binds follow the general format `<spec> <location>[: <type_expr>] [= init_expr]`
 
-Zag uses the following bind specifiers:
+Ligi uses the following bind specifiers:
   * `let`: Immutable bind. May only ever be assigned to once.
       * C/C++: `const int x = 10;`
-      * Zag: `let x: i32 = 10` or `let x = 10`
-      * Zag lets may be assigned to only once, no matter when that assignment happens, so this also works:
+      * Ligi: `let x: i32 = 10` or `let x = 10`
+      * Ligi lets may be assigned to only once, no matter when that assignment happens, so this also works:
           ```
           let x
           (:...
@@ -162,7 +162,7 @@ Zag uses the following bind specifiers:
           Out of orders like this are to facilitate mutually-recursive types/functions.
   * `var`: Mutable bind. May be reassigned to arbitrarily.
       * C/C++: `int x = 10;`
-      * Zag: `var x: i32 = 10` or `var x = 10`
+      * Ligi: `var x: i32 = 10` or `var x = 10`
   * `alias`: Transparent bind. The bind and its target literally *are* the same thing. It can be thought of like a C-preprocessor macro specified within the language itself.
       * C/C++:
           ```
@@ -171,7 +171,7 @@ Zag uses the following bind specifiers:
           y = 50;
           // x == 50
           ```
-      * Zag:
+      * Ligi:
           ```
           var x = 10
           alias y = x
@@ -193,10 +193,10 @@ Zag uses the following bind specifiers:
       ```
   * `field`: Declare a memory location inside the current type.
     * C/C++: `struct Foo { int x; };`
-    * Zag: `struct Foo { field x: i32 }`
+    * Ligi: `struct Foo { field x: i32 }`
   * `property`: Declare a C# style property. Reading it invokes its .get, writing it invokes its .set
     * C#: `int Prop { get => this.x; set => this.x = value; }`
-    * Zag: `property prop: i32= [ .get = fn self -> res = self.x, .set = fn self, value {self.x = value} ]`
+    * Ligi: `property prop: i32= [ .get = fn self -> res = self.x, .set = fn self, value {self.x = value} ]`
   * `enum`: Declare a new discriminator in a tagged union. 
     * The type of the bind is what it stores
     * The init expression of the bind is the tag's value (i.e `1`, `2`, etc)
@@ -260,19 +260,19 @@ This is also used to enable function overloading, but that's for later.
   * When used on a string literal, it turns that string into a symbol. (AKA stropping)
     * To bind `10` to the symbol `pure`: `let $"pure" = 10`
   * When used on a *compiletime-known* *variable*, it can be used to access a field/method with that name
-  	```zag
+  	```ligi
   	let fieldName = "x"
   	my2DVector.$fieldName = 10
   	assert my2DVector.x == 10
   	```
     * This also works with integers and tuple accesses
-    	```zag
+    	```ligi
     	let tup = (1, 4, 6)
     	let i = 2
     	assert tup.$i == 6
     	```
   * When used on an `untyped` variable, it expands it into the current scope
-  	```zag
+  	```ligi
   	let code: untyped = printf("Hello, world!\n", ())
   	$code
   	$code
@@ -280,8 +280,8 @@ This is also used to enable function overloading, but that's for later.
   	(: Printed "Hello, world!" 3 times
   	```
 #### Binary operators
-Here are all of Zag's binary operators:
+Here are all of Ligi's binary operators:
 * `+, -, *, /, %, <<, >>, >>>`: All work as expected.
 * `==, !=, <, >, <=, >=`: Work as expected.
 * `<=>`: Spaceship operator. Returns one of `#Less`, `#Eq`, or `#Greater`. (More on enum literals later)
-  * Mainly useful when used in a switch/match-style structure. Unfortunately that's not specified in Zag yet.
+  * Mainly useful when used in a switch/match-style structure. Unfortunately that's not specified in Ligi yet.

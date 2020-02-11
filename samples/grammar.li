@@ -5,7 +5,7 @@
 {
   (: 10 minute crash course
   (: We'll make a happy little comment with '(:'
-  (: Zag's all about the binds
+  (: Ligi's all about the binds
   let myFirstVal*: usize = 0 (: Let creates a constant
   (: The type is optional for a let
   var myFirstVar: usize = 0 (: Var creates a mutable variable
@@ -20,7 +20,7 @@
   (: The only real problem is if, for some reason, you needed to write an expression on one line
   (: then have the next line start with a unary '-'. In that case, just use () to disambiguate it.
 
-  (: Zag is semi-whitespace sensitive. Call/index/brace operators must be on the same line as their preceeding symbol,
+  (: Ligi is semi-whitespace sensitive. Call/index/brace operators must be on the same line as their preceeding symbol,
   (: So you can unambiguously write things like
   let 
     x = 10,
@@ -39,7 +39,7 @@
   var undefMemory: usize = undef
   printf("{}", undefMemory) (: No guarantees about what gets printed
 
-  (: Zag has arrays, either with or without explicit type
+  (: Ligi has arrays, either with or without explicit type
   let myFirstAr:
     (: 'array', when used with only a type as its argument, infers the size
     array usize =
@@ -72,10 +72,10 @@
   assert (0, 1, 2) + (0, -1, -2) == (0, 0, 0)
   (: I plan to make this use SIMD-optimizations where possible
 
-  (: Zag has builtin optionals
+  (: Ligi has builtin optionals
   let someVal: ?usize = 10
 
-  (: Zag has all the normal flow controls
+  (: Ligi has all the normal flow controls
   (: They also work with optionals
   (: (Note equality also works with optionals)
   if someVal == 6 {
@@ -134,7 +134,7 @@
     (: @This is a special compiler-level variable that means "the type we're currently inside"
       (: (Not to be confused with @this, which means "the function we're currently inside"
       (: (Note you could also use Vec2 in place of @This. This is a matter of preference)
-    let addVec2 = pure fn lhs, rhs: @This -> res: @This { (: Zag is return-location first. You bind a result location.
+    let addVec2 = pure fn lhs, rhs: @This -> res: @This { (: Ligi is return-location first. You bind a result location.
       (: Struct literals look like array literals, but use .fieldName to specify each field
       res = [.x = lhs.x + rhs.x, .y = lhs.y + rhs.y]
     }
@@ -160,7 +160,7 @@
     (: You can also overload certain operators for properties, but that's for another time
   }
 
-  (: Enums in Zag are always tagged unions
+  (: Enums in Ligi are always tagged unions
   let Meal = enum {
     @tagType = u8 (: Means the enum stores its tag in a u8
     (: If there are no union fields, this is the entire size of the enum
@@ -176,7 +176,7 @@
     var numberOfMealsEaten = 0
     let wasReheated = pure fn self: @This -> res:bool {
       (: #Symbol is an enum literal. #Symbol(expr) is an enum literal with union initialization
-      (: Zag first compares the tag, then the union value iff the tag was equal, thus we can avoid
+      (: Ligi first compares the tag, then the union value iff the tag was equal, thus we can avoid
       (: drawn out 'self == #Pizza and self.Pizza == true' stuff.
       (: # was chosen instead of Zig's .Yadda to distinguish between
       (: [ .EnumLit...] and [ .FieldName = ... ] without advance lookahead
@@ -268,10 +268,10 @@
   (: what went wrong if the expression is false
 
   (: Standard operators
-  (: Zag has all the standard arithmetic/logical/relational ops, with the exception that
+  (: Ligi has all the standard arithmetic/logical/relational ops, with the exception that
   (: ||, &&, and ! are written 'or', 'and', and 'not'
 
-  (: Zag also adds:
+  (: Ligi also adds:
   { (: xor
     let x = true xor false (: true
     assert true xor true == false
@@ -332,7 +332,7 @@
   (: Types
 
   { (: Primitives
-    (: Zag technically has 1028 primitive types
+    (: Ligi technically has 1028 primitive types
     let voidy: void = () (: Void. It's... nothing. A zero-tuple ( () ) is of type void
     let uintOf21Bits: u21 = 0 (: u{1..=512} for unsigned integers of specified size
     let intOf21Bits: i21 = -2 (: i{1..=512} for signed integers of specified size
@@ -346,7 +346,7 @@
 
   {
     (: Functions
-    (: Zag specifies the type of a function with the 'proc' operator and a tuple
+    (: Ligi specifies the type of a function with the 'proc' operator and a tuple
     let foo = fn {}
     assert foo.@type == proc ((), ()) (: Function which takes/returns void
     assert foo.@type == proc(void, void)
@@ -356,7 +356,7 @@
   }
 
   { (: Modifier types
-    (: Zag has 6 modifier types
+    (: Ligi has 6 modifier types
 
     (: const means it can't be modified anymore
     var a: const usize = 10
@@ -403,7 +403,7 @@
   {
     (: Tuples
 
-    (: Zag has tuples that can be used to store multiple different types without needing a full struct
+    (: Ligi has tuples that can be used to store multiple different types without needing a full struct
     {
       let t = (0, true, "Oi maties")
       assert t.@type == (usize, bool, slice const u8)
@@ -483,7 +483,7 @@
 {
   (: Interesting notes about how things work
 
-  (: There's no such thing as a float literal in Zag.
+  (: There's no such thing as a float literal in Ligi.
   1.0;
   (: is actually parsed as a field access into 1's field 0
   (: The jury's still out on how annoying this could become, but I can't see any immediate problems.

@@ -1,6 +1,6 @@
 Current plan:
 	Lexer/Parser/Evaluator/Interpreter in Nim
-		Final Zag language will be compiled, but this will work for a prototype/senior project
+		Final Ligi language will be compiled, but this will work for a prototype/senior project
 		Other languages considered:
 			Zig: Too immature. I love it, but there are too many bugs for an official project
 			Rust: Love it but it has its own way of doing things I haven't learned yet.
@@ -13,5 +13,5 @@ Current plan:
 		Works in a client/server model. GUI sends a command when it wants the interpreter to step.
 		Interpreter sends the new state to the GUI
 	Evaluator serializes its final type database into SQLite
-		This may stick around in the final Zag. Seems useful
+		This may stick around in the final Ligi. Seems useful
 	

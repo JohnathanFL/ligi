@@ -1,4 +1,4 @@
-# Plans for Parsing Zag
+# Plans for Parsing Ligi
 
 Note that this document was only started on 01/10/20, which is *after* I finished pretty much all of the parser.
 
@@ -24,7 +24,7 @@ Normally to use that snippet's AST to get to the access path, we'd have to go in
 I **may** change the language to disallow anything but straight atoms, `()`s, and `.`s inside swizzles. That remains to be seen 
 
 ### Experimental addition: Implicit Method Chaining
-Possible new change for Zag is allowing the following:
+Possible new change for Ligi is allowing the following:
 ```
 foo.(
   .func1(args),
