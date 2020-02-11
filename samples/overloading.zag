@@ -1,0 +1,54 @@
+(: New Proposal: Overloadable functions
+(: Rather than allow shadowing, why not just make functions work like operators
+(: w.r.t overloading?
+
+(: `overload` would be an operator which takes an array of functions
+  (: We'd have to allow `comptime array undef` for this to work. :)
+(: `overloaded` would be the type of its variable.
+
+let add: overloaded = overload [
+  (: Functions would be checked stack style, LIFO.
+  (: Thus this is the fallback function:
+  pure fn a, b -> c = a + b,
+  (: And all other functions after it are checked before it.
+  fn a: u35, b: u35 -> c: u35 = { (: Not pure because printf
+    printf("In u35!", _)
+    a + b
+  },
+  fn s1, s2: str -> void = {
+    printf("{0}{1}", (s1, s2))
+  }
+]
+
+let x: u35 = 10, y: u35 = 10
+_ = add(x, y) (: Prints "In u35!"
+_ = add(10, 10) (: Prints nothing, as int literals are usize by default.
+add("Hello, ", "world!") (: Prints "Hello, world!"
+
+(: `overloaded` would act more like a `const * overloaded` (i.e they have interior mutability)
+(: This would allow things like
+add += fn a -> void {
+  printf("Got a single arg!", _)
+}
+
+add("Hey") (:= "Got a single arg!"
+
+(: Operators would then be overloaded to work like so
+let Vec2 = struct { field x: f32, y: f32 }
+
+(: Imaginary in the compiler :)
+let @operators: struct {
+  let addOverloads = overload [
+    pure fn a, b -> c = a + b,
+  ]
+  let Op = enum {
+    enum Add, Sub, Mul, Div (: Etc
+  }
+
+  let get* = fn self: @This, op: Op -> overloads:overloaded = (: ...
+}
+
+@operators[#Add] += pure fn a, b: Vec2 -> c: Vec2 = [.x = a.x + b.x, .y = a.y + b.y]
+(: @operators itself would be a full struct, and would enforce functional purity
+(: for certain operators (such as +) (although I think I'll have an @debug builtin for logging
+(: that can bypass purity)
