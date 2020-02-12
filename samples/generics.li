@@ -29,3 +29,16 @@ let adder = pure fn a, b -> c = {
 _ = adder(10.0, 20.0)
 (: Note that above, type coercions break down
 (: This may be able to be fixed, but I don't know.
+
+
+(: Note that a generic function, like a function that takes comptime args, cannot be extern
+(: ERROR: extern function cannot have undef argument types
+(: let myFunc = extern fn a, b -> c {}
+
+(: You can, however, make a generic function concrete and export that
+(: Also note the need for parentheses around the function type, as functions use retval= in their definition
+let myAdder: extern (fn _:f32, _:f32 ->_:f32) = adder
+(: or
+let myAdder2 = @as(extern fn _:f32, _:f32 -> _:f32, adder)
+(: or
+let myAdder3 = adder.@as(extern fn _:f32, _:f32 -> _:f32)
