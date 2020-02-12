@@ -1,0 +1,37 @@
+(: This is to document allowed implicit and explict conversions
+
+
+(: Implicit
+
+(: Integers :)
+
+(: Int literals are usize by default :)
+var u = 10
+assert u.@type == usize
+(: Negation on an int literal produces an isize :)
+var i = -10
+assert i.@type == isize
+(: Negation of negation is still isize :)
+var otherI = - -10 (: Note there's no -- operator yet
+
+let num:usize = 10
+(: Implicit conversions from a comptime-known (and thus checked) number is allowed
+let smallNum:u8 = num
+(: Implicit conversions from a non-comptime-known number are not allowed
+
+
+(: Arrays may be implicitly converted to a slice
+let ar = [0, 1, 2, 3]
+let sl: slice usize = ar
+
+(: Non-const may implicitly convert to const, but not vice versa. Obviously.
+
+(: Explicit :)
+(: @as works for most conversions
+let k = @as(i32, 10)
+(: Or the more readable version, .as is defined for any number or boolean
+let j = 10.as(i98)
+let intBool = true.as(i32) (: true is defined as 1, false as 0 :)
+(: Works the other way around as well.
+(: Note that .as for integer -> boolean is defined as 0->false, not 0->true
+let boolInt = 1.as(bool)
