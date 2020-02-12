@@ -1,0 +1,13 @@
+(: Feature proposal: Shorthand for creating enums
+
+(: Doing enums like this is a little verbose when you only need the tags themselves:
+let Foo = enum {
+    enum en1, en2, en3
+}
+
+(: Instead, I plan to overload the enum operator to take a tuple of symbols like so:
+let Bar = enum (en1, en2, en3)
+
+(: This would then translate out to exactly the same as Foo before it.
+(: This style wouldn't allow setting exact tag values (or changing tag types), but it is
+(: shorter when only the tags are needed.

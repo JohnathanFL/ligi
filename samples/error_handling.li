@@ -1,0 +1,39 @@
+(: Ligi doesn't have direct error handling in the language like Zig does.
+(: Instead, it follows Rust's expample with unions of Result vs Error
+(: In fact, Ligi makes composing error sets even easier than Rust
+(: because types can be arbitrarily added together
+
+(: Using the enum shorthand from enum_shorthand.li
+
+
+let MemoryError = enum (OutOfMemory)
+
+let ArrayList = pure fn T: type -> list = struct {
+  let ArrayListError = MemoryError + enum (OutOfBounds)
+  let GetResult = enum {
+    enum Ok: T
+  } + ArrayListError + MemoryError
+  field data: slice T
+
+  let get = fn self: @This, index: usize -> item =
+    if self.data.len <= index { #OutOfBounds }
+    else { #Ok(self.data[index]) }
+}
+
+let storage = [
+  "Hello",
+  "world",
+  "and",
+  "goodnight",
+  "moon"
+]
+let list = [:ArrayList(str): .data = storage]
+for 0..5 -> i {
+  printf("{}", list.get(i).Ok)
+}
+
+assert list.get(1) == #Ok
+assert list.get(1).Ok == "world"
+assert list.get(1) == #Ok("world")
+
+assert list.get(10) == #OutOfBounds
