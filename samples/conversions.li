@@ -24,6 +24,18 @@ let smallNum:u8 = num
 let ar = [0, 1, 2, 3]
 let sl: slice usize = ar
 
+(: Pointers may be implicitly deref'd
+let printIt = fn num: usize -> void = printf("{0}", num)
+let num = 15
+let addr = num.addr
+printIt(addr)
+(: This may be a somewhat controversial decision, but I believe it helps cut down on code bloat.
+(: If you tried to pass the address in, obviously you meant to deref it. Why require it to be explicit?
+(: I think this would be one of the things in the compiler that can be controlled with an @, like
+@allowImplicitPointerDeref = true
+(: Thus individual projects could disable it within their code if they find it unsafe.
+(: Remember the Ligi' Zeno: Stay flexible, and just don't be a dumdum.
+
 (: Non-const may implicitly convert to const, but not vice versa. Obviously.
 
 (: Explicit :)
