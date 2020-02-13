@@ -91,3 +91,21 @@ FuncVals shall store the name of the retval. When a function is called,
 a new context is pushed to the stack with that retval in it and no parent set.
 This way, functions don't have to worry about touching external variables.
 Statics should still work like this, as they're stored inside the types themselves.
+
+### Overloading
+* Functions in Ligi can be overloaded by using the `overloaded` type and the `overload` block.
+* The `overload` block may only have functions exported from within it.
+* All functions in the `overload` block marked public (`*`) are considered for overloading.
+* Functions are checked in reverse order from when they are added.
+* Thus `overloaded` essentially acts like a glorified struct with an overloaded call operator.
+* See `samples/overloading.li` for examples
+
+### Generics
+Functions in Ligi can be generic argument by argument (i.e have arguments with an `any` type).
+This presents a problem in calling them. What will happen is:
+* Stage 1 interpreter encounters a generic func
+  * The type of that bind is changed to `overloaded`
+  * Each new call against it checks to see if a matching func exists.
+  * If it doesn't, it uses the fallback to add a new function to that block that matches the types
+    * Each is named `<originalname>@arg1type@arg2type...@arg3type@@rettype`
+* Stage 2 interpreter only ever encounters overloads
