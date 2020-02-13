@@ -53,6 +53,7 @@ type Tag* {.pure.} = enum
   OpenRange = ".."
   Optional = "?"    # These shall be actual operators
   Or = "or"
+  Overload = "overload"
   Property = "property"
   Pure = "pure"
   Return = "return"

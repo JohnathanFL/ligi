@@ -74,3 +74,15 @@ std.io.print("Hey").val
 
 (: You can do more than a mere access with `.`
 std.io.(printf("Hello!", _), write("test.txt", "Hello"))
+
+(: Overloading
+let showIt = overload {
+  (: Block should be a bunch of public functions
+  let showDefault* = fn _:usize -> void = printf("Didn't match one of the below")
+  let showInt* = fn _:usize -> void = printf("Int")
+  let showBool* = fn _:bool -> void = printf("Bool")
+}
+
+showIt(10) (:= Int
+showIt(true) (:= Bool
+showIt("Testy") (:= Didn't match one of the below
