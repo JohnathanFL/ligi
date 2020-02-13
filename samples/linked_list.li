@@ -1,0 +1,27 @@
+(: Example of a LinkedList in Ligi
+
+let LinkedList = pure fn T: type -> list: type = struct {
+  field next: ?*@This
+  field data: T
+
+  property len: usize = [
+    .get = fn self: @This -> len = 1 + (self.next.len orelse 0)
+  ]
+
+  let at = fn self: @This, i: usize -> val: T =
+    if i == 0 { self.data }
+    else { self.next.val.at(i - 1) }
+
+  let push = fn self: @This, val: T -> void = {
+    if self.next -> var next {
+      next.push(val)
+    } else {
+      (: Just assuming we have a standard C-style malloc function
+      self.next = malloc(@This.@size)
+      self.next.val.deref = [
+        .next = null,
+        .data = val
+      ]
+    }
+  }
+}
