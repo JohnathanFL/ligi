@@ -19,3 +19,31 @@ show(-10) (:= Hit showISize
 (: As you can see, things like show(10) may be annoying.
 (: You can also access each functon directly:
 show.showISize(10) (:= Hit showISize
+
+
+
+(: Applied example that combines with undef: Print the type of something
+(:This only implements const and pointers:)
+(:Note that this would be more efficient if you just used builtin @funcs:)
+let showType = overload {
+  let showConst* = pure fn c:bool -> void = printf("bool")
+  let showConst* = pure fn c: usize -> void = printf("usize")
+
+  let showConst* = pure fn c: *undef -> void = {
+    printf("*")
+    showType(c.deref)
+  }
+  
+  let showConst* = pure fn c: const undef -> void = {
+    printf("const ")
+    (: Name here may change. @unConst would be a voodoo function to remove constness
+    showType(@unConst(c))
+  }
+}
+
+(: Lets are always const on the outer
+let num = 10
+let booly = true
+let numAddr = num.addr
+showType(numAddr) (:= *const usize
+showType(booly.addr) (:= *const bool
