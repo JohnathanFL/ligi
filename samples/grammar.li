@@ -1,3 +1,7 @@
+(: Note: The comment below lies
+(: Many changes have been made (Like Zag->Ligi)
+(: This sample is more useful for historial purposes
+
 (: Grammar MK6 - Final (hopefully) iteration of the language
 (: Biggest change as of the beginning of this doc is removing all shadowing
 

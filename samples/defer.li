@@ -1,0 +1,16 @@
+(: Ligi also follows Zig's philosophy on manually managed resources
+(: Given that, it also follows its path with regards to defer
+
+
+let foo = fn -> void {
+  var resource = someAllocatingFunc()
+  defer resource.deinit()
+
+  if someFunc() {
+    (: deinit is called here
+    return;
+  }
+  (: and here
+}
+
+(: Since Ligi doesn't follow Zig on error sets, we unfortunately don't have errdefer.
