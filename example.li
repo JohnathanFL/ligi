@@ -14,14 +14,19 @@ let stringy =
   (: Test comment
   \\ Baaaack
 
+(: lets can also be bound after the fact, as long as they're only written to once
+let ligis (: se vi komprenas cxi, gratulojn :)
+printf("Test")
+ligis = "Test"
+
 if x == 1 -> _ {
-  printf("Was 1", ())
+  printf("Was 1")
 } elif x == 2 -> _ {
-  printf("Was 2", ())
+  printf("Was 2")
 } else {
-  printf("Was neither", ())
+  printf("Was neither")
 } finally {
-  printf("Was either 1 or 2", ())
+  printf("Was either 1 or 2")
 }
 
 loop -> counter `thaLoop {
@@ -34,17 +39,40 @@ for 11..=20 -> i {}
 for 11..=20 -> var i {}
 for 21..=30 -> i, counter {}
 for 21..=30 -> var i, counter {}
-(: Not bothering to test while since it's the same code as for
 
-until x == 0 {
-  printf("X ain't 0!", ())
-  x -= 1
+while x != 0 {
+  
 }
 
-(: TODO: Should this be allowed?
-(: It parses at the moment, but should it?
-x = 0 = 10
+(: 'until' was chosen instead of `dowhile` or `aslongas` or similar as a *post*test loop.
+(: Again, `until` is *post*test. If you want a negated-pretest, just do `while not`
+until x == 0 {
+  printf("X ain't 0!")
+  x -= 1
+}
+(: Note that to truly emulate a do-while, you need `until not`
+until not true {
+  break
+} finally {
+  printf("Never executed because of the break")
+}
 
+(: Note that all loops are still expressions
+let myAr = [0, 6, 1, 7, 9, 10]
+{
+  let posOf7 = for myAr -> cur, i { if cur == 7 { i } } finally {null}
+  assert posOf7 == 3
+  let posOf2 = for myAr -> cur, i { if cur == 7 { i } } finally {null}
+  assert posOf2 == null
+}
+(: If the body of a loop yields a value, then it *must* have a `finally` block, even if it's just
+(: a `finally {unreachable}`
+
+(: The above could also use labels and breaks, for those who don't like implicit breaks
+{
+  let posOf7 = for myAr -> cur, i `lab { if cur == 7 { break `lab i } } finally `lab { break `lab null }
+}
+(: However, this is obviously much more verbose, and the first way is the preferred way.
 
 let Vec2 = struct {
   field
@@ -66,23 +94,41 @@ let foo = pure fn -> c = {
   return 10 (: Note that like a break, a return must always preceed a } or a ; (preferably } )
 }
 (: A function that doesn't
-let greet = fn -> void = printf("Saluton, mondo!")
-(: Note that void and _ are considered synonyms in all usages of either.
 let greet = fn -> _ = printf("Saluton, mondo!")
+(: Note that in bind statements, `void` and `_` are allowed to be synonyms for this very reason.
+(: In other usages, however, `_` is the value and `void` is the type.
+let greet = fn -> void = printf("Saluton, mondo!")
 
 std.io.print("Hey").val
 
 (: You can do more than a mere access with `.`
-std.io.(printf("Hello!", _), write("test.txt", "Hello"))
+std.io.(printf("Hello!"), write("test.txt", "Hello"))
+(:= "Hello!" and "Hello" -> test.txt
+(: These are called swizzles. The above is identical to
+(std.io.printf("Hello!"), std.io.write("test.txt", "Hello"))
+(:= You can use it to do GLSL-style swizzling with dot-accesses:
+let myVecy = [:Vec2 (:From before:): .x = 42, .y = 420]
+let (myVecyX, myVecyY) = myVecy.(x, y)
 
 (: Overloading
 let showIt = overload {
   (: Block should be a bunch of public functions
-  let showDefault* = fn _:usize -> void = printf("Didn't match one of the below")
-  let showInt* = fn _:usize -> void = printf("Int")
-  let showBool* = fn _:bool -> void = printf("Bool")
+  let asDefault* = fn _:usize -> void = printf("Didn't match one of the below")
+  let asInt* = fn _:usize -> void = printf("Int")
+  let asBool* = fn _:bool -> void = printf("Bool")
 }
+(: Functions in an `overload{}` are checked in reverse order of export.
+(: Thus `showDefault` will be called only if none of the others matched
+
+(: Functions with `undef`-typed params are translated into overloaded functions for each real param type
 
 showIt(10) (:= Int
 showIt(true) (:= Bool
 showIt("Testy") (:= Didn't match one of the below
+
+(: You can also directly access each overload by name, which is why it's done with a block,
+(: rather than a tuple/array
+showIt.asDefault("") (:= Didn't match one of the below
+showIt.asInt(1) (:= Int
+showIt.asBool(false) (:= Bool
+(: ERROR: showIt.asInt(false) (: `false` ain't a usize!
