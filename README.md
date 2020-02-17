@@ -1,5 +1,4 @@
 # Ligi - *Just don't be a dumdum*
-###### (Name subject to change)
 
 This repo is for the ligi interpreters (comptime and runtime) and compiler. (Compiler is TODO)
 
@@ -7,31 +6,45 @@ This repo is for the ligi interpreters (comptime and runtime) and compiler. (Com
 ### Principles
 * Code is data
 * Flexibility and caution are better than absolute safety and thoughtlessness
+* 
 
-### As compared to other languages
+### As compared to other languages (WIP)
 * C and C++
-    * C has incredible power, but requires programmers to either repeat themselves often or use ugly preprocessor macros.
-      * Ligi replaces both preprocessor macros with pure Ligi functions act directly on the AST.
-    * C++ is a good language, but the template system and standard library have grown convoluted.
-      * Ligi replaces templates with pure ligi functions that take and return types.
-        * Example: C++'s `vector<int>` could be `Vector(isize)` in Ligi.
-    * Both are more difficult to parse, both for humans and machines.
-      * See most vexing parse, C's variable declaration syntax, etc.
-    * Both use ugly direct textual inclusions through `#include <file>`
-      * Ligi `@import`s files as new structs, same as Zig. This means the current namespace isn't needlessly polluted and removes strange compile errors.
+  * C has incredible power, but requires programmers to either repeat themselves often or use ugly preprocessor macros.
+    * Ligi replaces both preprocessor macros with pure Ligi functions act directly on the AST.
+  * C++ is a good language, but the template system and standard library have grown convoluted.
+    * Ligi replaces templates with pure ligi functions that take and return types.
+      * Example: C++'s `vector<int>` could be `Vector(isize)` in Ligi.
+  * Both are more difficult to parse, both for humans and machines.
+    * See most vexing parse, C's variable declaration syntax, etc.
+  * Both use ugly direct textual inclusions through `#include <file>`
+    * Ligi `@import`s files as new structs, same as Zig. This means the current namespace isn't needlessly polluted and removes strange compile errors.
 * Rust
-    * A great language with incredible compiletime guarentees. However, these guarentees are at the cost of both compile-times and flexibility.
-    * Ligi will still have as many compiletime checks as possible, but will not sacrifice the programmer's flexibility.
+  * Rust's borrow checking is a stroke of genius, but it leads to slower development times and restricts the programmer.
 * Zig
-    * Another great language. However, I feel that it can be too verbose it times.
-    * As with C/C++, the parentheses around control structure conditions are completely unneeded.
-      * Ligi follows Rust's example in `<keyword> <expr> <block>` syntax for control structures, rather than `<keyword> ( <expr> ) <block>`
+  * Another great language. Zig was actually the direct inspiration for the earliest versions of Ligi (when it was named "Zag" in its honor).
+  * Zig's explicit resource management with `defer` and manual allocation is fantastic, given that the programmer is cautious.
+      * Ligi follows the same philosophy, and also uses a `defer` keyword for easier resource cleanup.
+  * Zig's style of allowing functions to create types is a much more elegant solution than C++/Rust's <template> style.
+      * Ligi follows the exact same philosophy.
+  * Zig doesn't allow any kind of symbol-shadowing.
+      * Neither does Ligi.
+  * As with C/C++, the parentheses around Zig's control structure conditions are completely unneeded and ugly, especially given
+    that Zig requires `{}` when using more than a single `if`.
+    * Ligi follows Rust's example in `<keyword> <expr> <block>` syntax for control structures, rather than `<keyword> ( <expr> ) <block>`
+  * Zig doesn't allow function overloading as a part of its "only one obvious way to do things"
+      * I believe that overloading *is* the way to have "only one obvious way to do things". Without overloading,
+        you end up with either generic functions and extra logic inside, or `longFunctionNamesWithTypesAtTheEnd`.
+        This isn't "one obvious way", this is "many different ways with postfixes"
+        Another problem is Zig's current need to add a `.{}` when formatting without args, as in `warn("Hello world!", .{})`.
+        Ligi solves this by simply allowing overloading, so you don't need an explicit extra parameter.
 * Nim
-    * Nim has a beautiful syntax and amazingly powerful pure-nim macros, but many features (such as unions) leave much to be desired. 
-    * Whitespace sensitivity is also less desirable for some.    
-      * * Ligi is mostly whitespace insensitive and 
-    * Nim unions (`case` types) can be convoluted to work with
-      * Ligi merges unions and enums Rust-style to make them less of a headache.
+  * Nim has a beautiful syntax and amazingly powerful, pure-nim macros
+      * Ligi will also have a fully AST-exposed macros that can be written in pure Ligi.
+  * Whitespace sensitivity is also less desirable for some.    
+    * Ligi is mostly whitespace insensitive, though that comes at the cost of braces.
+  * Nim unions (`case` types) can be convoluted to work with
+    * Ligi merges unions and enums Rust-style to make them less of a headache.
 * Python
   * Another language with beautiful syntax, but it's very slow and has no (builtin) macros.
   * Its interpreted nature makes for wonderful REPL opportunities.
@@ -87,6 +100,8 @@ To make it easier to tell what you're taking the address of or dereferencing, Li
 * To take the address of val: `val.addr`
 * To dereference  ptr: `ptr.deref`
 
+Note that these *might* be replaced with `.*` and `.&` in the future.
+
 #### Builtin types
 * Integers
   * `.max` and `.min`: (Used on the type itself) Get the max or min value of that type
@@ -109,6 +124,12 @@ To make it easier to tell what you're taking the address of or dereferencing, Li
   assert x.@type == usize
   x = 10
   assert x.@type == usize
+  ```
+  `undef` is used for generic arguments:
+  ```
+  let add = pure fn a, b: undef -> c:undef = a + b
+  _ = add(10, 10)
+  _ = add(10.0, 60.0)
   ```
 * `untyped`(TODO): Macro type. It stores an **untype**checked subtree of the AST. Can be expanded into the current AST with `$`.
   For example:
