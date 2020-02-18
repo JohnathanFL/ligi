@@ -1,0 +1,47 @@
+(: This is to document the new property style
+(: Essentially, properties shall now be declared in the same style as
+(: structs and overloads (unary operator + block with exported functions).
+(: This:
+  (: Makes the language more consistent (with overload/struct syntax)
+  (: Allows for easily adding things beyond simple get/set
+    (: Could allow users to e.g overload indexing/compound assigns inside properties
+  (: Solves the question of how to assign the property functions themselves (i.e [] vs () and so on)
+
+(: The sample code here relies on new_ptr_syntax.li, but the proposal does not.
+
+let Vec2 = struct {
+  field x: f32, y: f32
+
+  let length = property {
+    (: Note that @This will still point to the outer struct.
+    (: Since properties cannot have fields/enums, there's no reason to make @This point to...this...
+    let get* = pure fn self: @This -> len = @sqrt(self.x*self.x + self.y*self.y)
+    let set* = fn self: @This, newLen: f32 -> void = {
+      self.(x,y) /= self.length
+      self.(x,y) *= newLen
+    }
+  }
+}
+
+(: We could also allow overloading indexing:
+let MyArray = pure fn N: usize, T: type -> res = struct {
+  field data: array (N, T)
+
+  (: Using it as a value, as in `x = y.rev` returns an array
+  (: Indexing into it, as in `reversed.rev[i]`, indexes without making a new array
+  (: 
+  let rev* = property {
+    let get* = pure fn self: @This -> reversed: @This = {
+      for self.data -> item, i {
+        reversed.rev[i].* = item
+      }
+    }
+    (: TODO: Look into a C++-style &reference type
+    (: It would make this sort of thing *much* cleaner when you only need the pointer
+    (: for its ability to point, not for long-term storage and such.
+    let index* = fn self: @This, i: usize -> item: *T = {
+      assert i < self.data.len
+      self.data[self.data.len - 1 - i].&
+    }
+  }
+}
