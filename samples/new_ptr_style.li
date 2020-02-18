@@ -1,0 +1,21 @@
+(: This is to describe the new style for address-of and deref
+
+
+(: Currently, we do pointers as such:
+let val: usize = 10
+let ptr = val.addr
+let sameVal = ptr.deref
+
+(: This makes it very clear what's happening, and reduces the need for copious
+(: parentheses with & and *.
+
+
+(: However, it's also rather verbose
+(: This document proposes changing it to be more in line with Zig (rename addr -> .& and deref -> .*)
+let val: usize = 10
+let ptr = val.&
+let sameVal = ptr.*
+
+
+(: This means we must change swizzling parsing:
+let ptr = val.(&, abs)
