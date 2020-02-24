@@ -1,0 +1,9 @@
+(: This is to document general Ligi<->C interop things
+
+(: To import a specific function without the header:
+  (: extern stringLit
+let printf = extern "printf"
+(: Technically this is fine as is. The compiler will resolve the type when it
+(: looks as what we link against. However, it's better to do this so we have the type:
+(: (Remember that str is C-compatible.)
+let printf: (extern fn fmt: str, args: varargs -> void) = extern "printf"
