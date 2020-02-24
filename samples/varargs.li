@@ -1,0 +1,43 @@
+(: This is to document the varargs type.
+
+(: In C, we could do:
+\\ printf("...", 1, 2, true, "Hey", 5);
+(: Without defining a param for each of those.
+
+(: In Ligi, we would prefer to do
+let printf = fn fmtStr:str, args:undef -> void = {
+  let numArgs = args.@tupLen
+  let arg1 = args.@tupAt(0)
+  assert arg1.@type == usize
+  (: and so on
+}
+
+(: Thus it would be passed as
+printf("Hello for the {0}th time, {1}", (15, "John"))
+
+(: But those are resolved at compiletime, which means we can't use it for C functions
+
+(: C varargs work by just pushing a bunch of things onto the stack and giving the user
+(: a pointer to the beginning of those. The user must then specify what the type of each
+(: is, in order, like so (pseudocode):
+\\ va_list argp;
+\\ va_start(argp, lastNonVarArg);
+\\ arg1 = va_arg(argp, int);
+\\ arg2 = va_arg(argp, char*);
+\\ ... and so on
+
+(: Ligi will expose a type called `varargs` that just allows infinite arguments of any type
+(: from that position onwards.
+(: varargs will be an *in-language* feature, not a *library* feature, in order to allow
+(: infinitely-sized args.
+(: This signature would work for a C-compatible, Ligi-based implementation of printf
+let printf* = extern fn fmtStr:str, args: varargs -> void = {
+  (: You would then use .get to get each *in sequence*
+  let arg1 = args.get(c_int)
+  let arg2 = args.get(str)
+  (: Thus Ligi essentially just "patching over" C's varargs.
+  (: I prefer this way, as it allows more direct interop.
+  (: If you're not being called from outside Ligi, however, **USE UNDEF TUPLES**
+  (: Again, varargs should only be used for cross-language interop.
+  (: Don't use it within Ligi-only modules.
+}
