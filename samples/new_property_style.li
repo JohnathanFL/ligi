@@ -9,28 +9,41 @@
 
 (: The sample code here relies on new_ptr_syntax.li, but the proposal does not.
 
+(: Addition 02/27: `property T` denotes the type of a property
+
+(: In short, there are 2 ways to use the `property` keyword:
+  (: `property T`: Denotes a property which takes/returns a T
+  (: `property {block with exported get/set functions}`: Defines a property with those gets/sets
+
+
 let Vec2 = struct {
   field x: f32, y: f32
 
-  let length = property {
-    (: Note that @This will still point to the outer struct.
-    (: Since properties cannot have fields/enums, there's no reason to make @This point to...this...
-    let get* = pure fn self: @This -> len = @sqrt(self.x*self.x + self.y*self.y)
-    let set* = fn self: @This, newLen: f32 -> void = {
+
+
+  (: Read: "length is a property of type f32 where..."
+  let length: property f32 = property {
+    (: ...getting it will call this function... (i.e foo.length * 2. It "gets" the length)
+    let get* = pure fn self: @This -> len:f32 = @sqrt(self.x*self.x + self.y*self.y)
+    (: ...and setting it will call this function. (i.e foo.length = 2. It "sets" the length)
+    let set* = fn self: @This, newLen:f32 -> void = {
       self.(x,y) /= self.length
       self.(x,y) *= newLen
     }
+    (: Note that @This will still point to the outer struct.
+    (: Since properties cannot have fields/enums, there's no reason to make @This point to...this..
   }
 }
 
 (: We could also allow overloading indexing:
+  (: Note this part is not finalized yet.
 let MyArray = pure fn N: usize, T: type -> res = struct {
   field data: array (N, T)
 
   (: Using it as a value, as in `x = y.rev` returns an array
   (: Indexing into it, as in `reversed.rev[i]`, indexes without making a new array
   (: 
-  let rev* = property {
+  let rev*: property @This = property {
     let get* = pure fn self: @This -> reversed: @This = {
       for self.data -> item, i {
         reversed.rev[i].* = item
@@ -39,6 +52,7 @@ let MyArray = pure fn N: usize, T: type -> res = struct {
     (: TODO: Look into a C++-style &reference type
     (: It would make this sort of thing *much* cleaner when you only need the pointer
     (: for its ability to point, not for long-term storage and such.
+
     let index* = fn self: @This, i: usize -> item: *T = {
       assert i < self.data.len
       self.data[self.data.len - 1 - i].&
