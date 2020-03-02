@@ -4,9 +4,10 @@ let LinkedList = pure fn T: type -> list: type = struct {
   field next: ?*@This
   field data: T
 
-  property len: usize = [
-    .get = fn self: @This -> len = 1 + (self.next.len orelse 0)
-  ]
+  let len = property {
+    (: This particular function relies on the orelse syntax proposal
+    let get* = pure fn self: @This -> len = 1 + (self.next.len orelse 0)
+  }
 
   let at = fn self: @This, i: usize -> val: T =
     if i == 0 { self.data }
