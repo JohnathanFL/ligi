@@ -15,7 +15,20 @@
   (: `property T`: Denotes a property which takes/returns a T
   (: `property {block with exported get/set functions}`: Defines a property with those gets/sets
 
+(: For reference: The old style
+  (: - Property is a bind specifier
+  (: - Property takes a compound init with a .get/.set
+let Vec2 = struct {
+  field x: f32, y: f32
+  property len: f32 = [
+    .get = pure fn self: @This -> len = @sqrt(self.x * self.x + self.y * self.y)
+  ]
+}
 
+(: The new style in a nutshell
+  (: - Properties are statics
+  (: - Properties have their own `property` type
+  (: - Properties take their getters/setters from what's exported in a block of code
 let Vec2 = struct {
   field x: f32, y: f32
 
