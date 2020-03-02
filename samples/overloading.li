@@ -62,3 +62,26 @@ showType += pure fn c:isize -> void = printf("isize")
 (: If you don't want other people overloading your overloads, make it readonly (see readonly.li)
 
 showType(-1) (:= isize
+
+
+(: Example use case: Serialization
+
+(: Marked public writable (*) so others can extend it with their own serializers
+let serialize* = overload {
+  let default* = pure fn _ -> void = printf("UNKNOWN TYPE")
+  let serializeBool = pure fn b:bool -> void = if b { printf("true") } else { printf("false") }
+  let serializeArray = pure fn a:array undef -> void = {
+    printf("[")
+    for a -> element {
+      serialize(element)
+      printf(",")
+    }
+    printf("]")
+  }
+}
+
+serialize([true, true, false, true]) (:= '[true, true, false, true,]'
+serialize += pure fn i:isize -> void = printf("{}", i)
+serialize([1, 5, 2, 2]) (:= '[1, 5, 2, 2,]'
+
+(: Note that additions can only be used *after* they've been added.
