@@ -168,4 +168,9 @@ proc scan*(self: var Lexer): Token =
           discard self.advance()
           ret Tag.LessEq
         else: ret Tag.Less
+      of '!':
+        if nextIs '=':
+          discard self.advance()
+          ret Tag.NotEqual
+        else: quit $pos & "The only thing that can follow a ! is an ="
       else: quit "UNEXPECTED CHARACTER AT " & $self.pos

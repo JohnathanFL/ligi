@@ -44,7 +44,7 @@ proc tryMatch(self: var Parser, what: set[Tag]): bool = # Only for when we don't
     return false
 proc match(self: var Parser, what: set[Tag]): Token =
   if not self.nextIs what:
-    echo "Expected a " & $what & " at " & $self.cur.pos
+    echo $self.cur.pos & "Expected a " & $what
     assert false
   result = self.advance()
 # Returns whether there's a '(' or '[' on the *same* line as the last token
@@ -69,8 +69,13 @@ proc parseBlock(self: var Parser, braced: static[bool] = true): Block
 # 'void' is allowed as a synonym for '_' for use in functions. Just don't be a dumdum.
 # ('_'|'void') | ('bindloc{',' bindloc}')' | symbol ['*'][':' expr]
 proc parseBindLoc(self: var Parser): BindLoc =
-  if tryMatch {Tag.Sink, Tag.Void}:
+  if tryMatch {Tag.Void}:
     result = BindSink()
+  elif tryMatch Tag.Sink:
+    var res = BindSink()
+    if tryMatch Tag.Separator:
+      res.ty = self.parseBinLevel(below Assignment)
+      result = res
   elif tryMatch Tag.LParen:
     var res = BindTuple(locs: @[])
     while not nextIs Tag.RParen:
@@ -135,6 +140,17 @@ proc parseLoop(self: var Parser): Loop =
     result.counter = self.parseBind(spec=BindCmd.Let, mayDefault=false)
   result.body = self.parseBlock()
 
+# 'until' expr [ '->' bind ] block [ 'finally' block ]
+proc parseUntil(self: var Parser): Until =
+  let pos = match(Tag.Until).pos
+  result = Until(pos: pos)
+  result.cond = self.parseBinLevel(below Assignment)
+  if tryMatch Tag.StoreIn:
+    result.counter = self.parseBind(spec=BindCmd.Let, mayDefault=false)
+  result.body = self.parseBlock()
+
+  if tryMatch Tag.Finally: result.final = self.parseBlock()
+
 # ('while'|'for') expr [ '->' bind [ ',' bind ] ] block [ 'finally' block ]
 proc parseCondLoop(self: var Parser): CondLoop =
   let tok = match {Tag.While, Tag.For}
@@ -151,13 +167,43 @@ proc parseCondLoop(self: var Parser): CondLoop =
     if tryMatch Comma:
       result.counter = self.parseBind(spec=BindCmd.Let, mayDefault=false)
   result.body = self.parseBlock()
-proc parseUntilLoop(self: var Parser): Until =
-  let pos = match(Tag.Until).pos
-  result = Until(pos: pos, cond: self.parseBinLevel(below Assignment))
-  if tryMatch Tag.StoreIn: result.counter = self.parseBind(spec=BindCmd.Let, mayDefault=false)
-  result.body = self.parseBlock()
-# Thus sinks, nulls, symbols, ints, and tuples are the 'atoms' that make up the language
-# symbol | string | int | '('expr{ ',' expr }')'
+  if tryMatch Tag.Finally:
+    result.final = self.parseBlock()
+
+
+# expr {',' expr}
+proc parseArrayLit(self: var Parser, pos: FilePos, ty: Expr): ArrayLit =
+  result = ArrayLit(pos: pos)
+  result.ty = ty
+  while not nextIs Tag.RBracket:
+    result.values.add self.parseBinLevel(below Assignment)
+    if not tryMatch Tag.Comma: break
+
+# '.'symbol = expr { ',' structLit }
+proc parseStructLit(self: var Parser, pos: FilePos, ty: Expr): StructLit =
+  result = StructLit(pos: pos)
+  result.ty = ty
+  while tryMatch Tag.Access:
+    let name = match(Tag.Symbol).lexeme
+    discard match Tag.Assign
+    let val = self.parseBinLevel(below Assignment)
+    result.members[name] = val
+    if not tryMatch Tag.Comma: break
+
+# '[' [':' expr ':'] ( structLit | arrayLit )']'
+proc parseCompoundLit(self: var Parser): CompoundLit =
+  let pos = match(Tag.LBracket).pos
+  var ty: Expr = nil
+  if tryMatch Tag.Separator:
+    ty = self.parseBinLevel(below Assignment)
+    discard match Tag.Separator
+  if nextIs Tag.Access: result = self.parseStructLit(pos, ty)
+  else: result = self.parseArrayLit(pos, ty)
+  discard match Tag.RBracket
+  
+
+# Compounds are included here to allow `.` access on them
+# symbol | string | int | compound | '('expr{ ',' expr }')'
 proc parseAtom(self: var Parser): Callable =
   if nextIs Tag.LParen: # Tuple
     # Tuple parsing has 3 forms:
@@ -229,12 +275,13 @@ proc parseBase(self: var Parser): Expr =
     of Tag.If: return self.parseIf()
     of Tag.For, Tag.While: return self.parseCondLoop()
     of Tag.Fn: return self.parseFn()
-    of Tag.Until: return self.parseUntilLoop()
+    of Tag.Until: return self.parseUntil()
     of Tag.Loop: return self.parseLoop()
     of Tag.Label, Tag.LBrace: return self.parseBlock()
     of Tag.Undef: return Undef(pos: match(Tag.Undef).pos)
     of Tag.NullLit: return Null(pos: match(Tag.NullLit).pos)
     of Tag.Sink, Tag.Void: return Sink(pos: match(Tag.Sink).pos)
+    of Tag.LBracket: return self.parseCompoundLit()
     else: return self.parseSwizzle()
 
 # {unaryop} access
