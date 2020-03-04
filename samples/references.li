@@ -1,0 +1,44 @@
+(: This is to document my proposed reference style
+
+(: Currently, Ligi requires you to pass around pointers:
+let MyArray = struct {
+  field data: slice usize
+  let at = pure fn self:*@This, i:usize -> el:*usize = self.data[i].&
+}
+
+var data = [0, 1, 2, 3, 4, 5]
+let ar = [:MyArray: .data = data]
+
+let el1 = ar.at(1)
+assert el1.* == 1
+el1.* = 2
+assert el1.* == 2
+
+(: The constant .&/.* is somewhat combersome
+(: This proposal would change things as such:
+
+
+(: A new modifier, 'ref':
+let MyRefArray = struct {
+  field data: slice usize
+  (: Note that we can now change our self:@This arguments to use `ref`
+    (: when we want to mutate ourself.
+    (: Note that a simple `self:@This` allows no mutation and may be ref or value
+  (: Note you still have to initialize a ref using a pointer
+  let at = pure fn self: ref @This, i:usize -> el:*usize = self.data[i].&
+}
+
+var data2 = [0, 1, 2, 3, 4, 5]
+var ar2 = [:MyRefArray: .data = data2]
+
+(: Up to here it's basically all the same. The difference comes when it's actually used:
+var el2 = ar2.at(2)
+assert el2 == 2
+el2 = 3
+assert el2 == 3
+
+(: So in short
+  (: `ref`s get explicitly initialized by a pointer
+    (: Makes the intent clear
+  (: `ref`s can be manipulated as if they were already dereferenced
+    (: Makes code more readable
