@@ -6,8 +6,8 @@
   (: The block must only export functions
 (: `overloaded` would be the type of its variable.
 let show = overload {
-  (: Every overload must have a 'default' function.
-  (: If your function absolutely can't have a default, just make it `= pure fn -> void = unreachable`
+  (: Every overload may have a 'default' function.
+  (: This is only ever used if no other function matches
   let default* = fn u -> void = printf("Hit fallback")
 
   
@@ -85,3 +85,16 @@ serialize += pure fn i:isize -> void = printf("{}", i)
 serialize([1, 5, 2, 2]) (:= '[1, 5, 2, 2,]'
 
 (: Note that additions can only be used *after* they've been added.
+
+
+(: Possible additional syntax: `overload` tuple
+(: Would be used to create a quick overload between multiple functions:
+let addInt = pure fn a: isize, b: isize -> c: isize = a + b
+let addFloat = pure fn a: f32, b: f32 -> c: f32 = a + b
+let add = overload (addInt, addFloat)
+_ = add(1.0, 2.0)
+_ = add(1, 2)
+
+(: This would be useful e.g to easily bring multiple functions into scope with the same name:
+let foo = overload(bar.foo, baz.foo)
+(: However this would require removing the ability to .index overloads, as these wouldn't be named
