@@ -72,3 +72,17 @@ let MyArray = pure fn N: usize, T: type -> res = struct {
     }
   }
 }
+
+(: Planned feature: If no .get is defined, you can access internal members through a .get:
+let Foo = struct {
+  let prop = property {
+    let testy* = fn -> void = printf("Testy")
+  }
+}
+
+let f: Foo
+f.testy()
+
+(: This could then be used in conjunction with type arithmetic to extend types under "namespaces"
+(: if needed.
+(: It can't have a .get because otherwise the `.` becomes ambiguous
