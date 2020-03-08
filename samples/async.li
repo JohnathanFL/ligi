@@ -3,7 +3,6 @@
 
 (: Basics
 
-(: Ligi will assume a variable is only changed by the current thread unless its type is a volatile
 let i: volatile usize = 10
 (: 'volatile' is a volatile operator in that it doesn't stick around on re-assigns
 assert i.@type == volatile usize
@@ -33,48 +32,62 @@ let semaphore: atomic usize = 10
 (: These coroutines are purely for cooperative *scheduling*
 (: Coroutines take parameters once, then may suspend any number of times before returning a value once
 
-(: I plan to basically follow Zig and Rust's lead
+(: I plan to basically follow Zig's lead
 
-(: Asyncing a function call returns a stack frame struct for that function.
+
+(: Functions are mostly declared as normal
+  (: A function declaration that's async'd (i.e `async fn ...`) may only be called as async
+  (: Any function may have `suspend` statements inside
+  (: Suspend statements are ignored if not invoked as async
+  (: Functions with suspend are compiled as FSMs
+(: Asyncing a function call
+  (: returns a stack frame struct for that function.
+  (: Runs the function until its first suspend
 (: You can get the type of a function's frame with function.frame
-  (: This frame may be called( () ) to resume it
+  (: This frame may be called( .resume() ) to resume it
   (: The result location is exposed as '.val', and whether it's ready is '.done'
     (: I originally wanted to expose the actual location, but that doesn't allow void functions
   (: When an async'd function returns a value, .val is valid and .done is true
   (: You can access interior variables according to normal struct access rules
+  (: you can .await() to run until the end and get the result in one call
+
 
 let get_resource = fn resID:str -> res = {
-  var canceled* = false
+  var estTime+ = 10.0
   let flag = send_off_request_for(resID)
   suspend
   while not is_ready(flag) {
-    if canceled {
-      (: Do special stuff to signal whatever we're requesting that we no longer need it
-      (: Could also do this with a public 'cancel' function inside the routine
-      break
-    }
+    estTime += 1.0
     suspend
   }
 }
 
+{ (: Purely blocking call
+  let res = get_resource("https://example.com/my_resource")
+}
 {
   var resFrame = async get_resource("https://example.com/image")
-  while not resFrame.done { resFrame() }
+  while not resFrame.done { resFrame.resume() }
   let res = resFrame.val
 }
 {
   var resFrame = async get_resource("https://example.com/slow_resource")
-  while not resFrame.res.done -> _, i {
-    if i > 10 {
-      (: Took too long, we don't want it anymore
-      resFrame.canceled = true
+  while not resFrame.done -> _ {
+    if resFrame.estTime > 15.0 {
+      (: Takes too long, we don't want it anymore
+      resFrame.cancel() = true
       break
     }
+    (: Do other stuff
+    (: ...
+    resFrame.resume()
   }
 }
 
 (: You could also use the frame itself as a variable
 (: Here's a lexer for the expression A + B - C + A implemented as a single function
+(: Function types can also be annotated with async to specify that they must be asynced
+(: This is intended for things like this lexer, which simply should never be non-asynced
 let lex = fn input -> void = {
   let Token = enum {
     enum Var: char
@@ -107,8 +120,11 @@ while not lexer.done {
 
 (: This essentially allows a way of making a shorthand struct/FSM
 
+(: Note that the above would probably be better as an @for
+
 (: Considerations
   (: Should we go with Zig's `resume frame` syntax to make things clearer?
+  (: Should @fors be transformed into async functions?
 
 
 
