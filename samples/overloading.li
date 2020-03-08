@@ -6,7 +6,12 @@
   (: The block must only export functions
 (: `overloaded` would be the type of its variable.
 let show = overload {
-  let fallback* = fn u -> void = printf("Hit fallback")
+  (: Every overload may have a 'default' function.
+  (: This is only ever used if no other function matches
+  let default* = fn u -> void = printf("Hit fallback")
+
+  
+  (: Overloads are checked in order from first->last added
   let showBool* = fn b:bool -> void = printf("Hit showBool")
   let showISize* = fn i:isize -> void = printf("Hit showISize")
   let showString = fn s:str -> void = printf("I'm never hit because I'm not public!")
@@ -26,10 +31,11 @@ show.showISize(10) (:= Hit showISize
 (:This only implements const and pointers:)
 (:Note that this would be more efficient if you just used builtin @funcs:)
 let showType = overload {
-  let showConst* = pure fn c:bool -> void = printf("bool")
-  let showConst* = pure fn c: usize -> void = printf("usize")
+  let default* = pure fn c -> void = printf("unknown")
+  let showBool* = pure fn c:bool -> void = printf("bool")
+  let showUSize* = pure fn c: usize -> void = printf("usize")
 
-  let showConst* = pure fn c: *undef -> void = {
+  let showPtr* = pure fn c: *undef -> void = {
     printf("*")
     showType(c.deref)
   }
@@ -47,3 +53,48 @@ let booly = true
 let numAddr = num.addr
 showType(numAddr) (:= *const usize
 showType(booly.addr) (:= *const bool
+
+(: I plan to make overloads inner-mutable, so you can add new overloads at compiletime:
+showType += pure fn c:isize -> void = printf("isize")
+(: Note that since overloads are checked first->last, it's impossible to extend a method such that
+(: it overrides existing logic.
+(: Exception: The `default` function is always checked last.
+(: If you don't want other people overloading your overloads, make it readonly (see readonly.li)
+
+showType(-1) (:= isize
+
+
+(: Example use case: Serialization
+
+(: Marked public writable (*) so others can extend it with their own serializers
+let serialize* = overload {
+  let default* = pure fn _ -> void = printf("UNKNOWN TYPE")
+  let serializeBool = pure fn b:bool -> void = if b { printf("true") } else { printf("false") }
+  let serializeArray = pure fn a:array undef -> void = {
+    printf("[")
+    for a -> element {
+      serialize(element)
+      printf(",")
+    }
+    printf("]")
+  }
+}
+
+serialize([true, true, false, true]) (:= '[true, true, false, true,]'
+serialize += pure fn i:isize -> void = printf("{}", i)
+serialize([1, 5, 2, 2]) (:= '[1, 5, 2, 2,]'
+
+(: Note that additions can only be used *after* they've been added.
+
+
+(: Possible additional syntax: `overload` tuple
+(: Would be used to create a quick overload between multiple functions:
+let addInt = pure fn a: isize, b: isize -> c: isize = a + b
+let addFloat = pure fn a: f32, b: f32 -> c: f32 = a + b
+let add = overload (addInt, addFloat)
+_ = add(1.0, 2.0)
+_ = add(1, 2)
+
+(: This would be useful e.g to easily bring multiple functions into scope with the same name:
+let foo = overload(bar.foo, baz.foo)
+(: However this would require removing the ability to .index overloads, as these wouldn't be named

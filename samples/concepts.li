@@ -1,44 +1,49 @@
 (: Definite needed feature: Concepts
 
 
-(: Will follow Nim's concept of a concept
+(: Will follow essentially Nim's concept of a concept
 
-let StackConcept = pure fn T: type -> t:type {
-  return concept {
-    let push: (fn self: *@Self, item:T)
-    let pop: (fn self: *@Self -> item:T)
+let StackConcept = pure fn T: type -> t:type = concept {
+  (: `@Self` is a special variable in concepts that represents the type being tested
+  let push: (fn self: *@Self, item:T)
+  let pop: (fn self: *@Self -> item:T)
+  let len: property usize
+  (: TODO: Find a way to denote a property with vs one without a .set function and vice versa
 
-    property len: usize
-  }
+  (: Thus you can read the above as:
+    (: A Stack(T) is the concept of something with a push method which takes the stack and
+    (: a T, a pop method which takes the stack and returns a T,
+    (: and a property named len which yields a usize.
+
+  (: Note that I currently plan to allow properties to be compared
 }
 
-let Stack = pure fn T: type -> t:type {
-  return concept {
-    field storage: slice T
-    (: Subslice of storage
-    field data: slice T
-    let push = fn self: *@This, item:T {
-      if data.len < storage.len {
-        data = storage[0..data.len] (: Moves it forward one
-        data[data.len-1] = item
-      }
-    }
-    let pop = fn self: *@This -> item:T {
-      if data.len > 0 {
-        item = data[data.len-1]
-        data = data[0..data.len-1]
-      }
+let Stack = pure fn T: type -> t:type = concept {
+  field storage: slice T
+  (: Subslice of storage
+  field data: slice T
+  let push = fn self: *@This, item:T -> void =
+    if data.len < storage.len {
+      data = storage[0..data.len] (: Moves it forward one
+      data[data.len-1] = item
     }
 
-    property len: usize = [
-      .get = pure fn self: @This -> res:usize { res = self.data.len }
-    ]
+  let pop = fn self: *@This -> item:T =
+    if data.len > 0 {
+      item = data[data.len-1]
+      data = data[0..data.len-1]
+    }
+
+  let len = property {
+    let get* = pure fn self: @This -> res:usize = self.data.len
   }
 }
 
 (: 'in' and 'notin' will be overloaded for checking concept membership
 (: TODO: Should I add 'is' instead?
 assert Stack(usize) in StackConcept(usize)
+(: Alternative?
+assert Stack(usize).@matches(StackConcept(usize))
 
 (: Related subfeature: blocks
 (: Different from standard {}

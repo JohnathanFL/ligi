@@ -22,13 +22,14 @@ type
     locs*: seq[BindLoc]
   BindSym* = ref object of BindLoc
     loc*: string
-    ty*: Expr
+    ty*: Expr #?
     isPub*: bool
   # We want to just discard any writes to this.
   # Has to be its own thing rather than Symbol(_) to avoid constant
   # 'is sym == _' checks
   # Note this technically means `let _ = 10` is just as valid as `_ = 10`
   BindSink* = ref object of BindLoc
+    ty*: Expr #?
   Bind* = ref object of Stmt
     cmd*: BindCmd
     # We know the bind type from Stmt.cmd
@@ -97,6 +98,7 @@ type
   Loop* = ref object of Expr
     body*: Block
     counter*: Bind #?
+    final*: Block #?
   # Either for or while
   CondLoop* = ref object of Loop
     expr*: Expr
@@ -106,7 +108,12 @@ type
     cond*: Expr
     # Can't capture since the first run tests nothing.
 
-
+  CompoundLit* = ref object of Expr
+    ty*: Expr
+  StructLit* = ref object of CompoundLit
+    members*: Table[string, Expr]
+  ArrayLit* = ref object of CompoundLit
+    values*: seq[Expr]
 
   # A function is always of the form `fn [args] -> bind`
     # `fn a,b -> c = a + b` is a complete definition for a function that returns a value

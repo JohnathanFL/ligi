@@ -9,6 +9,7 @@ This repo is for the ligi interpreters (comptime and runtime) and compiler. (Com
 * 
 
 ### As compared to other languages (WIP)
+Note that this list is still very rough and probably not well written.
 * C and C++
   * C has incredible power, but requires programmers to either repeat themselves often or use ugly preprocessor macros.
     * Ligi replaces both preprocessor macros with pure Ligi functions act directly on the AST.

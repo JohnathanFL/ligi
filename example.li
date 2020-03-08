@@ -107,13 +107,13 @@ std.io.(printf("Hello!"), write("test.txt", "Hello"))
 (: These are called swizzles. The above is identical to
 (std.io.printf("Hello!"), std.io.write("test.txt", "Hello"))
 (:= You can use it to do GLSL-style swizzling with dot-accesses:
-let myVecy = [:Vec2 (:From before:): .x = 42, .y = 420]
+let myVecy = [:Vec2: .x = 42, .y = 420]
 let (myVecyX, myVecyY) = myVecy.(x, y)
 
 (: Overloading
 let showIt = overload {
   (: Block should be a bunch of public functions
-  let asDefault* = fn _:usize -> void = printf("Didn't match one of the below")
+  let default* = fn _:usize -> void = printf("Didn't match one of the below")
   let asInt* = fn _:usize -> void = printf("Int")
   let asBool* = fn _:bool -> void = printf("Bool")
 }
@@ -125,10 +125,3 @@ let showIt = overload {
 showIt(10) (:= Int
 showIt(true) (:= Bool
 showIt("Testy") (:= Didn't match one of the below
-
-(: You can also directly access each overload by name, which is why it's done with a block,
-(: rather than a tuple/array
-showIt.asDefault("") (:= Didn't match one of the below
-showIt.asInt(1) (:= Int
-showIt.asBool(false) (:= Bool
-(: ERROR: showIt.asInt(false) (: `false` ain't a usize!
