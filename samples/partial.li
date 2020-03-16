@@ -1,0 +1,63 @@
+(: This is to document the creation of partial functions
+
+(: Ligi will allow you to use sinks (`_`) to create partial functions
+(: Note that the non-sink arguments must either be constant or accessible in the calling scope
+
+
+(: An example for allowing different indexing modes in an ArrayList
+
+let ArrayList = pure fn T:type -> A = struct {
+  field data: slice T (: Ignoring allocation concerns. Just assume it's already allocated.
+
+  let Pos = enum {
+    enum Start, Middle, End
+  }
+
+  let at* = overload {
+    (: Using the ref proposal
+    (: Ignoring possible indexing errors
+    (: Note that i is untyped here...
+    let byIFromPos* = pure fn self: *@This, i:undef, pos: comptime Pos -> x:ref T =
+      if pos == #Start {
+        (: ...so that we can allow only unsigned here...
+        assert not i.@type.@isSigned
+        return self.data[i]
+      } elif pos == #Middle {
+        (: ...and still allow signed here.
+        return self.data[self.data.len / 2 + i]
+      } elif pos == #End {
+        assert i.@type.@isSigned
+        return self.data[self.data.len - 1 - i]
+      } else { unreachable }
+
+    (: And now the partial application:
+    let byI* = byIFromPos(_, _, #Start)
+    (: Nice and simple. Calling a function with a sink argument gives you a partial application.
+    assert byI.@type == pure fn self: *@This, i:usize -> x:ref T
+
+    (: Without partial application:
+    let byINoPartial = pure fn self: *@This, i:usize -> x: ref T = self.byIFromPos(i, #Start)
+    (: So not much different, but it makes it obvious that byI does the same stuff as byIFromPos
+  }
+  (: And then we make sure we add at to the overloads
+  (: Note that adding an overload to an overload adds all sub overloads (other than the default)
+  @overloads[#Index] += @This.at
+}
+
+var data = [0, 1, 2, 3, 4]
+var ar = [:ArrayList(usize): .data = data[0.._]]
+assert ar[0] == 0
+assert ar[0, #Start] == 0
+assert ar[0, #End] == 4
+assert ar[0, #Middle] == 2
+
+assert ar[1, #Middle] == 3
+assert ar[-1, #Middle] == 1
+
+
+
+(: Note that partial function application does *not* detect things like the `0.._` above.
+(: For that, you'd just create a function that redirects to that one with the right range.
+
+(: Partial function is just a quick/dirty way of making a new function.
+(: If you need more customization than a direct template provides, just make a new function.
