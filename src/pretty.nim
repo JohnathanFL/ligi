@@ -1,3 +1,4 @@
+import tables
 import nodes
 
 
@@ -36,7 +37,12 @@ method prettyPrint*(self: BindSym) =
   else:
     pecho self.loc, pub
 method prettyPrint*(self: BindSink) =
-  pecho "@_@"
+  if self.ty != nil:
+    pecho "@_@ : "
+    becho: prettyPrint self.ty
+  else:
+    pecho "@_@"
+    
 
 method prettyPrint*(self: Block) =
   pecho "Block", self.label, self.pos
@@ -63,10 +69,31 @@ method prettyPrint*(self: Bind) =
     prettyPrint self.loc
     if self.init != nil:
       pecho "="
+      pecho ""
       becho:
         prettyPrint self.init
 method prettyPrint*(self: Expr) =
   quit "HIT BASE EXPR"
+method prettyPrint*(self: CompoundLit) =
+  quit "HIT BASE COMPOUNDLIT"
+method prettyPrint*(self: StructLit) =
+  pecho "StructLiteral", self.pos
+  becho:
+    if self.ty != nil:
+      pecho "@type:"
+      becho: prettyPrint self.ty
+    for name, val in self.members.pairs:
+      pecho name, " = "
+      becho: prettyPrint val
+method prettyPrint*(self: ArrayLit) =
+  pecho "ArrayLiteral", self.pos
+  becho:
+    if self.ty != nil:
+      pecho "@type:"
+      becho: prettyPrint self.ty
+    for val in self.values:
+      prettyPrint val
+
 method prettyPrint*(self: Tuple) =
   pecho "Tuple", self.pos
   becho: prettyPrint self.children

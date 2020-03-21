@@ -75,7 +75,7 @@ proc parseBindLoc(self: var Parser): BindLoc =
     var res = BindSink()
     if tryMatch Tag.Separator:
       res.ty = self.parseBinLevel(below Assignment)
-      result = res
+    result = res
   elif tryMatch Tag.LParen:
     var res = BindTuple(locs: @[])
     while not nextIs Tag.RParen:

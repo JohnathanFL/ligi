@@ -17,6 +17,9 @@ type
   Return* = ref object of Stmt
     val*: Expr #?
 
+  BindAccess* = enum
+    Private, ReadOnly, Public
+
   BindLoc* = ref object of RootObj
   BindTuple* = ref object of BindLoc
     locs*: seq[BindLoc]
@@ -109,7 +112,7 @@ type
     # Can't capture since the first run tests nothing.
 
   CompoundLit* = ref object of Expr
-    ty*: Expr
+    ty*: Expr #?
   StructLit* = ref object of CompoundLit
     members*: Table[string, Expr]
   ArrayLit* = ref object of CompoundLit

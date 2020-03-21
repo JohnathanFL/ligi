@@ -50,6 +50,7 @@ type # Note that tags is kept sorted in alphabetical order. Thus that (Tag) orde
     Inline = Tag.Inline
     Not = Tag.Not
     Optional = Tag.Optional
+    Overload = Tag.Overload
     Pure = Tag.Pure
     Slice = Tag.Slice
     Struct = Tag.Struct
