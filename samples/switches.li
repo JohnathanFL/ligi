@@ -1,5 +1,6 @@
 (: In dev feature: switches/matches/whatever it ends up being
 (: (Consider switch replacable with match in this document)
+  (: Update: We'll be going with the final `when` proposal with is-delayed binops
 
 
 (: Option:  Standard Ziggy/Rusty style
@@ -46,4 +47,19 @@ match x {
   10 => printf("Was 10"),
   is != 10 => printf("Wasn't 10")
 }
-(: I currently think this is the best way to go. It allows for 
+
+(: Final style: Whens with optional delayed operators
+(: `is` is always used to delimit cases
+(: If `is` is followed by an expression, it's matched against that directly
+(: If `is` is followed by a relational binary operator, it's matched against that + the next expr
+  (: The spaceship operator won't work here since it returns an enum, not a bool
+(: Instead of an "else", you just use `is` with a sink `_`, as `anything relop _` === true
+when avgGrade {
+  is 100 => "A+", (: `is <expr>` === `lhs == expr`
+  is >= 90 => "A", (: `is <binop> <expr>` === `lhs binop expr`
+  is >= 80 => "B",
+  is >= 70 => "C",
+  is >= 60 => "D",
+  is _ => "F" (: Since a comparison against a sink is always true
+}
+(: Highly readable: "When avgGrade is 100 it's A+. When it's >= 90 it's A..."
