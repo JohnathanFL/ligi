@@ -6,6 +6,7 @@ import lexer
 import nodes
 import parser
 import evaluator
+import comptime_eval
 import pretty
 
 when isMainModule:
@@ -17,4 +18,9 @@ when isMainModule:
   #  tok = lex.scan
   var blocky = lex.parse()
   blocky.prettyPrint()
+  echo "\n"
+  for n in blocky.children:
+    if n of Bind:
+      # TODO: Now send this to Ligujo
+      echo $n.Bind.loc.BindSym.ty.evalAsType
 

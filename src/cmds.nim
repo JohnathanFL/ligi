@@ -43,6 +43,7 @@ type # Note that tags is kept sorted in alphabetical order. Thus that (Tag) orde
     Xor = Tag.Xor
 
   UnaryCmd*{.pure.} = enum
+    Array = Tag.Array
     BitNot = Tag.BitNot
     Comptime = Tag.Comptime
     Const = Tag.Const

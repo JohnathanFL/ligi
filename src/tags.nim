@@ -1,5 +1,4 @@
 type Tag* {.pure.} = enum
-  # Leaving this here, whether as a monument to my insanity or brilliance I don't know
   # Float literals are now parsed as field accesses into an int
   # (i.e every int has an infinite number of fields, each named for an int)
   # FloatLit = "FLOATLIT"

@@ -125,6 +125,14 @@
     .z = 30,
     .w = 40
   ]
+
+  (: Enforced by the compiler: Indexing ( [] ) must always have the `[` on the same line as its target:
+  let ar0 = ar[0]
+  (: Compare to this:
+  let ar0 = ar
+  [0]
+  (: The above is actually 2 statements: `bind ar to ar0` and `make an array containing 0`
+  (: This restriction is in place to remove the need for semicolons.
 }
 
 (: Naming Conventions

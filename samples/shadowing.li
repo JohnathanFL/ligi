@@ -17,3 +17,7 @@ Bar = struct {
 }
 
 (: This seems like the best way to allow this (and may be added regardless of Shadowing)
+
+
+(: Update: I'm currently only adding shadowing back in the case of statics on type arithmetic
+(: Ligi allows no shadowing in other contexts.

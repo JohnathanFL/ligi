@@ -1,12 +1,27 @@
 # Ligi - *Just don't be a dumdum*
 
+Ligi is a statically typed, compiled language optimized for performance and readability.
+
+
 This repo is for the ligi interpreters (comptime and runtime) and compiler. (Compiler is TODO)
 
 
 ### Principles
 * Code is data
+  * Heavy AST-based macros
+  * Operators that work on types to make new types
 * Flexibility and caution are better than absolute safety and thoughtlessness
-* 
+  * No destructors/constructors
+    * Manual resource management through `defer`
+  * No garbage collection
+    * Manually allocated pointers
+* Work with the programmer, not against them
+  * Properties
+  * Partial functions
+  * Untyped arguments
+  * Tuples
+  * Anonymous structs
+  * Algebraic Data Type `enum`s
 
 ### As compared to other languages (WIP)
 Note that this list is still very rough and probably not well written.
@@ -22,9 +37,10 @@ Note that this list is still very rough and probably not well written.
     * Ligi `@import`s files as new structs, same as Zig. This means the current namespace isn't needlessly polluted and removes strange compile errors.
 * Rust
   * Rust's borrow checking is a stroke of genius, but it leads to slower development times and restricts the programmer.
+    * Ligi instead uses `defer` to ensure that cleanup code is executed at all exits for that block
 * Zig
   * Another great language. Zig was actually the direct inspiration for the earliest versions of Ligi (when it was named "Zag" in its honor).
-  * Zig's explicit resource management with `defer` and manual allocation is fantastic, given that the programmer is cautious.
+  * Zig's explicit resource management with `defer` and manual allocation is fantastic, as long as the programmer is cautious.
       * Ligi follows the same philosophy, and also uses a `defer` keyword for easier resource cleanup.
   * Zig's style of allowing functions to create types is a much more elegant solution than C++/Rust's <template> style.
       * Ligi follows the exact same philosophy.
@@ -73,6 +89,59 @@ Note that this list is still very rough and probably not well written.
 
 
 ### Language Basics
+
+#### 2 minute crash course
+```
+(: This is a singleline comment
+let x = 10 (: This bound a constant
+var y:usize = (: This is an inline comment for a variable :) 10
+(: No shadowing. ERROR: let y = 20
+
+(: Just about everything is an expression
+var z = {
+  let _z = 20
+  _z / 2
+}
+assert z == 10 (: Asserts are built in statements
+
+(: Functions are 'fn', a series of binds, '->', and a final bind statement:
+(: The final bind statement's initializer is the function's body
+let fib = fn n: usize -> m = if n in 0..=1 { 1 } else { fib(n - 1) + fib(n - 2) }
+
+(: Types are created with the `struct`, `enum`, and `concept` **unary operators**
+(: That last bit is important. They're operators which take a block as input.
+let Meal = enum {
+  (: Enumerations of an enum are bound with the enum bind type
+  enum Breakfast = 1 (: By default enums number from 0.._. Bind a value to it to override it
+  enum Lunch, Supper
+  (: Enums are algebraic data types, and can hold inner data.
+  (: The type of an enum bind statement is what it holds
+  enum Snack: struct {
+    field time: usize (: Hold the time we snacked at in 24-hour time
+  }
+}
+(: Note the compiler must be able to know what type the literal should resolve to.
+let m: Meal = #Breakfast (: Enum literals use #<TagName> or #<TagName>(<InnerData>)
+let m2 = Meal.Breakfast
+
+let s: Meal = #Snack(2300)
+
+
+let Vec2f = struct {
+  (: Fields of a struct are bound with 'field'
+  (: * = public, + = public but readonly
+  field x*: f32
+  field y*: f32
+}
+
+(: Functions can also create new types
+(: The `pure` operator makes its subtree always evaluate the same, given the same inputs
+let Vec2 = pure fn T:type -> V = struct {
+  field x: T
+  field y: T
+}
+
+```
 
 #### Happy comments
 ```
