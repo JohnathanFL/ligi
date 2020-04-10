@@ -99,6 +99,14 @@
   }
   (: As a general rule, if you need {} (other than control structures and types), multiline.
 
+  (: If you need to multiline a function's return, the -> should be at the start of the
+  (: normal indent for the function body *on the same line as the return value*
+  let really_long_func_name = pure fn x: slice const str, y: slice const u8
+    -> newSlice: slice const u8 = {
+      (: ...
+    }
+  (: Jury's out on whether the function body should actually get another level of indentation.
+
   (: Control structures follow the same rule as functions
   let x = if true { 1 } else { 2 }
   let y = if true {
