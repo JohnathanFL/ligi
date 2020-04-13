@@ -1,0 +1,35 @@
+(: This is to discuss comment style in Ligi
+
+(: Style:
+(: + Pro
+(: - Con
+(: * Neutral
+(:   Continuation
+
+(: As much as I love the (: syntax for comments, it can be a little hard to type
+
+(: Suggestion #0: Keep the existing style
+
+(: + Looks nice, at least to me, and leads to a very nice inline comment style ( (: :) )
+(: + There's no possible ambiguity with `(:` and the way Ligi uses `:`
+(: - Harder to type, especially if your editor auto-inserts the )
+
+(: Suggestion #1: Allow `#<space>` to start a line comment
+
+(: + This would not conflict with `#<character>`, like enum literals and `#{`
+(: + This is much easier to type
+(: * The existing style can be maintained as an alternative or for inline comments
+(: - Means that `#` cannot be treated as an operator (i.e `# <ident or other stuff>`)
+(: * Similarly, #= could be used for doc comments
+
+(: Suggestion #2: Allow `//` for comments
+
+(: +  This is widely known and used, so it's more familiar. (: is certainly not.
+(: -  Longer to type than #
+(: +- The existing style can still be maintained as an alternative and for inline comments
+
+(: Suggestion #3: Use `#:` or similar for comments
+
+(: + At least on QWERTY keyboards, it's much easier to type
+(: + Allows `#` to be treated as an operator if we need to
+(: + Kinda
