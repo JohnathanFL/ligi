@@ -67,7 +67,7 @@ binop_9 <- '|' | '&' | '^'
 unExpr <- {unOp} atom
 unOp <- '-' | '~' | 'not' | 'const' | 'comptime' | 'array' | 'slice' | '?' | 'pure' | 'inline' | 'struct' | 'enum' | 'overload' | '*' | 'property' | 'ref'
 
-atom <- access | cond | loop | block | fn | compoundLit | strlit | charlit
+atom <- access | cond | loop | block | fn | compoundLit | strlit | charlit | enumlit
 
 cond <- if | when
 if <- 'if' ifCond block { 'elif' ifCond block } [ 'else' block ] ['finally' block ]
@@ -100,3 +100,6 @@ strlit <- '"' {charOrEscape} '"' | multStrlit
 multStrlit <- '\\ ' {anythingButNewline} newline {multStrlit}
 
 charlit <- singleQuote charOrEscape singleQuote
+
+
+enumlit <- '#' symbol [ tuple ]
