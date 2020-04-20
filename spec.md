@@ -1,6 +1,45 @@
 # Ligi Spec
 This document is to specify Ligi's semantics.
 
+Note that this is to be the official specification of Ligi. The reference interpreter
+is *not* currently up to spec.
+
+
+## Modes
+Ligi programs may be compiled in one of the following 'modes':
+- debug
+- release
+- release_fast
+
+## Assertions
+Any `assert` statement which can be checked at compiletime *will* be, and compilation will
+produce an error for each invalid assertion.
+
+For runtime, the `assert` statement is defined as follows:
+- In debug and release modes, the condition will be checked.
+  - If the condition is false, the program will error out.
+- In release and release_fast modes, the compiler may assume that the condition is true
+  and may make optimizations off of that.
+- In release_fast mode, the condition will be neither checked not evaluated.
+  - To avoid confusion over this, an assertion's condition's subtree is implicitly marked
+    as `pure`. Thus, it is not allowed to mutate outside values.
+
+## Primitive Types
+Ligi contains the following primitive types. All other types are based upon these.
+- `void`: The absence of any value.
+- `uN` and `iN`, where `N` is from `1` to `1024`, inclusive: This is defined to be a
+  signed (if `i`) or unsigned (if `u`) integer `N` bits in size.
+  - Except in cases of packing structs, values of `N` which do not align with a byte
+    boundary are stored in a `iN` or `uN` widened to fit a byte boundary.
+    - Further widening to fit other alignment may also occur.
+- `usize` and `isize`: Defined to be `uN` and `iN`, respectively, where `N` is the
+  number of bits for the target platform. (e.g 32 or 64)
+- `char`: Defined to be `u32`. Intended to hold UTF-32 values.
+- `f16`, `f32`, `f64`, and `f128`: These are the appropriate IEEE specifications for
+  floating point numbers of 16, 32, 64, and 128 bits, respectively.
+- `bool`: Holds either `true` or `false`.
+- `type`: Holds a Ligi type. `type` is implicitly `comptime`.
+- `_`: The sink. May not be instantiated, but is used for pattern matching.
 
 ## Value and Reference
 With one exception, Ligi is always pass by value.
@@ -94,6 +133,17 @@ Optionals contain 2 members:
   - Attempting to access this when `.has` is false in debug mode is an error, 
     and is undefined in release.
 
+### Representation
+Optional pointers are guaranteed to be the same size as their underlying pointer.
+If an optional pointer is `null`, that means its in-memory value is `0`.
+- This means that currently, it is impossible to have an optional pointer with an underlying
+  value which itself may be `0`.
+
+All other optional type `?T`s are defined to have the same layout as:
+```
+let V = struct { field has: bool, val: T }
+```
+
 ### Truthyness and Capturing
 If an optional value is used as the condition of `if`, `when`, or `while`, it is tested
 to see if it is `null`. If it is not, then its inner value may be captured in a `->` block.
@@ -140,6 +190,7 @@ The following unary operators create new types. `T` is used as a standin for any
 - `overload`: Used with a block. Creates a new `overloaded` object. All exported functions
   found within the block are considered as being part of the overload.
 - `* T`: Creates a pointer to a *single* `T`. 
+- `ref T`: Creates a reference type that points to a single `T`.
 
 ### Binary Type Operators
 The following binary operators create new types. `T` and `V` are used as standins for any other
@@ -151,5 +202,68 @@ types. `N` is used as a standin for a number.
 
 
 ## Bind Specs
+Aside from `field` and `enum`, all bind specs translate directly to a `var` bind.
 - `let x:T` translates to `var x:const T`
 - `cvar x:T` translates to `var x: comptime T`
+
+## Enum Literals
+Enum literals (`#Symbol` or `#Symbol(expr,...)`) are a shorthand for typing `EnumType.Symbol`.
+
+Enum literals may only be used in places where the enum's type is clearly known, such as
+comparisons and direct assignments.
+
+
+## Access Operator
+The access operator (`.`) is used to both access fields and call methods of the type.
+
+## Floating Points
+There are no floating point literals. Floating point values are produced through field accesses
+on integer literals. Thus the following works:
+```
+assert = 1 . 1 == 1.1
+```
+
+## Swizzling
+Swizzling is done by placing a tuple of swizzles and/or symbols after an access operator.
+
+Swizzling produces a tuple of its arguments. Thus:
+```
+assert x.(y, z) == (x.y, x.z)
+```
+
+Swizzling *is* defined for functions. Swizzled function calls are all applied against the same
+memory location (i.e functions that take the location by reference may modify it, but it is still
+the same location). Thus:
+```
+assert x.(y(), z()) == (x.y(), x.z())
+```
+
+## Sinks
+Comparisons against the sink (`_`) are defined to be `true`. Thus:
+```
+assert (x, _) == (x, z)
+```
+
+For type purposes, a sink is its own type. Thus:
+```
+let x: u32
+assert (x, _).@type == (u32, _)
+```
+
+## Implicit Casts
+The following are the only implicit casts allowed:
+- Enum literals to an enum type containing the proper discriminators and inner types
+- Numerical casts which widen.
+  - Arithmetic between a smaller and larger type casts and produces the larger type.
+- Numerical casts which can be known at compiletime to not truncate.
+  - Hence a `comptime f32` may be cast to an integer type.
+- Anonymous struct literals to structs with matching field names and castable field types.
+  - Hence a struct of three floats may be initialized by an anonymous struct of 3 ints.
+
+## `ref` Types
+A ref type is produced with `ref T`. A ref type is initialized exactly one time with a pointer
+to its underlying `T` type. Thereafter, a `ref T` may be treated as just `T`.
+
+This allows for assigning directly to locations returned by custom indexing operators,
+such as is needed for array-list style structures and the like, as well as pass-by-reference
+semantics for functions.
