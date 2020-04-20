@@ -1,0 +1,102 @@
+(: This file follows this format:
+  (: `(:` denotes a comment
+  (: word '<-' denotes a rule
+  (: '[]' is 0 or 1
+  (: '{}' is 0 or more
+  (: '|' is alternatives
+  (: '()' is just for grouping things for alternatives
+  (: In cases where things cannot be easily described by EBNF, it is described in English
+
+(: Note this means that technically, 1s is still a symbol
+(: As is '1' itself
+(: This is part of my plan to allow names like '1s', and to simply match numbers/constants
+(: based on regexes
+symbol <- alphanum{alphanum}
+
+block <- [ label ] '{' { stmt [';'] } '}'
+label <- '`'symbol
+
+stmt <- assert | break | return | bind | assign | defer
+
+defer <- 'defer' assign
+assert <- 'assert' expr
+break <- 'break' [ label | label expr ]
+return <- 'return' [ expr ]
+
+bind <- ('let' | 'var' | 'cvar' | 'field' | 'enum') unspecBind ['=' expr]
+unspecBind <- tupleBind | locBind
+tupleBind <- '(' unspecBind { ',' unspecBind } ')'
+locBind <- (symbol [accessSpec] | '_' | 'void') [ ':' expr ]
+(: Private, readonly, and public, respectively
+accessSpec <- '-' | '*' | '+'
+
+
+assign <- expr [ assignOp expr ]
+assignOp <- '=' | '+=' | '-=' | '*=' | '/=' | '|=' | '&=' | '<<=' | '>>='
+
+binExpr_1 <- binExpr_2 [ binop_1 binExpr_2 ]
+binop_1 <- '==' | '!='
+
+binExpr_2 <- binExpr_3 [ binop_2 binExpr_3 ]
+binop_2 <- '<' | '>' | '>=' | '<=' | '<=>'
+
+binExpr_3 <- binExpr_4 [ binop_3 binExpr_4 ]
+binop_3 <- 'or' | 'xor'
+
+binExpr_4 <- binExpr_5 [ binop_4 binExpr_5 ]
+binop_4 <- 'and'
+
+binExpr_5 <- binExpr_6 [ binop_5 binExpr_6 ]
+binop_5 <- 'in' | 'notin'
+
+binExpr_5 <- binExpr_6 [ binop_5 binExpr_6 ]
+binop_5 <- 'in' | 'notin'
+
+binExpr_6 <- binExpr_7 [ binop_6 binExpr_7 ]
+binop_6 <- '..' | '..='
+
+binExpr_7 <- binExpr_8 [ binop_7 binExpr_8 ]
+binop_7 <- '+' | '-'
+
+binExpr_8 <- binExpr_9 [ binop_8 binExpr_9 ]
+binop_8 <- '*' | '/' | '%'
+
+binExpr_9 <- unExpr [ binop_9 unExpr ]
+binop_9 <- '|' | '&' | '^'
+
+unExpr <- {unOp} atom
+unOp <- '-' | '~' | 'not' | 'const' | 'comptime' | 'array' | 'slice' | '?' | 'pure' | 'inline' | 'struct' | 'enum' | 'overload' | '*' | 'property' | 'ref'
+
+atom <- access | cond | loop | block | fn | compoundLit | strlit | charlit
+
+cond <- if | when
+if <- 'if' ifCond block { 'elif' ifCond block } [ 'else' block ] ['finally' block ]
+ifCond <- binExpr_1 [ '->' unspecBind ]
+when <- 'when' isCond block { isCond block } { 'else' block } { 'finally' block }
+isCond <- 'is' [any_binop | 'not'] expr [ '->' unspecBind ]
+
+(: TODO: dowhile and dountil versions
+loop <- infLoop | while | for | until
+infLoop <- 'loop' [ '->' unspecBind ] block
+while <- ( 'while' | 'until' ) expr [ '->' unspecBind [ ',' unspecBind ] ] block [ 'finally' block ]
+for <- 'while' expr [ '->' unspecBind [ ',' unspecBind ] ] block [ 'finally' block ]
+
+(: If a fn's return bind has no init expr, it's just a fn type
+fn <- fnType [ '=' expr ]
+fnType <- 'fn' [unspecBind {',' unspecBind}] '->' unspecBind
+
+(: Tuple or symbol, optional function call (looks like tuple), then swizzle on that
+access <- ( tuple | symbol ) [ tuple ] { '.' swizzle }
+tuple <- '(' expr {',' expr} ')'
+(: '.*' and '.&' are shorter alternatives for '.addr' and '.deref'
+swizzle <- symbol [ tuple ] | '(' access {',' access} ')' | '*' | '&'
+
+compoundLit <- '[' [ ':' expr  ':' ] [ structLitSpec | expr {',' (structLitSpec | expr)} ] ']'
+(: '=' is optional because of the new .existingVar syntax
+structLitSpec <- '.' symbol [ '=' expr]
+
+strlit <- '"' {charOrEscape} '"' | multStrlit
+(: Note the space after '\\'
+multStrlit <- '\\ ' {anythingButNewline} newline {multStrlit}
+
+charlit <- singleQuote charOrEscape singleQuote
