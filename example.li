@@ -1,6 +1,1 @@
-let x: u32 = 0
-let ar: array(10, u32)
-let name: str = "Johnathan Lee"
-let otherName: slice const u8 = "Darrion Oakenbow"
-
-let mean: enum (Breakfast, Lunch, Dinner)
+let Meal = enum(Breakfast, Lunch, Supper)
