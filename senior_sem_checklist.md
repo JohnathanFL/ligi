@@ -8,5 +8,5 @@ The following is a checklist of things to be done in this repo for senior semina
 - [x] Basic comptime evaluator
   - Absolute basics are in place, but a little more work is needed before I can
     consider it *completely* checked off (comptime math evaluation).
-- [ ] Basic comptime evaluator communicates with Ligujo
-  - All that's missing is the HTTP requests in Ligi itself.
+- [x] Basic comptime evaluator communicates with Ligujo
+  - Currently only supports enum shorthand evaluation.
