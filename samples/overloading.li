@@ -98,3 +98,24 @@ _ = add(1, 2)
 (: This would be useful e.g to easily bring multiple functions into scope with the same name:
 let foo = overload(bar.foo, baz.foo)
 (: However this would require removing the ability to .index overloads, as these wouldn't be named
+
+
+
+(: Possible feature: Overload constraints
+(: Emphasis possible
+(: Essentially, the first overload block would introduce a constrain function like so:
+let my_func = overload {
+  (: Thus, if this function either fails an assert, its argument func cannot be added
+  (: func is the func to be added
+  let constraint* = pure fn func -> void = {
+    assert func.@type.FuncInfo.argc < 3
+  }
+}
+
+(: OK: Arg count is < 3
+my_func += pure fn -> void = printf("Hey")
+(: ERROR when adding function to overload: Failed constraint assertion ...
+my_func += pure fn a, b, c, d -> void = printf("Womp womp")
+
+(: This feature can be used e.g to constrain overloads for Add/For/etc to make sure they're
+(: pure/taking functions/etc
