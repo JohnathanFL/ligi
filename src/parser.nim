@@ -212,6 +212,12 @@ proc parseAtom(self: var Parser): Callable =
       # (expr, expr,...): A normal tuple
     let pos = match(Tag.LParen).pos
     var children: seq[Expr] = @[]
+
+    var ty: Expr = nil
+    if tryMatch Tag.Separator:
+      ty = self.parseBinLevel(below Assignment)
+      discard match Tag.Separator
+    
     # Thus Tuple(children=[]) is valid (null tuple)
     while not nextIs Tag.RParen:
       children.add self.parseBinLevel(below Assignment)
@@ -219,7 +225,7 @@ proc parseAtom(self: var Parser): Callable =
       if not tryMatch Tag.Comma: break
     discard match Tag.RParen
     if children.len == 0: return NillTup(pos: pos)
-    else: return Tuple(pos: pos, children: children)
+    else: return Tuple(pos: pos, ty: ty, children: children)
   else:
     let atom = match Atoms
     case atom.tag:

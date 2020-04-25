@@ -33,7 +33,7 @@ const UnaryOps*: set[Tag] = {
   Tag.Sub, Tag.BitNot, Tag.Not,
   Tag.Const, Tag.Comptime, # Used for type expressions
   Tag.Array, Tag.Slice, Tag.Optional,
-  Tag.Pure, Tag.Inline, Tag.Struct, Tag.Enum, Tag.Overload,
+  Tag.Pure, Tag.Inline, Tag.Struct, Tag.Enum, Tag.Overload, Tag.Property,
   # As pointer
   Tag.Mul
 }
@@ -41,7 +41,7 @@ const UnaryOps*: set[Tag] = {
 const CallOps*: set[Tag] = { Tag.LParen, Tag.LBracket }
 
 const BindSpecs*: set[Tag] = {
-  Tag.Let, Tag.Var, Tag.CVar, Tag.Field, Tag.Property, Tag.Enum
+  Tag.Let, Tag.Var, Tag.CVar, Tag.Field, Tag.Enum
 }
 
 # Note that tuples are technically atoms, though they aren't included here

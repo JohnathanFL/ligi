@@ -96,7 +96,12 @@ method prettyPrint*(self: ArrayLit) =
 
 method prettyPrint*(self: Tuple) =
   pecho "Tuple", self.pos
-  becho: prettyPrint self.children
+  becho:
+    if self.ty != nil:
+      pecho ":"
+      prettyPrint self.ty
+      pecho ":"
+    prettyPrint self.children
 method prettyPrint*(self: Atom) =
   quit "HIT BASE ATOM" & $self.pos
 proc prettyPrint*(self: Call) =

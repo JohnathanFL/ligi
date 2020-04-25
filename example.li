@@ -1,1 +1,15 @@
+-- Comment test
+var a = 1 - 2 -- test
+a -= -- Test2
+12
+
 let Meal = enum(Breakfast, Lunch, Supper)
+
+let Vec2 = (f32, f32) + struct {
+  let lenSqr = property pure fn (x: f32, y: f32) -> lenSqr = (x*x + y*y)
+  let len = property pure fn self: @This -> len = @sqrt(self.lenSqr)
+}
+
+let x = (:Vec2: 1, 1)
+assert x.lenSqr == 2
+assert x.len == @sqrt(2)

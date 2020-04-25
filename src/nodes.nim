@@ -44,6 +44,7 @@ type
   Callable* = ref object of Expr
     call*: Call
   Tuple* = ref object of Callable
+    ty*: Expr #? The type we're casting this tuple to
     children*: seq[Expr]
   Atom* = ref object of Callable
   Sink* = ref object of Atom
