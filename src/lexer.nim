@@ -42,21 +42,10 @@ template match(c: char) =
 # TODO: In order to properly do this, I'll need 2-char lookahead
 # Otherwise a line string lit followed by a '(' will discard the original stringlit
 # Must be a template so the LParen can be returned
-template skip(self: var Lexer) =
-  var doneSkipping = false
-  while not doneSkipping: # Whitespace and comments
-    doneSkipping = true
-    while self.cur in Whitespace: discard self.advance()
-    let pos = self.pos # in case we have a Tag.LParen
-    if nextIs '(':
-      discard self.advance()
-      if nextIs ':':
-        doneSkipping = false
-        while nextChar() != '\n': discard self.advance()
-      else: # Oopsie! We just consumed a Tag.LParen. Better rectify that.
-        return Token(pos: pos, tag: Tag.LParen)
+template skipWhitespace() =
+  while self.cur in Whitespace: discard self.advance()
 proc scan*(self: var Lexer): Token =
-  self.skip() # comments/whitespace
+  skipWhitespace
   let pos = self.pos
   if nextChar() in ValidSymbolBeginnings: # Symbol or keyword
     var lexeme = ""
@@ -101,7 +90,7 @@ proc scan*(self: var Lexer): Token =
       match ' '
       while not nextIs '\n': lexeme &= self.advance()
       match '\n'
-      self.skip()
+      skipWhitespace
       if nextIs '\\': lexeme &= '\n'
     return Token(pos: pos, tag: StringLit, lexeme: lexeme)
   # Begin operator parsing
@@ -138,6 +127,9 @@ proc scan*(self: var Lexer): Token =
         elif nextIs '>':
           discard self.advance()
           ret Tag.StoreIn
+        elif nextIs '-': # Comment
+          while not nextIs '\n': discard self.advance()
+          return self.scan()
         else: ret Tag.Sub
       of '*':
         if nextIs '=':
