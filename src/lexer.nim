@@ -1,5 +1,6 @@
 import streams
 import strutils
+import strformat
 
 import tags
 import tokens
@@ -47,23 +48,19 @@ template skipWhitespace() =
 proc scan*(self: var Lexer): Token =
   skipWhitespace
   let pos = self.pos
-  if nextChar() in ValidSymbolBeginnings: # Symbol or keyword
+  if nextChar() in ValidSymbolChars: # Symbol or keyword
     var lexeme = ""
-    while nextChar() in ValidSymbolChars: lexeme &= self.advance()
+    var onlyDigits = true
+    while nextChar() in ValidSymbolChars:
+      if nextChar() notin '0'..'9': onlyDigits = false
+      lexeme &= self.advance()
 
-    const words: set[Tag] = {
-      Alias, And, Array, Assert, Break, Comptime, Const, CVar, Until, ElIf, Else, Enum,
-      Field, Finally, Fn, For, If, In, NotIn, Inline, Let, Loop, Not, NullLit, Property,
-      Pure, Return, Tag.Slice, Struct, Test, Undef, Use, Var, Void, While, Xor, Sink, Overload
-    }
-    for word in words:
-      if $word == lexeme:
-        return Token(pos: pos, tag: word)
-    return Token(pos: pos, tag: Symbol, lexeme: lexeme)
-  elif nextChar() in Digits: # IntLit
-    var lexeme = ""
-    while nextChar() in Digits: lexeme &= self.advance()
-    return Token(pos: pos, tag: IntLit, val: lexeme.parseInt.uint)
+    if onlyDigits: return Token(pos: pos, tag: IntLit, val: lexeme.parseUInt())
+    else:
+      for word in Words:
+        if $word == lexeme:
+          return Token(pos: pos, tag: word)
+      return Token(pos: pos, tag: Symbol, lexeme: lexeme)
   elif nextIs  '`': # Label
     var lexeme = $self.advance()
     while nextChar() in ValidSymbolChars: lexeme &= self.advance()
@@ -165,4 +162,4 @@ proc scan*(self: var Lexer): Token =
           discard self.advance()
           ret Tag.NotEqual
         else: quit $pos & "The only thing that can follow a ! is an ="
-      else: quit "UNEXPECTED CHARACTER AT " & $self.pos
+      else: quit fmt"UNEXPECTED CHARACTER ({cur}) AT {self.pos}"

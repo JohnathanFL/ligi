@@ -27,7 +27,11 @@ const BinOps*: array[BinLevel, set[Tag]] = [
   {Tag.BitOr, Tag.BitAnd, Tag.BitXor},
 ]
 
-  
+const Words*: set[Tag] = {
+  Alias, And, Array, Assert, Break, Comptime, Const, CVar, Until, ElIf, Else, Enum,
+  Field, Finally, Fn, For, If, In, NotIn, Inline, Let, Loop, Not, NullLit, Property,
+  Pure, Return, Tag.Slice, Struct, Test, Undef, Use, Var, Void, While, Xor, Sink, Overload
+}
 
 const UnaryOps*: set[Tag] = {
   Tag.Sub, Tag.BitNot, Tag.Not,
@@ -61,8 +65,10 @@ const ValidSwizzles*: set[Tag] = {
   Tag.Symbol, Tag.IntLit
 }
 
-const ValidSymbolBeginnings*: set[char] = {'_', '@'} + Letters
-const ValidSymbolChars*: set[char] = ValidSymbolBeginnings + Digits
+# Another stroke of insanity: I now parse integers and symbols the same, and just
+# keep track of whether there was anything other than digits inside it.
+# Thus `10th` is a valid symbol, while `10` still parses as an IntLit
+const ValidSymbolChars*: set[char] = {'_', '@'} + Letters + Digits
 # A stroke of insanity: I'll now parse float lits as field accesses into ints
 
 type
