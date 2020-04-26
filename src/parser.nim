@@ -214,11 +214,12 @@ proc parseAtom(self: var Parser): Callable =
     var children: seq[Expr] = @[]
 
     var ty: Expr = nil
-    if tryMatch Tag.Separator:
+    if nextIs Tag.Separator:
+      let pos = match(Tag.Separator).pos
       ty = self.parseBinLevel(below Assignment)
       if not nextIs Tag.Separator:
         discard match Tag.Comma
-        var tyTup = Tuple(children: @[ty])
+        var tyTup = Tuple(pos: pos, children: @[ty])
         ty = tyTup
         while not nextIs Tag.Separator:
           tyTup.children.add self.parseBinLevel(below Assignment)
