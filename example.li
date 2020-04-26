@@ -3,6 +3,8 @@ var a = 1 - 2 -- test
 a -= -- Test2
 12
 
+var 1stvar
+
 let Meal = enum(Breakfast, Lunch, Supper)
 
 let Vec2 = (f32, f32) + struct {
@@ -13,3 +15,6 @@ let Vec2 = (f32, f32) + struct {
 let x = (:Vec2: 1, 1)
 assert x.lenSqr == 2
 assert x.len == @sqrt(2)
+
+
+let tup = (:usize, isize, f32: 1, 2, 3)

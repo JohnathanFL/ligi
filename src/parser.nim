@@ -216,6 +216,13 @@ proc parseAtom(self: var Parser): Callable =
     var ty: Expr = nil
     if tryMatch Tag.Separator:
       ty = self.parseBinLevel(below Assignment)
+      if not nextIs Tag.Separator:
+        discard match Tag.Comma
+        var tyTup = Tuple(children: @[ty])
+        ty = tyTup
+        while not nextIs Tag.Separator:
+          tyTup.children.add self.parseBinLevel(below Assignment)
+          if not tryMatch Tag.Comma: break
       discard match Tag.Separator
     
     # Thus Tuple(children=[]) is valid (null tuple)
