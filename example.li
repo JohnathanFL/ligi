@@ -18,3 +18,7 @@ assert x.len == @sqrt(2)
 
 
 let tup = (:usize, isize, f32: 1, 2, 3)
+let tup2 = (:(usize, isize, f32): 1, 2, 3)
+
+assert tup == tup2
+assert tup.@type == tup2.@type
