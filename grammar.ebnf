@@ -1,17 +1,22 @@
-(: This file follows this format:
-  (: `(:` denotes a comment
-  (: word '<-' denotes a rule
-  (: '[]' is 0 or 1
-  (: '{}' is 0 or more
-  (: '|' is alternatives
-  (: '()' is just for grouping things for alternatives
-  (: In cases where things cannot be easily described by EBNF, it is described in English
+-- This file follows this format:
+  -- `--` denotes a comment
+  -- word '<-' denotes a rule
+  -- '[]' is 0 or 1
+  -- '{}' is 0 or more
+  -- '|' is alternatives
+  -- '()' is just for grouping things for alternatives
+  -- In cases where things cannot be easily described by EBNF, it is described in English
 
-(: Note this means that technically, 1s is still a symbol
-(: As is '1' itself
-(: This is part of my plan to allow names like '1s', and to simply match numbers/constants
-(: based on regexes
+-- Note this means that technically, 1s is still a symbol
+-- As is '1' itself
+-- This is part of my plan to allow names like '1s', and to simply match numbers/constants
+-- based on regexes
+-- The grammar won't actually care about symbols vs intlits, so we don't need to specify it here.
+-- Additionally, since "float literals" are really just "field accesses on an int", we can
+-- also ignore specifying them.
 symbol <- alphanum{alphanum}
+
+prog <- { stmt [';'] }
 
 block <- [ label ] '{' { stmt [';'] } '}'
 label <- '`'symbol
@@ -20,19 +25,22 @@ stmt <- assert | break | return | bind | assign | defer
 
 defer <- 'defer' assign
 assert <- 'assert' expr
-break <- 'break' [ label | label expr ]
+break <- 'break' [label [',' expr ]]
 return <- 'return' [ expr ]
 
-bind <- ('let' | 'var' | 'cvar' | 'field' | 'enum') unspecBind ['=' expr]
+bind <-  unspecBind ['=' expr]
+spec <- 'let'|'var'|'cvar'|'field'|'enum'
 unspecBind <- tupleBind | locBind
-tupleBind <- '(' unspecBind { ',' unspecBind } ')'
-locBind <- (symbol [accessSpec] | '_' | 'void') [ ':' expr ]
-(: Private, readonly, and public, respectively
+tupleBind <- '('unspecBind{','unspecBind}')'
+locBind <- loc [ ':' expr ]
+loc <- symbol [accessSpec] | '_' | 'void'
 accessSpec <- '-' | '*' | '+'
 
 
 assign <- expr [ assignOp expr ]
 assignOp <- '=' | '+=' | '-=' | '*=' | '/=' | '|=' | '&=' | '<<=' | '>>='
+
+expr <- binExpr_1
 
 binExpr_1 <- binExpr_2 [ binop_1 binExpr_2 ]
 binop_1 <- '==' | '!='
@@ -75,28 +83,30 @@ ifCond <- binExpr_1 [ '->' unspecBind ]
 when <- 'when' isCond block { isCond block } { 'else' block } { 'finally' block }
 isCond <- 'is' [any_binop | 'not'] expr [ '->' unspecBind ]
 
-(: TODO: dowhile and dountil versions
 loop <- infLoop | while | for | until
 infLoop <- 'loop' [ '->' unspecBind ] block
 while <- ( 'while' | 'until' ) expr [ '->' unspecBind [ ',' unspecBind ] ] block [ 'finally' block ]
 for <- 'while' expr [ '->' unspecBind [ ',' unspecBind ] ] block [ 'finally' block ]
 
-(: If a fn's return bind has no init expr, it's just a fn type
+-- If a fn's return bind has no init expr, it's just a fn type
 fn <- fnType [ '=' expr ]
 fnType <- 'fn' [unspecBind {',' unspecBind}] '->' unspecBind
 
-(: Tuple or symbol, optional function call (looks like tuple), then swizzle on that
-access <- ( tuple | symbol ) [ tuple ] { '.' swizzle }
+-- Tuple or symbol, optional function call (looks like tuple), then swizzle on that
+access <- ( tuple | symbol ) [ call ] { '.' swizzle }
 tuple <- '(' expr {',' expr} ')'
-(: '.*' and '.&' are shorter alternatives for '.addr' and '.deref'
+-- '.*' and '.&' are shorter alternatives for '.addr' and '.deref'
 swizzle <- symbol [ tuple ] | '(' access {',' access} ')' | '*' | '&'
+call <- '(' expr {',' expr} ')' | '[' expr {',' expr} ']'
 
-compoundLit <- '[' [ ':' expr  ':' ] [ structLitSpec | expr {',' (structLitSpec | expr)} ] ']'
-(: '=' is optional because of the new .existingVar syntax
-structLitSpec <- '.' symbol [ '=' expr]
+compoundLit <- '[' type_des members ']'
+type_des <- [':' expr ':']
+members <- struct_members | array_members
+struct_members <- [ '.' name '=' expr ] {',' struct_members}
+array_members <- [expr] {',' expr}
 
-strlit <- '"' {charOrEscape} '"' | multStrlit
-(: Note the space after '\\'
+strlit <- '"' {char} '"' | multStrlit
+-- Note the space after '\\'
 multStrlit <- '\\ ' {anythingButNewline} newline {multStrlit}
 
 charlit <- singleQuote charOrEscape singleQuote
