@@ -1,62 +1,62 @@
-(: This is to document stuff relating to Async and general threading
+-- This is to document stuff relating to Async and general threading
 
 
-(: Basics
+-- Basics
 
 let i: volatile usize = 10
-(: 'volatile' is a volatile operator in that it doesn't stick around on re-assigns
+-- 'volatile' is a volatile operator in that it doesn't stick around on re-assigns
 assert i.@type == volatile usize
 let j = i
 assert j.@type == usize
-(: This is so we're marking the location itself as volatile, not the value inside
-(: Note that this doesn't affect things inside a pointer or slice
+-- This is so we're marking the location itself as volatile, not the value inside
+-- Note that this doesn't affect things inside a pointer or slice
 let ptr: volatile* volatile usize = i.&
 let ptr2 = ptr
 assert ptr2.@type == *volatile usize
-(: I do, however plan to make it strip inside arrays, as they're value types
+-- I do, however plan to make it strip inside arrays, as they're value types
 let ar: array volatile usize = [10, 20, 30, 40]
-let ar2 = ar (: Array assignment copies. If you want a reference, use slices
+let ar2 = ar -- Array assignment copies. If you want a reference, use slices
 assert ar2.@type == array usize
-(: Once again, it sticks to the location not the value
+-- Once again, it sticks to the location not the value
 
 
-(: Like volatile, I plan to make `atomic` an operator
+-- Like volatile, I plan to make `atomic` an operator
 let semaphore: atomic usize = 10
-(: Like volatile, `atomic` is sticky to the location, not the value
+-- Like volatile, `atomic` is sticky to the location, not the value
 
 
-(: Coroutines
-(: Note that I have much to learn in this area. This may look like chicken scratchings.
+-- Coroutines
+-- Note that I have much to learn in this area. This may look like chicken scratchings.
 
-(: If you're looking for a generator, just make a struct with an overloaded @for.
-(: These coroutines are purely for cooperative *scheduling*
-(: Coroutines take parameters once, then may suspend any number of times before returning a value once
+-- If you're looking for a generator, just make a struct with an overloaded @for.
+-- These coroutines are purely for cooperative *scheduling*
+-- Coroutines take parameters once, then may suspend any number of times before returning a value once
 
-(: I plan to basically follow Zig's lead
+-- I plan to basically follow Zig's lead
 
 
-(: Functions are mostly declared as normal
-  (: A function declaration that's async'd (i.e `async fn ...`) may only be called as async
-  (: Any function may have `suspend` statements inside
-  (: Suspend statements are ignored if not invoked as async
-  (: Functions with suspend are compiled as FSMs
-(: Asyncing a function call
-  (: returns a stack frame struct for that function.
-  (: Runs the function until its first suspend
-(: You can get the type of a function's frame with function.frame
-  (: This frame may be called with .resume() to resume it
-  (: The frame may be canceled with .cancel()
-    (: Calls any pending defers
-  (: The result location is exposed as '.val', and whether it's ready is '.done'
-    (: I originally wanted to expose the actual location, but that doesn't allow void functions
-  (: When an async'd function returns a value, .val is valid and .done is true
-  (: You can access interior variables according to normal struct access rules
-  (: you can .await() to run until the end and get the result in one call
-  (: Thus in summary, async functions may not make public binds named:
-    (: done
-    (: cancel
-    (: resume
-    (: val
+-- Functions are mostly declared as normal
+  -- A function declaration that's async'd (i.e `async fn ...`) may only be called as async
+  -- Any function may have `suspend` statements inside
+  -- Suspend statements are ignored if not invoked as async
+  -- Functions with suspend are compiled as FSMs
+-- Asyncing a function call
+  -- returns a stack frame struct for that function.
+  -- Runs the function until its first suspend
+-- You can get the type of a function's frame with function.frame
+  -- This frame may be called with .resume() to resume it
+  -- The frame may be canceled with .cancel()
+    -- Calls any pending defers
+  -- The result location is exposed as '.val', and whether it's ready is '.done'
+    -- I originally wanted to expose the actual location, but that doesn't allow void functions
+  -- When an async'd function returns a value, .val is valid and .done is true
+  -- You can access interior variables according to normal struct access rules
+  -- you can .await() to run until the end and get the result in one call
+  -- Thus in summary, async functions may not make public binds named:
+    -- done
+    -- cancel
+    -- resume
+    -- val
 
 let get_resource = fn resID:str -> res = {
   var estTime+ = 10.0
@@ -68,7 +68,7 @@ let get_resource = fn resID:str -> res = {
   }
 }
 
-{ (: Purely blocking call
+{ -- Purely blocking call
   let res = get_resource("https://example.com/my_resource")
 }
 {
@@ -80,20 +80,20 @@ let get_resource = fn resID:str -> res = {
   var resFrame = async get_resource("https://example.com/slow_resource")
   while not resFrame.done -> _ {
     if resFrame.estTime > 15.0 {
-      (: Takes too long, we don't want it anymore
+      -- Takes too long, we don't want it anymore
       resFrame.cancel() = true
       break
     }
-    (: Do other stuff
-    (: ...
+    -- Do other stuff
+    -- ...
     resFrame.resume()
   }
 }
 
-(: You could also use the frame itself as a variable
-(: Here's a lexer for the expression A + B - C + A implemented as a single function
-(: Function types can also be annotated with async to specify that they must be asynced
-(: This is intended for things like this lexer, which simply should never be non-asynced
+-- You could also use the frame itself as a variable
+-- Here's a lexer for the expression A + B - C + A implemented as a single function
+-- Function types can also be annotated with async to specify that they must be asynced
+-- This is intended for things like this lexer, which simply should never be non-asynced
 let lex = fn input -> void = {
   let Token = enum {
     enum Var: char
@@ -103,14 +103,14 @@ let lex = fn input -> void = {
   while not input.is_eof() {
     let cur = input.next_char()
 
-    (: Using the current when structure proposal
+    -- Using the current when structure proposal
     curTok = when cur
       is in ('A', 'B', 'B') { #Var(cur) }
       is '+' { #Add }
       is '-' { #Sub }
       else { return }
-      (: As a side note, doesn't that read nice?
-      (: 'curTok is, when cur is in the set {A, B, C}, a Var of cur. when cur is +, it is Add, etc
+      -- As a side note, doesn't that read nice?
+      -- 'curTok is, when cur is in the set {A, B, C}, a Var of cur. when cur is +, it is Add, etc
     
      suspend 
   } finally {
@@ -124,17 +124,17 @@ while not lexer.done {
   lexer()
 }
 
-(: This essentially allows a way of making a shorthand struct/FSM
+-- This essentially allows a way of making a shorthand struct/FSM
 
-(: Note that the above would probably be better as an @for
+-- Note that the above would probably be better as an @for
 
-(: Considerations
-  (: Should we go with Zig's `resume frame` syntax to make things clearer?
-  (: Should @fors be transformed into async functions?
+-- Considerations
+  -- Should we go with Zig's `resume frame` syntax to make things clearer?
+  -- Should @fors be transformed into async functions?
 
 
 
-(: Multithreading
-(: I'm thinking of restricting passing pointers/slices across thread boundaries to only when
-(: the inner type is volatile/atomic (and maybe introducing an unsafe keyword to force it)
+-- Multithreading
+-- I'm thinking of restricting passing pointers/slices across thread boundaries to only when
+-- the inner type is volatile/atomic (and maybe introducing an unsafe keyword to force it)
 

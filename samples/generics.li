@@ -1,44 +1,44 @@
-(: Ligi is a statically typed language.
-(: You can, however, make functions that take arguments of any type
+-- Ligi is a statically typed language.
+-- You can, however, make functions that take arguments of any type
 
 let add = pure fn a: undef, b: undef -> c: undef = a + b
 _ = add(1, 2)
 _ = add(1.0, 2.0)
 _ = add(-100, 10)
 
-(: You can also get the concrete type used to call the function
+-- You can also get the concrete type used to call the function
 let foo = fn arg: undef -> void = {
   printf("arg's type was {0}", arg.@type)
 }
-foo(10) (:= arg's type was usize
-foo(10.0) (:= arg's type was f64
-foo(true) (: arg's type was bool
-foo("Hey") (: arg's type was slice const u8
+foo(10) --= arg's type was usize
+foo(10.0) --= arg's type was f64
+foo(true) -- arg's type was bool
+foo("Hey") -- arg's type was slice const u8
 
-(: You can also place restraints on generic args
-(: Also note that rightmost untyped arguments are undef by default, as well as untyped retvals
+-- You can also place restraints on generic args
+-- Also note that rightmost untyped arguments are undef by default, as well as untyped retvals
 let adder = pure fn a, b -> c = {
-  (: Only allows adder to be used with floats
+  -- Only allows adder to be used with floats
   assert (a,b).@type in (f32, f64)
   a + b
 }
 
-(: ERROR: "usize" is not in ("f32", "f64")
-(: adder(10, 20)
-(: OK
+-- ERROR: "usize" is not in ("f32", "f64")
+-- adder(10, 20)
+-- OK
 _ = adder(10.0, 20.0)
-(: Note that above, type coercions break down
-(: This may be able to be fixed, but I don't know.
+-- Note that above, type coercions break down
+-- This may be able to be fixed, but I don't know.
 
 
-(: Note that a generic function, like a function that takes comptime args, cannot be extern
-(: ERROR: extern function cannot have undef argument types
-(: let myFunc = extern fn a, b -> c {}
+-- Note that a generic function, like a function that takes comptime args, cannot be extern
+-- ERROR: extern function cannot have undef argument types
+-- let myFunc = extern fn a, b -> c {}
 
-(: You can, however, make a generic function concrete and export that
-(: Also note the need for parentheses around the function type, as functions use retval= in their definition
+-- You can, however, make a generic function concrete and export that
+-- Also note the need for parentheses around the function type, as functions use retval= in their definition
 let myAdder: extern (fn _:f32, _:f32 ->_:f32) = adder
-(: or
+-- or
 let myAdder2 = @as(extern fn _:f32, _:f32 -> _:f32, adder)
-(: or
+-- or
 let myAdder3 = adder.@as(extern fn _:f32, _:f32 -> _:f32)

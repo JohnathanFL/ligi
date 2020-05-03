@@ -1,0 +1,66 @@
+-- This is to begin specifying Ligi's planned JIT features
+
+-- Note: I know I may just be gettin' too big for my britches on this, but aim for the moon
+-- even if you miss you too can suffocate endlessly within the disapointment of the void
+
+-- In a nutshell, Ligi's compiler will eventually itself be written in Ligi.
+-- Since the JIT library will be able to parse/execute Ligi, the "compiler" will really
+-- just be a wrapper over the JIT library that can spit out the JIT-d code as an executable
+
+-- The JIT part will be part of the builtin module
+---- You will be able to disable it for a module with a jit option
+let builtin = @module[#Builtin]
+let jit = builtin.jit
+
+
+-- The following is just a brainstorming interface. It is by no means the final interface.
+---- jit.lex: Create an iterator that reads a #File or #String and returns tokens
+---- jit.parse: Take an iterator of tokens and parse it into an AST
+---- jit.eval: Take an AST and perform compiletime evaluation and some options in an array
+------ #NoJIT: Disable the JIT when evaluating, for security reasons
+------ Resolves types, etc. This produces something ready for code generation
+---- jit.compile: Take an eval'd AST compile it to be able to run it, producing a `Lib` object
+------ Also takes an array of options, including #NoJIT, which makes sure that module isn't
+------ compiled with builtin.jit support, for reasons of either security or executable size
+---- Lib.execute:
+------ .execute(func, args, comptime type): Find the exported function named "func", execute it
+------   with "args", and return the result which must be of type `type`
+---- Lib.get:
+------ .get(symbol, type): Get the symbol as a type
+------ .get(symbol): Get the symbol and its type as a tuple
+---- Lib.output(location, type): Output the JIT'd code in one of the following types:
+------ #Executable(main): `main` is a string for the symbol of the main function
+------ #DynLib: A dynamic library (.dll/etc)
+------ #StaticLib: A static library
+
+-- Using the `using` proposal as each of these dynamically allocates and needs to be cleaned up
+-- Assuming each of these has no errors (.Ok)
+using var
+  -- Since the initialized value of a bind is available in *all* subsequent binds
+  lexer = jit.lex(#String("let msaaLevel = #2x")).Ok,
+  ast = jit.parse(lexer).Ok,
+  evalAst = jit.eval(ast, [#NoJIT]).Ok -- Do a compiletime evaluation only. That's enough for a cfg
+
+
+let msaaLevel = evalAst.get("msaaLevel", anyenum)
+-- Since anyenums are resolved by hash, we don't have to worry about making sure their values
+-- match up since they're just reproducible hashes
+assert msaaLevel == #2x
+
+
+-- Doing things like this would make it stupidly simple to:
+---- Dogfood Ligi in the compiler. It enforces the idea that Ligi treats code as just more data
+---- Make the compiler extensible. Just let the compiler JIT some code and add it to itself
+------ Want a new target platform to compile for? Just write a module that compiles the AST to that
+------ target ASM/whatever and tell the compiler to JIT it.
+---- Allow Ligi applications to be scripted *in Ligi*.
+------ This also makes Ligi the best config language for Ligi, as you can .eval a conf file.
+------ Since it's all Ligi, there's no setup for data binding between JIT'd code and the main exe
+
+
+-- Issues:
+---- Security implications of allowing code to arbitrarily JIT more code
+------ I think this is mostly solved with the #NoJIT, but we could introduce more options to
+------ restrict what JIT'd code is allowed to do.
+---- Size of binaries produced with a full compiler built into them
+---- 

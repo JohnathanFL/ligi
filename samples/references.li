@@ -1,6 +1,6 @@
-(: This is to document my proposed reference style
+-- This is to document my proposed reference style
 
-(: Currently, Ligi requires you to pass around pointers:
+-- Currently, Ligi requires you to pass around pointers:
 let MyArray = struct {
   field data: slice usize
   let at = pure fn self:*@This, i:usize -> el:*usize = self.data[i].&
@@ -14,37 +14,37 @@ assert el1.* == 1
 el1.* = 2
 assert el1.* == 2
 
-(: The constant .&/.* is somewhat combersome
-(: This proposal would change things as such:
+-- The constant .&/.* is somewhat combersome
+-- This proposal would change things as such:
 
 
-(: A new modifier, 'ref':
+-- A new modifier, 'ref':
 let MyRefArray = struct {
   field data: slice usize
-  (: Note that we can now change our self:@This arguments to use `ref`
-    (: when we want to mutate ourself.
-    (: Note that a simple `self:@This` allows no mutation and may be ref or value
-    (: This isn't required. If you're just doing self.xxx there's no difference
-  (: Note you still have to initialize a ref using a pointer
+  -- Note that we can now change our self:@This arguments to use `ref`
+    -- when we want to mutate ourself.
+    -- Note that a simple `self:@This` allows no mutation and may be ref or value
+    -- This isn't required. If you're just doing self.xxx there's no difference
+  -- Note you still have to initialize a ref using a pointer
   let at = pure fn self: ref @This, i:usize -> el: ref usize = self.data[i].&
 }
 
 var data2 = [0, 1, 2, 3, 4, 5]
 var ar2 = [:MyRefArray: .data = data2]
 
-(: Up to here it's basically all the same. The difference comes when it's actually used:
+-- Up to here it's basically all the same. The difference comes when it's actually used:
 var el2 = ar2.at(2)
 assert el2 == 2
 el2 = 99
 assert el2 == 99
 assert data2[2] == 99
 
-(: So in short
-  (: `ref`s are nothing but pointers with a bit of sugar over top
-  (: `ref`s get explicitly initialized by a pointer
-    (: Makes the intent clear
-    (: After a `ref T` has been initialized, it is interacted with **as if it were a `T`**
-      (: If you assign a `T` to a `ref T` after it has been initialized, it replaces the end value
-      (: Thus a `ref T` may only ever point to 1 distinct `T` in its lifetime
-  (: There's no way to create a `ref T` without specifying the type (i.e no inference)
-    (: Makes the intent very clear. No gotchas because you didn't know it would be a ref
+-- So in short
+  -- `ref`s are nothing but pointers with a bit of sugar over top
+  -- `ref`s get explicitly initialized by a pointer
+    -- Makes the intent clear
+    -- After a `ref T` has been initialized, it is interacted with **as if it were a `T`**
+      -- If you assign a `T` to a `ref T` after it has been initialized, it replaces the end value
+      -- Thus a `ref T` may only ever point to 1 distinct `T` in its lifetime
+  -- There's no way to create a `ref T` without specifying the type (i.e no inference)
+    -- Makes the intent very clear. No gotchas because you didn't know it would be a ref

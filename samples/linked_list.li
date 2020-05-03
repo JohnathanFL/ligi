@@ -1,11 +1,11 @@
-(: Example of a LinkedList in Ligi
+-- Example of a LinkedList in Ligi
 
 let LinkedList = pure fn T: type -> list: type = struct {
   field next: ?*@This
   field data: T
 
   let len = property {
-    (: This particular function relies on the orelse syntax proposal
+    -- This particular function relies on the orelse syntax proposal
     let get* = pure fn self: @This -> len = 1 + (self.next.len orelse 0)
   }
 
@@ -17,7 +17,7 @@ let LinkedList = pure fn T: type -> list: type = struct {
     if self.next -> var next {
       next.push(val)
     } else {
-      (: Just assuming we have a standard C-style malloc function
+      -- Just assuming we have a standard C-style malloc function
       self.next = malloc(@This.@size)
       self.next.val.deref = [
         .next = null,

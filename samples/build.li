@@ -48,8 +48,8 @@ let install* = fn -> void = {}
 -- Link dependencies are added by adding the depends array
 -- This essentially becomes the @modules builtin.
 -- For now, we'll assume a PKGBUILD `source=` style thing.
--- The enum values are, in order:
----- What we'll call this module within our project (must be unique)
+-- The values are, in order:
+---- What we'll call this module within our project (an anyenum, must be unique)
 ---- How we'll link to it
 ------ One of #Static, #Dynamic, #Present
 -------- #Present would be for tools and the like. You don't link it, but it needs to be *present*

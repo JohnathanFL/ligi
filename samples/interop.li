@@ -1,39 +1,39 @@
-(: This is to document general Ligi<->C interop things
+-- This is to document general Ligi<->C interop things
 
-(: To import a specific function without the header:
-  (: extern stringLit
+-- To import a specific function without the header:
+  -- extern stringLit
 let printf = extern "printf"
-(: Technically this is fine as is. The compiler will resolve the type when it
-(: looks as what we link against. However, it's better to do this so we have the type:
-(: (Remember that str is C-compatible.)
+-- Technically this is fine as is. The compiler will resolve the type when it
+-- looks as what we link against. However, it's better to do this so we have the type:
+-- (Remember that str is C-compatible.)
 let printf: (extern fn fmt: str, args: varargs -> void) = extern "printf"
 
 
-(: `extern` is a very versatile keyword. Here are the ways to use it:
-  (: extern string: Import something from all symbols linked into this binary (fn or var)
-  (: extern fn...: Make a function have C-linkage
-    (: Note that if the default args proposal passes, they won't carry into extern functions
-  (: extern struct...: Make a struct have C-layout (recursively)
-    (: Properties not exported
-  (: extern enum...: Make an enum have C-semantics
-    (: If none of the tags contains a value, it becomes only an enum
-    (: If a tag contains a value, it is an enum + union
-    (: Properties not exported
-  (: extern <type>: Make an extern-ized version of a type
-    (: Removes properties
-    (: Recursive
-    (: May not be used on ints other than {u,i}{8,16,32,64}
+-- `extern` is a very versatile keyword. Here are the ways to use it:
+  -- extern string: Import something from all symbols linked into this binary (fn or var)
+  -- extern fn...: Make a function have C-linkage
+    -- Note that if the default args proposal passes, they won't carry into extern functions
+  -- extern struct...: Make a struct have C-layout (recursively)
+    -- Properties not exported
+  -- extern enum...: Make an enum have C-semantics
+    -- If none of the tags contains a value, it becomes only an enum
+    -- If a tag contains a value, it is an enum + union
+    -- Properties not exported
+  -- extern <type>: Make an extern-ized version of a type
+    -- Removes properties
+    -- Recursive
+    -- May not be used on ints other than {u,i}{8,16,32,64}
 
 
 
-(: Experimental: Translating a union that looks like this in C
+-- Experimental: Translating a union that looks like this in C
 \\ union {
 \\   int x;
 \\   char y;
 \\   long z;
 \\ }
-(: x,y, and z all point to the same location, have no tag to distinguish them, and it has no field name
-(: It should be translated like so
+-- x,y, and z all point to the same location, have no tag to distinguish them, and it has no field name
+-- It should be translated like so
 let ContainingStruct = extern struct {
   field _data: c_long
   alias x: c_int = _data

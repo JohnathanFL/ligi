@@ -1,17 +1,17 @@
-(: This is to document my thoughts on how I *may* implement named parameters
+-- This is to document my thoughts on how I *may* implement named parameters
 
 
 
-(: We already have "named parameters" for struct initialization:
+-- We already have "named parameters" for struct initialization:
 let v = [.x = 10, .y = 12]
-(: And there's currently nothing else that uses a solitary leading `.`,
-(: so why not use that for named function params?
+-- And there's currently nothing else that uses a solitary leading `.`,
+-- so why not use that for named function params?
 
 let sub = pure fn a: usize, b: usize -> c: usize = a - b
 
-sub(.b = 0, .a = 1) (:= 0, not -1
+sub(.b = 0, .a = 1) --= 0, not -1
 
-(: This would also work well with default params:
+-- This would also work well with default params:
 let func = fn x:?usize = null, y:?usize = null -> void = {
   if x -> xVal {
     printf("X was specified")
@@ -21,7 +21,7 @@ let func = fn x:?usize = null, y:?usize = null -> void = {
   }
 }
 
-func() (: Ok, no output
-func(.x = 10) (:= X was specified
-func(.y = 10) (:= Y was specified
-func(.y = 10, .x = 10) (:= X was specified Y was specified
+func() -- Ok, no output
+func(.x = 10) --= X was specified
+func(.y = 10) --= Y was specified
+func(.y = 10, .x = 10) --= X was specified Y was specified

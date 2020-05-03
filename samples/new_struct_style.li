@@ -1,57 +1,57 @@
-(: Update: I don't think I'll be doing this after all.
-(: For now, I'll stick with enum/enum, but I'll be on the lookout for a better
-(: word for the bind enum
-    (: I will, however, keep the #EnumLit[inner struct init] syntax. It feels cleaner. Thus you now either do
-    (: #EnumLit(val)
-    (: or
-    (: #EnumLit[struct init]
-    (: The first always works, and the second is just a sugar for #EnumLit([struct init]) to avoid excessive
-    (: wrappers
-(: I'll leave this file to document where this syntax arose
+-- Update: I don't think I'll be doing this after all.
+-- For now, I'll stick with enum/enum, but I'll be on the lookout for a better
+-- word for the bind enum
+    -- I will, however, keep the #EnumLit[inner struct init] syntax. It feels cleaner. Thus you now either do
+    -- #EnumLit(val)
+    -- or
+    -- #EnumLit[struct init]
+    -- The first always works, and the second is just a sugar for #EnumLit([struct init]) to avoid excessive
+    -- wrappers
+-- I'll leave this file to document where this syntax arose
 
-(: Experimental syntax change:
-(: All new types now use 'struct', leaving 'enum' free for only the enum-bind
-(: Thus '.tag' becomes a reserved field in all types and is used for union tag
+-- Experimental syntax change:
+-- All new types now use 'struct', leaving 'enum' free for only the enum-bind
+-- Thus '.tag' becomes a reserved field in all types and is used for union tag
 
-(: Question: Should this change allow both enum and field in the same thing?
+-- Question: Should this change allow both enum and field in the same thing?
 
-(: The tag field would them have a subfield to get the exact underlying value
+-- The tag field would them have a subfield to get the exact underlying value
 
-(: This essentially allows for structs that have common fields no matter what, but can still
-(: directly model different states.
+-- This essentially allows for structs that have common fields no matter what, but can still
+-- directly model different states.
 
-(: To allow using the inner state tag on its own, you can just use type arithmetic:
+-- To allow using the inner state tag on its own, you can just use type arithmetic:
 
-(: For example, a traffic light:
+-- For example, a traffic light:
 
 let LightColor = struct {
-  (: No union values
+  -- No union values
   enum Red, Yellow, Green
 }
 
 let TrafficLight = LightColor + struct {
-  (: The time spent in the current state, no matter what that state is
-  (: Thus an outside observer can directly increment the time without worrying about
-  (: the exact state.
+  -- The time spent in the current state, no matter what that state is
+  -- Thus an outside observer can directly increment the time without worrying about
+  -- the exact state.
   field timer: f64
-  (: The location is obviously always the same place
+  -- The location is obviously always the same place
   field location: slice const u8
 }
 
-(: Types with enums in them would keep track of whether those enums came from an outside type,
-(: and could then allow comparisons between them
+-- Types with enums in them would keep track of whether those enums came from an outside type,
+-- and could then allow comparisons between them
 let color = LightColor.Red
 let light = [.tag = #Red, .timer = 0.5, .location = "Fifth and Main"]
 assert light.tag == color
-(: 
+-- 
 
 
-(: The only real obstacle in this is enum literals
+-- The only real obstacle in this is enum literals
 
 
-(: With:
+-- With:
 
-(: Making a simple calculator
+-- Making a simple calculator
 let Token = struct {
   enum Add, Sub, Mul, Div
   enum Num: f32
@@ -61,20 +61,20 @@ let Token = struct {
 
 var t: Token
 
-(: Option one:
-(: Require an initializer for the enum no matter what
+-- Option one:
+-- Require an initializer for the enum no matter what
 t = #Add((), [.pos = [.line = 1, .col = 10]])
 t = #Num(10.0, [.pos = [.line = 1, .col = 10]])
 
-(: Very verbose when we don't have an inner value for the union
+-- Very verbose when we don't have an inner value for the union
 
-(: Option two:
-(: Allow omitting the parentheses when there is no inner value
+-- Option two:
+-- Allow omitting the parentheses when there is no inner value
 t = #Add[.pos = [.line = 1, .col = 10]]
-(: Still require parentheses for initializing an innner value as in option one
+-- Still require parentheses for initializing an innner value as in option one
 
-(: Less verbose when uneeded, but possibly confusing
+-- Less verbose when uneeded, but possibly confusing
 
-(: Both of the above options would still allow for a plain
+-- Both of the above options would still allow for a plain
 t = #Add
-(: (where .pos is simply undef and needs to be written before a read)
+-- (where .pos is simply undef and needs to be written before a read)

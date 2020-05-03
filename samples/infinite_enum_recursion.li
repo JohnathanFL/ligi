@@ -1,0 +1,30 @@
+-- This is to explore allowing infinite recursion
+
+
+
+-- When you have an enum like so:
+let Octree = enum {
+  enum leaf: usize
+  enum parent: array(8, Octree)
+}
+-- It's obviously just going to infinitely recurse.
+
+
+
+-- This proposal would make the above perfectly valid to have instantiated, given that it
+-- meets certain conditions:
+---- 1: The tag must be const, comptime, or both (@tagType = const blah)
+------ This means you could directly load it into memory if you wished, but you can never change
+------ how many branches exist/where, only what's inside the branches.
+
+
+-- Thus, you could have a comptime variable like so:
+let octree: Octree = #parent([
+  #leaf(10), #leaf(10), #leaf(10), #leaf(10),
+  #leaf(10), #leaf(10), #leaf(10), #leaf(10)
+])
+-- But you have to know the maximum depth you're working with at compiletime, so you can't
+octree.parent[0] = #parent(undef) -- ERROR
+-- Because Ligi can't just allocate more memory for it at runtime
+
+

@@ -1,16 +1,16 @@
-(: Ligi doesn't have direct error handling in the language like Zig does.
-(: Instead, it follows Rust's expample with unions of Result vs Error
-(: In fact, Ligi makes composing error sets even easier than Rust
-(: because types can be arbitrarily added together
+-- Ligi doesn't have direct error handling in the language like Zig does.
+-- Instead, it follows Rust's expample with unions of Result vs Error
+-- In fact, Ligi makes composing error sets even easier than Rust
+-- because types can be arbitrarily added together
 
-(: Using the enum shorthand from enum_shorthand.li
+-- Using the enum shorthand from enum_shorthand.li
 
 
-(: Simple function to emulate Rust's Result type
+-- Simple function to emulate Rust's Result type
 let Result = pure fn R: type, E: type -> t = E + enum {
   enum Ok: R
 
-  (: For emulating the ?type .val property
+  -- For emulating the ?type .val property
   let val = property { let get = pure fn self: @This -> v:R = self.Ok }
 }
 
@@ -45,5 +45,5 @@ assert list.get(1) == #Ok("world")
 assert list.get(10) == #OutOfBounds
 
 
-(: TODO: This is still a little rough when handling throwing errors back up the stack.
-(: How could we make it a little more sugary?
+-- TODO: This is still a little rough when handling throwing errors back up the stack.
+-- How could we make it a little more sugary?

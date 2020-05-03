@@ -1,8 +1,8 @@
-(: An example of how you could make a simple ECS system in Ligi
-(: This example does it using all global/static allocations so we don't have to
-(: make assumptions about what Ligi's stdlib would look like.
+-- An example of how you could make a simple ECS system in Ligi
+-- This example does it using all global/static allocations so we don't have to
+-- make assumptions about what Ligi's stdlib would look like.
 
-(: Up to 1024 entities
+-- Up to 1024 entities
 let MaxEnts = 1024
 let EntRange = 0..MaxEnts
 
@@ -26,7 +26,7 @@ let Velocity = struct {
   var storage = [:array(MaxEnts, ?@This): ]
 }
 
-(: Here we also see an example  of mutual recursion in action
+-- Here we also see an example  of mutual recursion in action
 let World, Entity
 
 World = struct {
@@ -39,19 +39,19 @@ World = struct {
 }
 
 Entity = struct {
-  field id: usize (: in EntRange
+  field id: usize -- in EntRange
 
   let getComponent = fn self: @This, Comp: type -> comp: ?*Comp = {
     assert self.id in EntRange
-    (: "orElse" will be a function of optionals. Essentially rust's unwrap_or func
-    (: or Zig's orelse operator, just more granular.
-    (: I may re-adopt Zig's orelse instead, however.
-    (: Point is, this sets comp to the address of the inner value, or returns null otherwise.
-    (: The {} are needed because technically it must be an expression inside the function call
-    (: The typechecker will see that it makes it skip the call, but we have to trick the parser.
+    -- "orElse" will be a function of optionals. Essentially rust's unwrap_or func
+    -- or Zig's orelse operator, just more granular.
+    -- I may re-adopt Zig's orelse instead, however.
+    -- Point is, this sets comp to the address of the inner value, or returns null otherwise.
+    -- The {} are needed because technically it must be an expression inside the function call
+    -- The typechecker will see that it makes it skip the call, but we have to trick the parser.
     comp = Comp.storage[self.id].orElse({return null}).addr
   }
-  (: Adds or Sets
+  -- Adds or Sets
   let addComponent = fn self: @This, Comp: type, to: Comp -> void {
     assert self.id in EntRange
     Comp.storage[self.id] = to
@@ -63,34 +63,34 @@ Entity = struct {
 }
 
 
-(: Simple particle simulation
-(: Particle setup:
+-- Simple particle simulation
+-- Particle setup:
 var ents = [:array(MaxEnts, Entity):]
 for 0..MaxEnts -> i {
   ents[i] = World.newEnt()
-  use curEnt = ents[i] (: use can essentially be used as C++'s &
+  use curEnt = ents[i] -- use can essentially be used as C++'s &
   curEnt.addComponent(Position, [.x = i.as(f32), .y = i.as(f32)])
   curEnt.addComponent(Velocity, [.x = 0, .y = 0])
 
   assert curEnt.hasComponent(Position)
   assert curEnt.hasComponent(Velocity)
 }
-(: Simulation
-let timeStep: f32 = 0.25 (: quarter second at a time
+-- Simulation
+let timeStep: f32 = 0.25 -- quarter second at a time
 let simSteps = 10000
 for 0..simSteps {
-  (: Move the particles
+  -- Move the particles
   for ents -> ent {
     ent.getComponent(Position).val.move(ent.getComponent(Velocity).val)
   }
 
-  (: Update velocities
+  -- Update velocities
   for ents -> ent {
     let pos = ent.getComponent(Position).val
     var vel = ent.getComponent(Velocity).val
     for ents -> other {
       let (xDist, yDist) = pos.distTo(other.getComponent(Position).val)
-      (: Thus the increase is greater the closer they are
+      -- Thus the increase is greater the closer they are
       vel.x += 1.0 / xDist 
       vel.y += 1.0 / yDist 
     }

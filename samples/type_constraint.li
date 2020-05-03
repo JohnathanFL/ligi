@@ -1,17 +1,20 @@
-(: This is to explore the idea of a type constraint
+-- This is to explore the idea of a type constraint
 
-(: The basic idea would apply in situations like this:
+-- The basic idea would apply in situations like this:
 let Result = pure fn R: type, E: enum type -> T = E + enum {
   enum Ok: R
 }
 
-(: Thus, we restricted E to be some `enum type`. Otherwise, passing in a struct is technically
-(: valid, but will error when attempting to add it to the enum
+-- Thus, we restricted E to be some `enum type`. Otherwise, passing in a struct is technically
+-- valid, but will error when attempting to add it to the enum
 
-(: Similarly, you could restrict it to a struct
+-- Similarly, you could restrict it to a struct
 
 
-(: You could also use it to doublecheck what type of type something is
+-- You could also use it to doublecheck what type of type something is
 let Meal = enum (Breakfast, Lunch, Supper)
 assert Meal.@type == type
-assert Meal.@type == enum type (: Enum type is just a more specific version of type
+assert Meal.@type == enum type -- Enum type is just a more specific version of type
+
+-- Problem: `enum type` is ambiguous with `enum Symbol` (enum of 1)
+-- Solution: I'd say we should just make `enum type` a special case

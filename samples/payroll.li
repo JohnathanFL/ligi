@@ -1,7 +1,7 @@
-(: This is a reimplementation of an exercise from my C# class
+-- This is a reimplementation of an exercise from my C# class
 let Employee = struct {
   field name: str
-  field rate: f64 (: Since I haven't formalized fixed-point numbers
+  field rate: f64 -- Since I haven't formalized fixed-point numbers
   field hours: usize
 
   let min = pure fn a, b -> c = if a < b { a } else { b }
@@ -12,7 +12,7 @@ let Employee = struct {
   }
 }
 
-(: Assuming C stdlib styled IO functions
+-- Assuming C stdlib styled IO functions
 
 var emps: array(3, Employee) = undef
 for emps -> var loc {

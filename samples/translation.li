@@ -1,0 +1,59 @@
+-- I'm seriously considering specifying a translation system for strings in Ligi
+-- This is inspired by my frustrations with how annoying the Android SDK's setup is
+
+
+-- The basic idea would work like this:
+
+let greeting = @translatable(#Greeting, "{0} says hello, {1}.")
+-- The @translatable function could take 2 arguments: The ID and the default string for it
+-- The default is so that if no translation file (later) is specified or it hasn't been translated
+-- into a language, that's what's used.
+-- It also makes code more readable, as the developer sees what the string intends to say and
+-- (like in this case) how many format parameters there should be/where they are
+
+-- The build.li would then specify a translations file to use. It could be a simple .li file like:
+{
+  -- The compiler would look for a public `translate` function and use that
+  -- `which` is which string to translate, `lang` is which language to translate into
+  let translate* = pure fn which, lang -> translation:?str = when which {
+    is #Greeting {
+      when lang {
+        is #En { "Hello from {0}, {1}." }
+        is #Eo { "{0} diras saluton al {1}." }
+        is #Dk { "{0} siger hej til {1}." }
+        else { null }
+      }
+    }
+    else { null }
+  }
+}
+-- Since it's also a proper .li file, you can also run code to try translating things, including
+-- calling out to something else if you wanted to store translations elsewhere
+
+-- From there, I see 2 major possibilities:
+  -- Compile a separate executable for each language needed
+    -- This has the con of requiring a program restart to swap languages. However, I don't think
+    -- the average person will be changing languages too often.
+  -- Compile all functions that depend on those strings at compiletime into shared libraries
+    -- There would be one shared lib per language which contains all functions that depend on it
+    -- This would allow runtime swapping, but produces many shared libraries. Overhead from those
+    -- calls *may* be a concern, as well.
+    -- Any place that uses them at runtime could be compiled such that the current language enum
+    -- is used as an offset into a lookup table of the strings.
+
+-- There are three main reasons for me wanting this to be a language builtin:
+  -- It makes it dead simple to integrate into any project.
+    -- None of that terrible Android Studio autogenerating integer IDs based on random XML files.
+    -- Translations are declared at the places they're used and defined in a central location in
+    -- the same programming language as the original code.
+  -- It allows for dead simple compile-time strings (like the above) to be translated. This allows
+  -- you to use them as format strings.
+    -- This could still be done with a function taking a comptime enum, but that loses the shared
+    -- library pros
+  -- There's no real way to do this in userspace, as things like dynamically moving things to
+  -- shared libs is far beyond userspace.
+
+-- Additionally, with me wanting compiler builtins this pervasive/complex, I'd say this makes
+-- a decent extension system for the compiler absolutely critical. That way, these things can
+-- be rewritten/turned off without any real effort. That would also allow people to disable this
+-- kind of stuff if they have no use for it or want to roll their own solution for translations.

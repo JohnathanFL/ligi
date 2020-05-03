@@ -1,27 +1,27 @@
-(: The change has already been made, but this document is to document that change in Ligi's
-(: functions over time
+-- The change has already been made, but this document is to document that change in Ligi's
+-- functions over time
 
 
-(: Originally, before type expressions or optional semicolons, Ligi followed Zig's function style:
+-- Originally, before type expressions or optional semicolons, Ligi followed Zig's function style:
 let add = fn(a:usize, b:usize) usize { return a + b; }
 
-(: Then I got the idea to cement return locations into the language
-  (: This was after using Nim and seeing an old idea from Zig's creator which would have done
-  (: something similar.
+-- Then I got the idea to cement return locations into the language
+  -- This was after using Nim and seeing an old idea from Zig's creator which would have done
+  -- something similar.
 let add = fn(a:usize, b:usize) c:usize { c = a + b; }
 
-(: Then I started thinking "well I've done away with other parentheses, so why not these?"
-  (: It was around this time that I got rid of semicolons too.
+-- Then I started thinking "well I've done away with other parentheses, so why not these?"
+  -- It was around this time that I got rid of semicolons too.
 let add = fn a:usize, b:usize -> c:usize { c = a + b }
 
-(: Then I realized "I have a result *bind location*, so why not just directly assign to it?"
-let add = fn a:usize, b:usize -> c:usize = a + b (: or ` = { a + b }`  :)
-(: And thus we have the modern Ligi function style:
-  (: `fn`
-  (: 0 or more parameter binds
-  (: 1 return location, the init expression of which is the function's body.
-    (: If the init expression is present, it may be used as either a type or a function
-    (: If the init expression isn't present, it can only be used as a function type
+-- Then I realized "I have a result *bind location*, so why not just directly assign to it?"
+let add = fn a:usize, b:usize -> c:usize = a + b -- or ` = { a + b }`  :)
+-- And thus we have the modern Ligi function style:
+  -- `fn`
+  -- 0 or more parameter binds
+  -- 1 return location, the init expression of which is the function's body.
+    -- If the init expression is present, it may be used as either a type or a function
+    -- If the init expression isn't present, it can only be used as a function type
 
-(: There may still be some remanents of the eariler styles in the samples, so I felt this
-(: should be included.
+-- There may still be some remanents of the eariler styles in the samples, so I felt this
+-- should be included.

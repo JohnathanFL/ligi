@@ -1,16 +1,16 @@
-(: This is to document one of the more important (imho) features of Ligi: Swizzling'
+-- This is to document one of the more important (imho) features of Ligi: Swizzling'
 
-(: In most programming languages, member access is done 1-1, as in foo.bar
+-- In most programming languages, member access is done 1-1, as in foo.bar
 
-(: In GLSL and such, you're able to do things like this:
+-- In GLSL and such, you're able to do things like this:
 \\ vec4 a = vec4(1.0f, 1.0f, 1.0f, 1.0f);
 \\ vec3 b = vec4.wzy;
-(: Where the second statement is equivalent to
+-- Where the second statement is equivalent to
 \\ vec3 b = vec3(a.w, a.z, a.y);
 
 
-(: Ligi takes inspiration from GLSL by adding its own swizzling style
-(: GLSL's style won't work for non-single-letter members, so we use .():
+-- Ligi takes inspiration from GLSL by adding its own swizzling style
+-- GLSL's style won't work for non-single-letter members, so we use .():
 
 let Vec3 = struct {
   field x: f32, y: f32, z: f32

@@ -1,12 +1,12 @@
-(: Potential feature: adding Shadowing back
-(: Then we could also allow for function overloading (search through shadows for that function
-(: until you find the proper overload)
+-- Potential feature: adding Shadowing back
+-- Then we could also allow for function overloading (search through shadows for that function
+-- until you find the proper overload)
 
-(: Problem: Allowing mutually recursive types
+-- Problem: Allowing mutually recursive types
 
-(: Potential solution: Allowing you to access the binds being assigned in the 
+-- Potential solution: Allowing you to access the binds being assigned in the 
 
-(: Potential solution: Allow lets to be assigned to at any point, as long as it only happens once:
+-- Potential solution: Allow lets to be assigned to at any point, as long as it only happens once:
 
 let Foo, Bar
 Foo = struct {
@@ -16,8 +16,44 @@ Bar = struct {
   field f: *Foo
 }
 
-(: This seems like the best way to allow this (and may be added regardless of Shadowing)
+-- This seems like the best way to allow this (and may be added regardless of Shadowing)
 
 
-(: Update: I'm currently only adding shadowing back in the case of statics on type arithmetic
-(: Ligi allows no shadowing in other contexts.
+-- Update: I'm currently only adding shadowing back in the case of statics on type arithmetic
+-- Ligi allows no shadowing in other contexts.
+
+-- Update to the update: I'm looking at adding shadowing back.
+-- Restrictions:
+  -- A bind is always accessible in its initializer. Thus
+    let x = { let y = 20; y }
+    -- ALWAYS acts like
+    let x: usize
+    x = { let y; y = 20; y }
+    -- I'm considering allowing accessing the old version as `_.varName` or something like that
+    -- And
+    let x = 10
+    let x = { x + 10 }
+    -- Is an error, as the `x` inside the braces is as yet uninitialized
+  -- Aliasing a variable allows you to still access it after it's shadowed
+    let x = 10
+    alias z = x
+    let x = true
+    assert z == 10
+    -- Note that typically, it would be better to just pick a different name.
+    -- This is here to allow for situations where you have no choice (like 2 libraries going
+    -- into scope with the same library names)
+  -- You can't bind a function to a name that already has a var in it, and vice versa
+    -- Thus you can do
+    let add = pure fn a, b -> c = a + b
+    let add = pure fn a -> void = printf("Hello, {}", a)
+    -- But not
+    let add = pure fn a, b -> c = a + b
+    let add = 10 -- ERROR: `add` was previously bound as a function.
+    -- This is to enable...
+  -- Two(+) functions bound to the same name act like an implicit overload block
+    let add = pure fn a, b -> c = a + b
+    let add = pure fn a -> void = printf("Hello, {}", a)
+
+-- I believe these restrictions together allow me to add somewhat-sane shadowing while
+-- also allowing functions to be bound as expressions
+    

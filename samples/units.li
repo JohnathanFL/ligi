@@ -1,29 +1,29 @@
-(: This is an example to show how you can implement units in Ligi
+-- This is an example to show how you can implement units in Ligi
 
 
 let CommonOps = struct {
   @overloads[#Add] += pure fn lhs: @This, rhs: undef -> res:@This
     = [.inner = lhs.inner + @This.from(rhs).inner]
-  (: And so on for all other operators
+  -- And so on for all other operators
 }
 
 let Deg* = struct {
   field inner*: f64
 
-  (: Using the from/into pattern
-  (: Making from public writable (*) so other types can add ways to convert them into degs
+  -- Using the from/into pattern
+  -- Making from public writable (*) so other types can add ways to convert them into degs
   let from* = overload {
     let rawDeg* = pure fn raw:f64 -> deg: Deg = [.inner = raw]
   }
-  (: A nicer one for readability
+  -- A nicer one for readability
   alias of* = @This.from
 
-  (: With the from overload pattern in place, we can now add the common unit operator overloads
+  -- With the from overload pattern in place, we can now add the common unit operator overloads
 } + CommonOps
-(: The above `+ CommonOps` pattern is one of the main reasons for type arithmetic.
-(: @This will resolve to whatever the final struct is. Thus:
-  (: Use the actual typename from the bind if you want only that type
-  (: Use @This if you want to leave things open for expansion
+-- The above `+ CommonOps` pattern is one of the main reasons for type arithmetic.
+-- @This will resolve to whatever the final struct is. Thus:
+  -- Use the actual typename from the bind if you want only that type
+  -- Use @This if you want to leave things open for expansion
 
 let Rad* = struct {
   field inner*: f64
@@ -34,10 +34,10 @@ let Rad* = struct {
   alias of* = @This.from
 } + CommonOps
 
-(: Now we connect the 2 up:
+-- Now we connect the 2 up:
 Deg.from += pure fn rads:Rad -> deg:Deg = [.inner = 360.0 * ( rads.inner / ( 2 * 3.14159 ))]
 Rad.from += pure fn degs:Deg -> rad:Rad = [.inner = (2*3.14159) * ( degs.inner / 360.0 )]
 
 let angle1 = Deg.of(90.0)
 let angle2 = Rad.of(0.55)
-let angle3 = angle1 + angle2 (: Works seamlessly, comes out in degrees because angle1 is degrees
+let angle3 = angle1 + angle2 -- Works seamlessly, comes out in degrees because angle1 is degrees

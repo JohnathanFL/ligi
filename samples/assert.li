@@ -1,16 +1,16 @@
-(: This is to document the assert statement in Ligi
+-- This is to document the assert statement in Ligi
 
-(: The assert's simple. It's a statement-beginner (like bind specs)
+-- The assert's simple. It's a statement-beginner (like bind specs)
 assert true == true
-assert true == false (: Will error at compiletime
-assert true == user_input_func() (: Will error at runtime if input was false
+assert true == false -- Will error at compiletime
+assert true == user_input_func() -- Will error at runtime if input was false
 
-(: However, asserts only get compiled in debug mode. Thus, the above runtime check may not get
-(: performed in release mode, so asserts should generally not be used on straight user inputs.
-(: Instead, use them to check for conditions that the programmer may have forgotten to check,
-(: or those that the programmer simply wants to ensure are true during testing.
+-- However, asserts only get compiled in debug mode. Thus, the above runtime check may not get
+-- performed in release mode, so asserts should generally not be used on straight user inputs.
+-- Instead, use them to check for conditions that the programmer may have forgotten to check,
+-- or those that the programmer simply wants to ensure are true during testing.
 
 
-(: Proposal: Allow tagging asserts:
+-- Proposal: Allow tagging asserts:
 assert true == true, "The laws of math are breaking down"
-(: The above would show in the logs like "15:1: Failed assert: The laws of math are breaking down"
+-- The above would show in the logs like "15:1: Failed assert: The laws of math are breaking down"

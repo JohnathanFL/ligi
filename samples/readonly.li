@@ -1,16 +1,16 @@
-(: Proposal: Readonly access level
+-- Proposal: Readonly access level
 
-(: As it stands, Ligi has 2 access levels: public and private (default)
-(: Public is specified with *, as in
+-- As it stands, Ligi has 2 access levels: public and private (default)
+-- Public is specified with *, as in
 let foo* = 10
-(: This marks the variable as both readable *and* writable by the outside world.
-(: In the case of an extern thing, it also means that it is exported for outside languages
+-- This marks the variable as both readable *and* writable by the outside world.
+-- In the case of an extern thing, it also means that it is exported for outside languages
 let my_func* = extern fn a:c_uint -> void = {
-  (: Do something...
+  -- Do something...
 }
 
-(: This proposal would add a new specifier that would mark a variable as *only* readable by the
-(: outside world, like so: (not using this exact symbol)
+-- This proposal would add a new specifier that would mark a variable as *only* readable by the
+-- outside world, like so: (not using this exact symbol)
 let Foo = struct {
   field public*: usize
   field readOnly+: str
@@ -21,10 +21,17 @@ let Foo = struct {
   ]
 }
 
-(: In short:
-  (: No spec: "Don't even think about touching this, ya dolt"
-  (: *: "Fine, do whatever"
-  (: +: "Look, but don't touch, little Timmy."
+-- In short:
+  -- No spec: "Don't even think about touching this, ya dolt"
+  -- *: "Fine, do whatever"
+  -- +: "Look, but don't touch, little Timmy."
 
-(: This will also interact with the overload proposal
-(: An overload marked readonly may not be extended from outside
+-- This will also interact with the overload proposal
+-- An overload marked readonly may not be extended from outside
+
+
+-- Proposal: Swap * and +
+-- UML diagrams already use `+` to mean `public`, so changing it to `+` for public-rw and `*` for
+-- public-ro makes it consistent with direct UML diagrams
+-- This would also make the symbols consistent: `+` is public, `-` (could be) private,
+-- and `+` combined with `-` (`*`) is both public and private (public read, private write)

@@ -1,23 +1,23 @@
-(: This is to document the new property style
-(: Essentially, properties shall now be declared in the same style as
-(: structs and overloads (unary operator + block with exported functions).
-(: This:
-  (: Makes the language more consistent (with overload/struct syntax)
-  (: Allows for easily adding things beyond simple get/set
-    (: Could allow users to e.g overload indexing/compound assigns inside properties
-  (: Solves the question of how to assign the property functions themselves (i.e [] vs () and so on)
+-- This is to document the new property style
+-- Essentially, properties shall now be declared in the same style as
+-- structs and overloads (unary operator + block with exported functions).
+-- This:
+  -- Makes the language more consistent (with overload/struct syntax)
+  -- Allows for easily adding things beyond simple get/set
+    -- Could allow users to e.g overload indexing/compound assigns inside properties
+  -- Solves the question of how to assign the property functions themselves (i.e [] vs () and so on)
 
-(: The sample code here relies on new_ptr_syntax.li, but the proposal does not.
+-- The sample code here relies on new_ptr_syntax.li, but the proposal does not.
 
-(: Addition 02/27: `property T` denotes the type of a property
+-- Addition 02/27: `property T` denotes the type of a property
 
-(: In short, there are 2 ways to use the `property` keyword:
-  (: `property T`: Denotes a property which takes/returns a T
-  (: `property {block with exported get/set functions}`: Defines a property with those gets/sets
+-- In short, there are 2 ways to use the `property` keyword:
+  -- `property T`: Denotes a property which takes/returns a T
+  -- `property {block with exported get/set functions}`: Defines a property with those gets/sets
 
-(: For reference: The old style
-  (: - Property is a bind specifier
-  (: - Property takes a compound init with a .get/.set
+-- For reference: The old style
+  -- - Property is a bind specifier
+  -- - Property takes a compound init with a .get/.set
 let Vec2 = struct {
   field x: f32, y: f32
   property len: f32 = [
@@ -25,64 +25,73 @@ let Vec2 = struct {
   ]
 }
 
-(: The new style in a nutshell
-  (: - Properties are statics
-  (: - Properties have their own `property` type
-  (: - Properties take their getters/setters from what's exported in a block of code
+-- The new style in a nutshell
+  -- - Properties are statics
+  -- - Properties have their own `property` type
+  -- - Properties take their getters/setters from what's exported in a block of code
 let Vec2 = struct {
   field x: f32, y: f32
 
 
 
-  (: Read: "length is a property of type f32 where..."
+  -- Read: "length is a property of type f32 where..."
   let length: property f32 = property {
-    (: ...getting it will call this function... (i.e foo.length * 2. It "gets" the length)
+    -- ...getting it will call this function... (i.e foo.length * 2. It "gets" the length)
     let get* = pure fn self: @This -> len:f32 = @sqrt(self.x*self.x + self.y*self.y)
-    (: ...and setting it will call this function. (i.e foo.length = 2. It "sets" the length)
+    -- ...and setting it will call this function. (i.e foo.length = 2. It "sets" the length)
     let set* = fn self: @This, newLen:f32 -> void = {
       self.(x,y) /= self.length
       self.(x,y) *= newLen
     }
-    (: Note that @This will still point to the outer struct.
-    (: Since properties cannot have fields/enums, there's no reason to make @This point to...this..
+    -- Note that @This will still point to the outer struct.
+    -- Since properties cannot have fields/enums, there's no reason to make @This point to...this..
   }
 }
 
-(: We could also allow overloading indexing:
-  (: Note this part is not finalized yet.
+-- We could also allow overloading indexing:
+  -- Note this part is not finalized yet.
 let MyArray = pure fn N: usize, T: type -> res = struct {
   field data: array (N, T)
 
-  (: Using it as a value, as in `x = y.rev` returns an array
-  (: Indexing into it, as in `reversed.rev[i]`, indexes without making a new array
-  (: 
+  -- Using it as a value, as in `x = y.rev` returns an array
+  -- Indexing into it, as in `reversed.rev[i]`, indexes without making a new array
+  -- 
   let rev*: property @This = property {
     let get* = pure fn self: @This -> reversed: @This = {
       for self.data -> item, i {
         reversed.rev[i].* = item
       }
     }
-    (: TODO: Look into a C++-style &reference type
-    (: It would make this sort of thing *much* cleaner when you only need the pointer
-    (: for its ability to point, not for long-term storage and such.
 
-    let index* = fn self: @This, i: usize -> item: *T = {
+    -- .index can also be used instead of requiring the creation of a new array
+    -- (i.e rather than returning an array that is indexed, we can optimize the indexing)
+    let index* = fn self: @This, i: usize -> item: ref T = {
       assert i < self.data.len
       self.data[self.data.len - 1 - i].&
     }
   }
 }
 
-(: Planned feature: If no .get is defined, you can access internal members through a .get:
-let Foo = struct {
+-- Planned feature: If no .get is defined, you can access internal members through a .func
+-- This essentially allows namespacing within a struct while still allowing foo.bar style
+let MyVec2 = struct {
+  field x: f32, y: f32
   let prop = property {
-    let testy* = fn -> void = printf("Testy")
+    let testy* = fn self: @This -> void = printf("{}, {}", self.x, self.y)
   }
 }
 
-let f: Foo
-f.testy()
+let f: MyVec2
+f.prop.testy()
 
-(: This could then be used in conjunction with type arithmetic to extend types under "namespaces"
-(: if needed.
-(: It can't have a .get because otherwise the `.` becomes ambiguous
+-- This could then be used in conjunction with type arithmetic to extend types under "namespaces"
+-- if needed.
+-- It can't have a .get because otherwise the `.` becomes ambiguous
+
+
+-- New shorthand for properties in the same vein as the shorthand for enums:
+-- You may also declare properties as either:
+let prop = property fn -> val = 1 -- Only a getter. setter is invalid.
+let prop = property (fn -> val = 1, fn val -> void = printf("Got {}", val)) -- getter + setter
+-- Thus you can declare shorter properties if you don't need more than getters/setters
+-- In particular, it makes pure getters nicer

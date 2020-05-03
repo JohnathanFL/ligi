@@ -1,21 +1,21 @@
-(: Sometimes in C you'll want to make something like
+-- Sometimes in C you'll want to make something like
 \\ union C {
 \\   int c; float f;
 \\ }
 
-(: In the above, you can access c or f at the same time, no matter what.
-(: Ligi, however, has no direct "union" type, and instead relies on enums that act
-(: as algebraic data types.
+-- In the above, you can access c or f at the same time, no matter what.
+-- Ligi, however, has no direct "union" type, and instead relies on enums that act
+-- as algebraic data types.
 
-(: You can, however, emulate the behavior by setting the tagType to void:
+-- You can, however, emulate the behavior by setting the tagType to void:
 let C = enum {
   @tagType = void
   enum c: i32
   enum f: f32
 }
 
-(: That implies that the value representing c and f's tags is zero-sized
-(: Additionally, there's no difference between 2 voids, so you can do:
+-- That implies that the value representing c and f's tags is zero-sized
+-- Additionally, there's no difference between 2 voids, so you can do:
 var myC = C.c(0)
 let myF = myC.f
-(: Just as you might in C
+-- Just as you might in C
