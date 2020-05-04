@@ -44,10 +44,13 @@ Ligi contains the following primitive types. All other types are based upon thes
 ## Value and Reference
 With one exception, Ligi is always pass by value.
 
-The sole execption is `ref`. A `ref` type is initialized by a pointer
+The sole execption is a `ref T`. A `ref` type is initialized by a pointer
 with its first write (making it pass by value of pointer), but thereafter acts
 like a value, even though it still points to whatever the pointer pointed to.
 Thus it acts like C++'s `&`, if `&` was initialized by pointers.
+
+
+**Maybe remove the below?**
 
 Function arguments are always immutable. This is to allow Ligi to decide whether they
 should internally be pass-by-value or pass-by-reference as needed. Of course, a `ref`
@@ -56,7 +59,7 @@ and a `ref` may only every have one location in its lifetime.
 
 
 ## Scope and Lifetime
-Objects are always destroyed when they exit scope. Ligi (currently) has no destructors.
+Values are always destroyed when they exit scope. Ligi (currently) has no destructors.
 
 
 
@@ -145,12 +148,12 @@ let V = struct { field has: bool, val: T }
 ```
 
 ### Truthyness and Capturing
-If an optional value is used as the condition of `if`, `when`, or `while`, it is tested
+If an optional value is used as the condition of `if`, a `when` without an overridden 
+binary operator, or `while`, it is tested
 to see if it is `null`. If it is not, then its inner value may be captured in a `->` block.
 
 If the capturing bind for one of these is marked `var`, then it may be mutated with `ref` 
 semantics.
-
 
 
 ## Type Operators
@@ -267,3 +270,77 @@ to its underlying `T` type. Thereafter, a `ref T` may be treated as just `T`.
 This allows for assigning directly to locations returned by custom indexing operators,
 such as is needed for array-list style structures and the like, as well as pass-by-reference
 semantics for functions.
+
+
+## Control Structures
+
+### If
+
+The `if` statement's initial `if` condition, as well as all of its `elif`s are designated
+as its "arms". The arms of an `if` statement are always evaluated sequentially. When an arm
+evaluates to true, no further arms are evaluated, and the block attached to that arm is
+executed end becomes the value for the entire if statement. If no arm evaluates as true, then
+the `else` block, if any, is evaluated and becomes the value for the entire `if` statement.
+If any arm evaluates as true, then the `finally` block, if any, is evaluated but may not
+yield any value, as the arm which evaluated as true already yielded one.
+
+
+### When
+
+The `when` statement's initial expression (the one directly after the `when` keyword) is evaluated 
+exactly once. Each `is` arm is then evaluated sequentially according to the following rules:
+
+- If the `is` arm has an additional binary operator immediately after `is`, then that
+  operator is used to compare the initial expression with the `is` arm's expression.
+- If the `is` arm has no additional binary operator, then it acts as though `==` had been passed
+  as the additional operator.
+- If the `is` arm's operator (as determined by the two above conditions) is `==`, then the arm
+  is additionally able to capture the inner optional value (if any) in a `->` capture. See
+  the section on [Truthyness and Capturing] for more.
+
+The first `is` arm to evaluate as true according to the above rules halts evaluation of any further
+`is` arms, and that block becomes the value of the entire `when` expression. if no `is` arm
+evaluates as true, then the `else` block, if any, becomes the value of the entire structure.
+If any `is` arm evaluates as true, then the `finally` block, if any, is executed but **does not**
+become the value of the structure, as the `is` arm which evaluated as true has already done so.
+
+### Loops
+
+#### Breaking
+Any loop may be broken, either by a `break` which does not specify a label or by
+a `break` which specifies the label of that loop's body or another label above that
+loop. All loops except the `loop` loop are eligible for a `finally` block. This block
+is to be executed if and only if the loop executes "naturally". What constitutes
+"naturally" shall be specified by each loop type.
+
+#### Loop Counter
+All loops are capable of having at least one `->` capture, and this capture must always
+appear as the first capture if any captures are provided, although it is perfectly valid to
+bind the capture to `_` in order to discard it. This first capture is designated as the
+"loop counter". On the first iteration of the loop, this location is initialized to the
+`usize` value `0`, and is incremented by `1` on each subsequent iteration.
+
+#### Loop
+The `loop` loop will loop infinitely until a `break` statement halts it, or program execution
+is otherwise halted. As the only way out of a `loop` loop is a `break`, the `loop` loop is not
+eligible for a `finally` block.
+
+#### For
+The `for` loop is used for iteration over an eligible collection (see the section below). The
+for loop is eligible for an second capture -- which must come after the loop counter if at all --
+which is used to capture the value of the element currently iterated over.
+
+A `for` loop is considered as having exited "naturally" only if the collection it is iterating
+over has no more elements it wishes to expose. For example, reaching the end of an array.
+
+##### For Loop Eligibility
+In this initial specification, only arrays and slices are eligible for `for` loop looping.
+In both cases, the loop will execute once for every item in the array or slice. Thus, for
+an array or slice named `a`, the loop will execute `a.len` times in total, barring an unnatural
+exit via `break`.
+
+#### While and Until
+`while` and `until` will loop until their condition evaluates as either true or false,
+respectively. If the condition is an optional, then the `while` loop is additionally eligible 
+for a second capture -- which must come after the loop counter if at all -- which is used 
+to capture the value of the optional being used as the condition.
