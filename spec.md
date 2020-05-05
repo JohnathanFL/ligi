@@ -209,6 +209,22 @@ Aside from `field` and `enum`, all bind specs translate directly to a `var` bind
 - `let x:T` translates to `var x:const T`
 - `cvar x:T` translates to `var x: comptime T`
 
+Additionally, in order to allow `var` to work as normal, `var` will, by default when
+inferring a type, strip off any outer `const` or `comptime` modifiers. For example,
+
+```
+let x: const usize = 10
+assert x.@type == const usize
+var y = x
+assert y.@type == usize
+```
+
+Because `y`'s type was not specified, the type inferrence algorithm must strip off the
+outer `const`s and `comptime`s -- that is, any such modifiers outside of `*`, `ref`, or
+other such modifiers; modifiers which affect the mutability of the value being directly
+bound to, not the value pointed at or contained.
+
+
 ## Enum Literals
 Enum literals (`#Symbol` or `#Symbol(expr,...)`) are a shorthand for typing `EnumType.Symbol`.
 
