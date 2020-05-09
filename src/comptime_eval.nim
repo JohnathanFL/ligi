@@ -56,7 +56,7 @@ let f128Type = Type(name: "f128", pos: "builtin", ty: 2055)
 let typeType = Type(name: "type", pos: "builtin", ty: 2056)
 
 
-method evalAsType*(e: Expr): Option[Type] {.base.} = quit "HIT BASE EXPR"
+method evalAsType*(e: Expr): Option[Type] {.base.} = none(Type)
 method evalAsType*(b: Block): Option[Type] = quit "EVAL BLOCK NOT YET SUPPORTED"
 method evalAsType*(s: Symbol): Option[Type] =
   case s.sym:
