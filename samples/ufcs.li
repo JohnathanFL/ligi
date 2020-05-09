@@ -16,6 +16,38 @@ let val = pure fn a:?usize = b:bool = a.has
 let v: ?usize = 10
 assert v.val == 10 -- Not a bool
 
+-- New way for Part 1:
+-- Since `.` syntax makes it harder to differentiate between builtin methods and freestanding
+-- functions, I propose adding the `::` operator, which would act as a function applier:
+-- Inspiration from that C preprocessor dude in /r/ProgrammingLanguages on a UFCS thread
+assert 1::add(2) == 3
+let pow = fn x, y -> p = when y
+  is 0 { 1 }
+  is 1 { x }
+  else { x * x::pow(y - 1) }
+assert 2::pow(2) == pow(2, 2)
+
+-- It wouldn't require () for single arg functions
+-- Thus, 
+let sqr = pure fn x -> y = x * x
+assert 2::sqr == (2::sqr(), sqr(2))
+-- I'm going to advise (as a style recommendation) that functions which don't return a value
+-- always use () even if they have no args beyond the first :: arg, just because no ()
+-- seems to be to look more like you're getting a value than performing an operation
+-- (A bit like the advice to use snake_case for complex properties and camelCase for simple ones)
+
+
+-- The `::` operator would work below unary operators, at the same level as the `.` operator:
+assert foo::module.func(arg) == module(foo).func(arg)
+-- Thus, you must qualify function names if truly needed with parens:
+assert foo::(module.func)(arg) == module.func(foo, arg)
+-- This is an intentional ugliness. If you want the function, you should just `use` it directly.
+
+-- This new operator would also make formatting a little prettier:
+
+
+"Hello, world"::printf() 
+"Hello, {}."::printf("John")
 
 
 
