@@ -1,0 +1,30 @@
+-- This document is to document possible ways of adding shorthands to Ligi
+
+-- In C, you could make an enum like
+\\ enum MealTime { BREAKFAST, LUNCH, SUPPER, SNACK };
+
+-- Doing enums like this in Ligi is a little verbose when you only need the tags themselves:
+let Foo = enum {
+    enum en1, en2, en3
+}
+
+-- Instead, I plan to overload the enum operator to take a tuple of symbols like so:
+let Meal = enum { enum Breakfast, Lunch, Supper, Snack }
+-- could be
+let Meal = enum (Breakfast, Lunch, Supper, Snack)
+
+-- This would then translate out to exactly the same as Foo before it.
+-- This style wouldn't allow setting exact tag values (or changing tag types), but it is
+-- shorter when only the tags are needed.
+
+
+
+-- Making structs like this is a little verbose:
+let x = 10, y = 20, z = 30
+let vec3 = [.x = x, .y = y, .z = z]
+-- What if we allowed leaving off  the `=var` in `var = var`? Essentially a rust-style struct init:
+let vec3 = [.x, .y, .z]
+-- The parser itself would handle the translation of `.x` to `.x = x`. It'd just be a direct
+-- substitution of "you didn't add a `=expr`? you must think there's a variable in scope for it"
+
+

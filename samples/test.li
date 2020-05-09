@@ -1,0 +1,12 @@
+-- This is to document Ligi's testing style
+
+-- Ligi shall follow Zig's example with builtin `test` blocks
+-- The usage of test blocks and assert statements is heavily encouraged.
+
+let adder = pure fn a, b -> c = a + b
+-- The general syntax of a test is always `test` <testName> <block>
+test "adder" {
+  -- asserts are used within tests.
+  -- A failed assert is the only way to fail a test.
+  assert adder(4, 6) == 10
+}

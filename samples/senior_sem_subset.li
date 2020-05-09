@@ -1,0 +1,70 @@
+-- This file will attempt to show the entire subset of Ligi that will be implemented for
+-- my 2020 Senior Seminar project at MSUM
+-- This subset will serve as the initial proof-of-concept, as well as as a playground for
+-- exploring features/syntax changes
+
+let x = 0
+var y = 10
+y = y + 1
+y += 1
+assert y == 12
+
+if y != 12 {
+  -- Parens around y are optional
+  printf("Hey, {0} isn't 12!", (y))
+} else {
+  -- () is the 'null-tuple'. It has a @tupleLen of 0 and a type of void
+  printf("All is right in the world.", ())
+}
+
+
+-- New change starting with SS edition: Captures are now (val, counter), instead of (counter, val)
+for 4..=y -> val, counter {
+  printf("The {0}th iteration was #{1}", (counter, val))
+}
+
+var = true
+while booly {
+  if y != 0 {
+    y -= 1
+  } else {
+    booly = false
+  }
+}
+
+booly = false
+dowhile booly {
+  printf("I'll only print once!", ())
+}
+
+let Vec2 = struct {
+  -- Normal binds without a type will default to undef (the type of their first write)
+  field x*: f32, y*: f32
+  -- Function args without a type will default to the type of the arg to their right
+  -- A rightmost function arg with no type will default to undef
+  let vec2 = pure fn x, y: f32 -> res: Vec2 {
+    res.x = x
+    res.y = y
+  }
+
+  let equals = pure fn lhs, rhs: @This -> equal:bool {
+    return lhs.x == rhs.x and lhs.y == rhs.y
+  }
+  -- Add equals to the *global* overload table
+  @overload(#Eq, @This.equals)
+
+  -- Tuples can be returned
+  -- Return types may also be elided. However the same input types must always produce the same output type
+  let intoTuple = pure fn self: @This -> (x, y) {
+    x = self.x
+    y = self.y
+  }
+}
+
+var v = [:Vec2: .x = 10, .y = 20]
+var z = vec2(10, 20)
+assert v == z
+
+-- Unpack tuples by assigning them to a tuple of symbols
+let (v1, v2) = v.intoTuple()
+

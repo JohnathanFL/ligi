@@ -1,0 +1,62 @@
+-- This is to specify a RefCounted style class for Ligi's stdlib
+
+-- These classes would be used when you want to be able to pool/reclaim memory
+-- during a long period of allocations and deallocations
+
+-- Essentially: RcArena(T) holds all memory and counts, each Rc(T) holds only an index into
+-- its RcArena.
+-- Thus we can kinda get GC-style memory reshuffling, improving locality where possible
+
+-- I'm not going to bother defining the precise implementation, just the interface for now
+
+let Rc: fn T:type ->rc:type, RcArena: fn T:type -> arena:type
+
+RcArena = pure fn T:type -> rc:type = struct {
+  -- The objects themselves would be stored as a dynamically allocated array of
+  -- `?(*T, usize)`. Note that an RcArena makes no promises about objects maintaining their address
+  -- This allows us to reshuffle memory almost GC style
+
+  --= Creates a new RcArena.
+  --= TODO: Specify more on Ligi's whole setup regarding custom allocators
+  let init+ = overload {
+    --= Create the arena with no pre-reserved space
+    let default+ = fn -> self:@This = @This.init(0)
+    --= Create the arena with a specified size pre-reserved for object storage
+    let withSize+ = fn size: usize -> self:@This = {}
+  }
+
+  --= Returns a new Rc(T) pointing to this arena
+  --= val: The initial inner value of the Rc. May be `undef` if so desired
+  let new+ = fn self: ref @This, val: T -> rc:Rc(T) = {}
+
+  --= Handle Deallocating counts and all remaining objects
+  --= To be called when you can guarentee that no Rc object from this arena will
+  --= be calling its deinit again, and want to just dealloc all memory at once.
+  let deinit+ = fn self: ref @This -> void = {}
+
+
+  --= Reclaim as much memory as possible
+  --= mode:
+  ----= #Tame mode would only cut off as much memory as it can without moving objects
+  ----= #Aggressive mode would aggressively reshuffle members such that they are all contiguous,
+  ----= and then reclaim extra memory. This achieves GC-style memory reshuffling and cache locality
+  let trim+ = fn self: ref @This, mode: enum(Tame, Aggressive)-> void = {}
+
+  --= The number of objects currently allocated 
+  let count+: property usize
+  --= The total memory we have available at the moment
+  let cap+: property usize
+}
+
+Rc = pure fn T: type -> r:type = struct {
+  field arena: *RcArena --= The arena that allocated us
+  field id: usize --= The index into the arena's array.
+
+  --= Get the value we're pointing at
+  --= Returned as a ref T vs *T for convenience.
+  --= Must be a property because an RcArena is allowed to reshuffle memory
+  let val: property ref T
+  
+  --= Get the number of Rc(T)s that reference this same object location
+  let refCount: property usize
+}

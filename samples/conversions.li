@@ -1,0 +1,80 @@
+-- This is to document allowed implicit and explict conversions
+
+
+-- Implicit
+
+-- Integers :)
+
+-- Int literals are usize by default :)
+var u = 10
+assert u.@type == usize
+-- Negation on an int literal produces an isize :)
+var i = -10
+assert i.@type == isize
+-- Negation of negation is still isize :)
+var otherI = - -10 -- Note there's no -- operator yet
+
+let num:usize = 10
+-- Implicit conversions from a comptime-known (and thus checked) number is allowed
+let smallNum:u8 = num
+-- Implicit conversions from a non-comptime-known number are not allowed
+
+
+-- Arrays may be implicitly converted to a slice
+let ar = [0, 1, 2, 3]
+let sl: slice usize = ar
+
+-- Pointers may be implicitly deref'd
+  -- Update: No they ain't gonna be implicit deref'd.
+  -- Leaving this as a monument to my stupidity.
+-- let printIt = fn num: usize -> void = printf("{0}", num)
+-- let num = 15
+-- let addr = num.addr
+-- printIt(addr)
+-- This may be a somewhat controversial decision, but I believe it helps cut down on code bloat.
+-- If you tried to pass the address in, obviously you meant to deref it. Why require it to be explicit?
+-- I think this would be one of the things in the compiler that can be controlled with an @, like
+-- @allowImplicitPointerDeref = true
+-- Thus individual projects could disable it within their code if they find it unsafe.
+-- Remember the Ligi' Zeno: Stay flexible, and just don't be a dumdum.
+
+-- Non-const may implicitly convert to const, but not vice versa. Obviously.
+
+-- Explicit :)
+-- @as is the direct casting operator
+let k = @as(i32, 10)
+-- Or the more readable version, .as is defined for any number or boolean
+let j = 10.as(i98)
+let intBool = true.as(i32) -- true is defined as 1, false as 0 :)
+-- Works the other way around as well.
+-- Note that .as for integer -> boolean is defined as 0->false, not 0->true
+let boolInt = 1.as(bool)
+-- Note for pointers you have to use @as() or .@as(), to disambiguate from a method on the pointed
+let ptr = boolInt.&
+_ = ptr.@as(*u8)
+
+
+-- @into
+-- It's planned to have a Rust-like @into and @from on every struct
+-- It will work by having a @converter table on every type which can be added to by anyone
+-- For example:
+let MyVec2 = struct {
+  field x: f32, y: f32
+  @converter[(f32, f32)] = pure fn self: MyVec2 -> (x: f32, y: f32) = (self.x, self.y)
+  @from += pure fn (x: f32, y: f32) -> new:@This = [.x = x, .y = y]
+}
+-- Table is indexed by the type to convert into
+-- The table may be added to by anyone, but attempting to overwrite will be an error
+  -- or possibly just a warning, silently taking the first write :)
+
+-- Now you can do this:
+let mv2 = [:MyVec2: .x = 10.0, .y = 56.0]
+let (x, y) = mv2.@into((f32, f32))
+-- Note you can't do this with tuples, as the .@into will redirect to the inner members
+-- This is an unfortunate consequence of making tuples easier to work with, but may change
+  -- Or I may just add @tupInto to disambiguate
+
+-- I plan to add an extra special restriction on @converter:
+-- Only the type itself may define a conversion into a base type (or tuple of base types)
+-- This is to reduce clashes between different modules defining their own @intos
+-- If you want to define an @into for a base type, just make a distinct type that you @into

@@ -1,0 +1,62 @@
+-- This is to explore how unpacking (pattern matching) might work
+-- To remove any name conflicts, I'll usually wrap binds in {}
+-- None of this is set in stone, by any means.
+
+-- The basic idea is getting an easier way to get things out of data structures
+-- We can already do this with tuples:
+{ let (x, y, z) = (1, 2, 3) }
+
+-- So why not allow doing it with other stuff?
+
+
+
+
+-- Array/slice unpacking
+let data = [0, 1, 2, 3]
+
+-- "All or nothing" form
+{ let [first, second, third, fourth] = data }
+-- "Gap" form. Would either introduce `...` or use `..` as a "gap" operator
+{ let [first, ...] = data; assert first == 0 }
+-- Gaps could also be used in places like this (assuming only 1 gap)
+{ let [first, ..., last] = data; assert first == 0 and last == 3 }
+-- We could only have 1 gap in the above though, otherwise it's ambiguous
+-- Also, first/last could end up being the same:
+let smallData = [0, 1]
+{ let [first, ..., last] = data; assert first == last }
+-- I used `...` here instead of `_`, so the sink preserves its place as a single item sink
+-- Thus `...` (or `..`) would be a multi-item sink (hence a "gap")
+
+-- It would be nice to capture the leftover from the gap, though
+
+
+-- This brings up another problem: Should we allow len=0 slices to exist?
+-- Or should we require them to be optional slices?
+-- If we tried to capture the gap into a slice, and that's zero-sized, what then?
+
+-- len=0 slices are essentially the array equivalent of nullptrs, so it may make sense
+
+-- Maybe it could work like so:
+{ let [first, ...rem, last] = data; assert rem[0] == 1 and rem[1] == 2 }
+
+
+
+
+let MyVec2 = struct { field x: f32, y: f32 }
+let vec = [:MyVec2: .x = 0, .y = 20]
+
+-- Simplest form: directly capture by name
+{ let [.x, .y] = vec }
+-- The variable name here must match the inner name.
+-- Thus, this is simply a way of doing
+{ use vec.(x, y) } -- Or an alias :)
+-- while being able to change the x/y without affecting the original values
+
+-- Second form: Specify the inner name and outer name
+{ let [.myX = x, .myY = y] = vec }
+-- Here, the `x` and `y` must match the vec.(x,y) field names
+
+-- Thus, for structs, unpacking form is just a more readable form of
+{ let (x, y) = vec.(x, y) } -- Imagine if the members were longer. DRY. :)
+-- And a non-mutating form of
+{ use vec.(x, y) }

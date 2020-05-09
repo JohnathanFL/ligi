@@ -1,0 +1,23 @@
+-- This is an example to show how typechecked state machines could be done
+
+-- Using the enum shorthand proposal
+let State = enum (NoPlayer, Playing, Paused, Lose, Win)
+
+let Machine = pure fn state: State -> machine = struct {
+  let CurState = state
+
+  if state == #Playing {
+    -- Note that field declarations can escape their if-statements
+    field yourScore: u32
+    field theirScore: u32
+  } elif state == #Paused {
+    -- We could only ever pause if we were playing first
+    field oldState: Machine(#Playing)
+  } elif state in (#Lose, #Win) {
+    -- We just use Lose/Win 
+    field winnerScore: u32
+    field loserScore: u32
+  } else {
+    -- No need for anything here. If there's no player, we're just waiting
+  }
+}

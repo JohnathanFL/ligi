@@ -1,0 +1,507 @@
+-- Many changes have been made since this document (Like Zag->Ligi)
+-- This sample is more useful for historial purposes
+-- The comment below lies
+
+-- Grammar MK6 - Final (hopefully) iteration of the language
+-- Biggest change as of the beginning of this doc is removing all shadowing
+
+
+{
+  -- 10 minute crash course
+  -- We'll make a happy little comment with '(:'
+    -- Update: We now make indifferent little comments with '--'
+  -- Ligi's all about the binds
+  let myFirstVal*: usize = 0 -- Let creates a constant
+  -- The type is optional for a let
+  var myFirstVar: usize = 0 -- Var creates a mutable variable
+  -- Both type and initialization expression are optional for vars
+  -- If both are unspecified, the first write to the var determines its type
+  var noType
+  noType = 10
+
+  -- Note that semicolons are optional.
+  -- You only need them if there's ambiguity to remove, or if you prefer peppering them all over.
+  -- I've taken care to make a language that has very little of said ambiguity.
+  -- The only real problem is if, for some reason, you needed to write an expression on one line
+  -- then have the next line start with a unary '-'. In that case, just use () to disambiguate it.
+
+  -- Ligi is semi-whitespace sensitive. Call/index/brace operators must be on the same line as their preceeding symbol,
+  -- So you can unambiguously write things like
+  let 
+    x = 10,
+    y = 10
+  (x, y) += 1
+  -- Without the rule, that would be interpreted as Call{'()', 10, x, y}
+  -- With the rule, it's properly interpreted as 'Expr{10}, Call{'+=', (x, y), 1}'
+
+  -- All variables must be written to before they are read from
+  var undefinedMemory: usize
+  -- ERROR: printf("{}", undefinedMemory)
+  undefinedMemory = 1
+  printf("{}", undefinedMemory)
+
+  -- You can get around this by assigning the value of 'undef'
+  var undefMemory: usize = undef
+  printf("{}", undefMemory) -- No guarantees about what gets printed
+
+  -- Ligi has arrays, either with or without explicit type
+  let myFirstAr:
+    -- 'array', when used with only a type as its argument, infers the size
+    array usize =
+    -- When used with a tuple of (usize, type), it creates an array of that size.
+    [:array (10, usize): 0, 1, 2, 3]
+  -- You can slice into arrays
+  let myFirstSlice: slice usize = myFirstAr[0..2]
+  assert myFirstSlice.len == 2
+  assert myFirstSlice[1] == 1
+
+  -- You can concatenate arrays in 2 circumstances:
+  -- 1. When you can determine the entire size and concatenation at compiletime
+  cvar concatArray = [98, 99, 100]
+  -- Entire loop is evaluated at compiletime
+  comptime for 0..98 -> i {
+    concatArray = [i] + concatArray
+  }
+  -- 2. When the size is comptime known and it only happens once
+  -- (i.e no loops or other control structures like above)
+  let ar0 = [0, 1, 2]
+  let ar1 = [3, 4, 5]
+  var ar01 = ar0 + ar1
+  -- Note that if it's done with non-comptime values, it stores that on the stack,
+  -- as it's able to determine the size statically
+
+  -- Array concatenation is still very tentative.
+
+  
+  -- If you want to add 2 sets of numbers at the same time, use tuples:
+  assert (0, 1, 2) + (0, -1, -2) == (0, 0, 0)
+  -- I plan to make this use SIMD-optimizations where possible
+
+  -- Ligi has builtin optionals
+  let someVal: ?usize = 10
+
+  -- Ligi has all the normal flow controls
+  -- They also work with optionals
+  -- (Note equality also works with optionals)
+  if someVal == 6 {
+    printf("Oi!", {})
+  } elif someVal == 10 {
+    -- You can pass () (empty tuple) sometimes to denote no arg
+    printf("Yay!", ())
+  } elif someVal == null {
+  } elif someVal -> someValsVal { -- -> is used to capture things
+    printf("someVal was {}", someValsVal)
+  } else {
+    -- Can never execute
+  } finally {
+    printf("Executed because one of the if/elif was executed", ())
+  }
+
+  -- Ranges are included..excluded and included..=included
+  for 1..11 -> iterationNumber, capturedValue {
+    printf("{}-{}", (iterationNumber, capturedValue))
+    -- iterationNumber: 0..10
+    -- capturedValue: 1..11
+  } finally {
+    printf("I ran because nothing broke the loop!", ())
+  }
+
+  -- Labels are denoted with `blahBlah
+  while someVal -> someValsVal `whileLoopLabel {
+    -- breaks are either:
+    break `whileLoopLabel
+    -- or
+    break `whileLoopLabel, 10 -- If you want to break with a value
+    -- while can't get an error (i.e no need for an else)
+  } finally {
+    printf("I won't run because the loop broke!", ())
+  }
+
+  -- These can all return values
+  let maybe10 = if true { 10 } else { 50 }
+
+  let anArray = [0, 1, 2, 3, 4]
+  let indexOf2 = for anArray -> i, val {
+    if val == 2 { i }
+  } finally { null } -- Finally is required for a for loop expression
+  assert indexOf2.has
+  assert indexOf2 == 2
+
+  -- Types are defined with struct/enum
+  let Vec2 = struct {
+    -- Fields use 'field'
+    field x, y: f32 -- Binds without an explicit type defer to the type of the righthand neighbor
+
+    -- structs can have static stuff defined
+    -- 'pure' asserts that a function always does the same thing if it gets the same args
+      -- All arithmetic operator (+, -, *, etc) overloads *must* be pure
+      -- Operators such as +=, -=, etc are not subject to this restriction
+    -- @This is a special compiler-level variable that means "the type we're currently inside"
+      -- (Not to be confused with @this, which means "the function we're currently inside"
+      -- (Note you could also use Vec2 in place of @This. This is a matter of preference)
+    let addVec2 = pure fn lhs, rhs: @This -> res: @This { -- Ligi is return-location first. You bind a result location.
+      -- Struct literals look like array literals, but use .fieldName to specify each field
+      res = [.x = lhs.x + rhs.x, .y = lhs.y + rhs.y]
+    }
+    -- You can add a function to the global overload table with @overload
+    @overload(#Add, @This.addVec2)
+
+    -- A property works C# style. Read it and it calls .get. Write to it and it calls .set
+    property length = [
+      .get = pure fn self: @This -> len: f32 {
+        return @sqrt(self.x * self.x + self.y * self.y)
+      },
+      .set = fn self: @This, newLen: f32 {
+        let curLen = self.length
+        -- Tuples are most useful for doing many operations at once
+        -- The tuples must either be of equal length, or at least one must have len == 1
+        -- Thus this is 'diveq both by curLen'
+        (self.x, self.y) /= curLen
+        -- Don't bother if we're already there
+        if newLen != 1.0 { (self.x, self.y) *= newLen }
+      }
+    ]
+    -- Now we can do v.length to get a length, or v.length = 1.0 to normalize it to 1.0, etc
+    -- You can also overload certain operators for properties, but that's for another time
+  }
+
+  -- Enums in Ligi are always tagged unions
+  let Meal = enum {
+    @tagType = u8 -- Means the enum stores its tag in a u8
+    -- If there are no union fields, this is the entire size of the enum
+
+    -- 'enum' either specifies an enum block or an enum bind (as here)
+    -- If it's found at the beginning of a statement, 'enum bind' takes precedence
+    enum -- Note these are all in 1 bind statement. You don't need to, I just do it because.
+      BaconAndEggs = 0, -- You can assign a tag value
+      Pizza: bool, -- Here we store a bool iff the tag is Pizza to know if it was reheated
+      Cake
+
+    -- Like a struct, enums can have static stuff
+    var numberOfMealsEaten = 0
+    let wasReheated = pure fn self: @This -> res:bool {
+      -- #Symbol is an enum literal. #Symbol(expr) is an enum literal with union initialization
+      -- Ligi first compares the tag, then the union value iff the tag was equal, thus we can avoid
+      -- drawn out 'self == #Pizza and self.Pizza == true' stuff.
+      -- # was chosen instead of Zig's .Yadda to distinguish between
+      -- [ .EnumLit...] and [ .FieldName = ... ] without advance lookahead
+      res = self == #Pizza(true)
+    }
+  }
+
+  -- All types can be concatenated together
+  let Vec3 = Vec2 + struct {
+    field z: f32
+    -- Note that '@This' means '@This as of time of use'
+    -- Now you see why I used 'addVec2' instead of 'add'
+    let addVec3 = pure fn lhs, rhs: @This -> res: @This {
+      return [.x = lhs.x + rhs.x, .y = lhs.y + rhs.y, .z = lhs.z + rhs.z]
+    }
+    @overload(#Add, @This.addVec3)
+  }
+
+  -- Note:
+  let val = [.x = 10.0, .y = 10.0, .z = 10.0]
+  let vec3Val: Vec3 = [.x = 10.0, .y = 10.0, .z = 10.0]
+  assert val.@type != vec3Val.@type
+  -- The type of val is something like 'struct0_132_13', as that's where it was first used
+  -- The second one still makes a new anonymous struct, but it coerces it into a Vec3
+  -- because all fields match just fine.
+}
+
+{
+  -- Binds use one of the following:
+  let someConst = 10
+  var someMutable = someConst
+  -- field/enum as described
+  --alias anotherTermForSomeMut = someMutable
+  -- Changes to anotherTermForSomeMut are reflected in someMutable and vice versa
+
+  -- cvars are mutable at compiletime, and resolve to a let by runtime
+  cvar compileVar = 0
+  -- cvars must be changed in 'comptime' subtrees
+  comptime (compileVar += 10)
+  assert compileVar == 11
+  comptime (compileVar += 1)
+  -- Note the order there. Use cvars with care. (and probably sparingly)
+  -- They're great for letting systems register themselves with each other, but have a high potential
+  -- for abuse.
+
+  -- 'use' is the sole special case of binds.
+  -- It's really just a macro that expands 'use path.member' into 'alias member = path.member'
+  -- Obviously, we use it for including things from other modules
+  -- use std.ArrayList -- Std library borrowed from Zig until we have an actual parser 
+
+  -- Note you could also use it like so:
+  let ar = [0, 1, 2, 3, 4]
+  -- use ar.len
+  -- === alias len = ar.len
+  assert len == 5
+  -- Use this style sparingly though.
+
+  -- A bind with '*' immediately after it is publicized
+  let publicBind* = 10
+  -- Now another module that imported this block could see and use that.
+
+  -- In summary:
+    -- * to make public
+    -- Let for constants that never change
+    -- Var for variables that do change
+    -- alias for having a shorter name for something without making a new memory location
+    -- cvar for compiletime logic that changes over time
+      -- Note that 'let' can also store types and such
+    -- use as a shorthand alias
+
+  -- Binds may not be shadowed (i.e you can't 'let x; let x')
+  -- Binds in sibling scopes do not affect each other, only binds in direct ancestors
+  {
+    let myVal = 10
+  }
+  {
+    let myVal = true
+    {
+      -- ERROR: let myVal = true
+    }
+  }
+}
+
+{
+  -- Expressions
+  -- We'll make heavy use of it, so first: assert
+  assert true == true
+  -- It's parsed at the same precedence as 'let/var/etc', and will panic and do its best to explain
+  -- what went wrong if the expression is false
+
+  -- Standard operators
+  -- Ligi has all the standard arithmetic/logical/relational ops, with the exception that
+  -- ||, &&, and ! are written 'or', 'and', and 'not'
+
+  -- Ligi also adds:
+  { -- xor
+    let x = true xor false -- true
+    assert true xor true == false
+    -- Note that tuple rules let you check for one truth of a tuple easily now:
+    assert false xor (true, false, false)
+    -- (Expands to false xor true xor false xor false)
+    assert not (false xor (true, true, false))
+  }
+  { -- in and the range operators
+    assert 10 in 0..11
+    assert not ( 10 in 0..10 )
+    assert 10 in 0..=10
+
+    -- This works with tuples as well
+    -- (Note that 'in' between 2 scalars is defined as '=='
+    -- Great for checking membership in a disjoint range
+    assert 10 in (0, 5, 0..=9, 10, 11)
+    -- (expands to 10 in 0 or 10 in 5 or ...)
+    -- 'in', when used with tuples, is 'all of the left side are in one of the right sides'
+    assert (0, 1) in (0, 1..4, 10)
+    -- (expands to (0 in 0 or 0 in 1..4 or 0 in 10) and (1 in 0 or 1 in 1..4 or 1 in 10)
+    assert not ( (0, 1) in (0, 2..4, 10) )
+  }
+  {
+    -- Just about anything's an expression:
+    let x = {
+      10
+    }
+    let xIfTrue = if true { x } else {100}
+  }
+  {
+    -- comptime marks its entire subtree for evaluation at compiletime
+    let x = comptime {
+      10 + 12 + 135
+    }
+    -- Anything that comes out of a comptime subtree has its type marked 'comptime'
+    -- If used on a single type, it means that any value assigned to that type must also be comptime known
+    -- Thus you can also write 'comptime usize' when specifying a fn arg to say that it must be comptime known
+      -- i.e comptime has an overload for taking only a type, and an overload for taking a general expression
+    -- Any outside variables read in a comptime block must be comptime known
+    -- Any outside variables written in a comptime block must be cvars
+    -- If the subtree can't be evaluated at comptime, it's an error.
+  }
+  {
+    -- pure/inline are also just unary operators
+    -- Inline can either be used on the function definition to specify that it must always be inlined,
+    -- or used on a subtree to tell the compiler that it'd better either inline or or face the consequences
+    -- (such as a compile error)
+    var x = 10
+    inline (x += 10) -- Not gonna do much here, but you get the idea
+
+    -- Pure can only be used on a function def to specify that it may not modify anything outside its scope,
+    -- and may only read constant, comptime-known variables
+  }
+}
+
+{
+  -- Types
+
+  { -- Primitives
+    -- Ligi technically has 1028 primitive types
+    let voidy: void = () -- Void. It's... nothing. A zero-tuple ( () ) is of type void
+    let uintOf21Bits: u21 = 0 -- u{1..=512} for unsigned integers of specified size
+    let intOf21Bits: i21 = -2 -- i{1..=512} for signed integers of specified size
+    -- Don't worry, that's already 1025 of them :)
+    let archUnsigned: usize = 0 -- u{16, 32, 64, etc} depending on target architecture
+    let archSigned: isize = -2 -- i{16, 32, 64, etc} depending on target architecture
+    
+    let booly = true -- Booleans
+    -- And that's all the primitives
+  }
+
+  {
+    -- Functions
+    -- Ligi specifies the type of a function with the 'proc' operator and a tuple
+    let foo = fn {}
+    assert foo.@type == proc ((), ()) -- Function which takes/returns void
+    assert foo.@type == proc(void, void)
+    let bar = fn a, b: usize -> res:isize {res = a + b}
+    assert bar.@type == proc ((usize, usize), isize)
+
+  }
+
+  { -- Modifier types
+    -- Ligi has 6 modifier types
+
+    -- const means it can't be modified anymore
+    var a: const usize = 10
+    -- Kinda redundant here, just use a let.
+
+    -- comptime means its value must be known at compiletime
+    cvar v: comptime usize = 10
+
+    -- Arrays
+    -- You can use array (size, type) to declare with a specific size
+    let arrayOf5: array (5, usize) = [0, 1, 2, 3, 4]
+    -- Or just array type to deduce the size from its initializer
+    let deducedSize: array usize = [0, 1, 2]
+    let deducedLen = deducedSize.len -- They have a .len property that gives their length
+
+    -- Slices
+    -- Slices are a slice of an array. They're created by indexing an array with a range
+    let first3: slice usize = arrayOf5[0..3]
+    assert first3.len == 3
+    
+
+    -- Optional (? operator)
+    -- ?foo is either a foo or null
+    let optionalUsize: ?usize = null
+    -- Optionals have 2 builtin properties:
+    let has: bool = optionalUsize.has -- Is the value present?
+    let val: usize = optionalUsize.val -- The value
+    -- Note that on BuildMode != ReleaseFast, taking the val when !has is an error
+
+    -- Pointer (* operator)
+    -- Must never be null. Use a ?*foo for that
+    let u = 10
+    let ptrToU32: *u32 = u.addr -- use .addr to take the address of something
+    let uAgain = ptrToU32.deref -- and .deref on a pointer to dereference it
+    -- You can use .bytes to get a (slice u8) from a pointer:
+    let uBytes = ptrToU32.bytes
+    assert uBytes.len == (u32.size, 4)
+
+    -- These can be chained
+    let optPtrToOptUsize: ?*?usize = null
+    -- Just don't go too crazy
+  }
+
+  {
+    -- Tuples
+
+    -- Ligi has tuples that can be used to store multiple different types without needing a full struct
+    {
+      let t = (0, true, "Oi maties")
+      assert t.@type == (usize, bool, slice const u8)
+    }
+    {
+      -- the dot operator redirects to all members, except for a few compiler builtins
+      let ars = ([0, 1], [0], [1, 2, 3, 4, 5])
+      assert ars.len == (2, 1, 5)
+      -- .<num> indexes into a tuple
+      assert ars.0.len == 2
+      assert ars.1.len == 1
+      -- All the compiler builtins for tuples start with @tup
+      assert ars.0 == ars.@tupAt(0)
+      -- @tupLen gets the number of elements in the tuple
+      assert ars.@tupLen == 3
+      -- These @vars come in handy more when you're taking arguments of unknown type and use a tuple
+    }
+    
+  }
+
+  {
+    -- Basic type arithmetic
+
+    -- You can multiply a type to get a tuple:
+    let tupleOf5: usize * 5
+    assert tupleOf5.@type == (usize, usize, usize, usize, usize)
+  }
+}
+
+{
+  -- Experimental feature: Stropping
+  -- We'll use #StringLit to do stropping, allowing reserved stuff to be used as symbols
+  -- This will be parsed at the token level (# immediately followed by " == strop)
+  let #"pure" = true
+  -- Note that this does *not* conflict with enum lits
+  let E = enum { enum #"pure", #"fn" }
+  let e: E = ##"pure"
+  -- Think of # like a "promotion" operator
+  -- It promotes String->Symbol and Symbol->EnumLit
+
+  -- Update: Added.
+}
+
+{
+  -- Leaving this as a monument to my foolishness.
+  -- This can't work, as an ?*T can't be represented as an enum
+  -- Optionals will have to be structs
+  
+  -- Experimental feature: Options as enums
+  -- We *could* implement options like so within the compiler:
+  -- let @Optional = fn T: type -> type {
+  --   if T.@isPtrType {
+  --     return packed enum {
+  --       @tagType = usize
+  --       enum
+  --         Some: 
+  --         None: void
+  --       -- Thus accessing the val gets the entire enum, tag and all
+  --       alias val = @this.@unsafeCast(usize)
+  --     }
+  --   } else {
+  --     return enum {
+  --       enum
+  --         Some: T,
+  --         None: void
+  --       property
+  --         has: bool = [ .get = pure fn self -> has { return self == #Some } ],
+  --       alias val = Some -- Thus everything redirects to Some's union field
+  --       -- (avoids nasty questions of how to allow treating .val as the value itself when using a property)
+  --     }
+  --   }
+  -- }
+  -- -- And in the compiler itself:
+  -- @overload(#Optional, @Optional)
+}
+
+{
+  -- Interesting notes about how things work
+
+  -- There's no such thing as a float literal in Ligi.
+  1.0;
+  -- is actually parsed as a field access into 1's field 0
+  -- The jury's still out on how annoying this could become, but I can't see any immediate problems.
+  -- This allows us to work unambiguously with swizzling without lexer tricks:
+  let a = ((1, 2, 3), (1, 3))
+  assert a.0.1 == 2
+  -- This also means that this is technically syntactically correct:
+  1.2.4;
+  -- Although I'm not yet sure if it'll be semantically correct
+
+  -- TL;DR: The first '.' begins a path. Successive '.'s act as separators in that path
+  -- Thus the symbols/literals inside that path are no longer truly evaluated as normal
+  -- Thus when we need to grab something's field, we can pass it the Path
+  -- It then takes the first part of the path out and, if needed, passes the rest of the path to
+  -- whatever is specified by the first part of the path
+}
