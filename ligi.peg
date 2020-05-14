@@ -1,0 +1,162 @@
+WHITESPACE = _{ (" " | "\n" | "\t")+ }
+// WHITESPACE without the newlines
+SPACE = _{ (" " | "\t")+ }
+COMMENT = _{ "--" ~ (!NEWLINE ~ ANY)* ~ NEWLINE }
+// Generate this in Kakoune with:
+//   Select entire buffer
+//   <s>elect based on `"\w+"`
+//   <y>ank
+//   <a-p>aste into a scratch buffer
+//   Remove duplicates
+//   Add `|` as needed.
+//   
+RESERVED = _{ 
+  "_" |  "and" |  "array" |  "break" |  "comptime" |  "const" |  "cvar" |  "defer" |  "elif" |  "else" |  "enum" |  "field" |  "finally" |  "for" |  "if" |  "in" |  "inline" |  "is" |  "let" |  "loop" |  "mod" |  "not" |  "notin" |  "or" |  "overload" |  "property" |  "pure" |  "return" |  "slice" |  "struct" |  "until" |  "var" |  "when" |  "while" |  "xor"
+}
+// Note this means that numbers are also "Words". I expect that they'll be less common
+// than variable names, so I'll just do a lookup on them. Since I'm also planning
+// aggressive comptime optimizations anyway, it shouldn't affect anything
+Word = @{ !RESERVED ~ ('a'..'z' | 'A'..'Z' | '0'..'9' | "_" | "@")+ }
+Label = @{ "`" ~ Word }
+Tag = @{ "#" ~ Word }
+
+Block = { Label? ~ "{" ~ (Stmt ~ ("," ~ Stmt)*)? ~ "}" }
+
+TypeDesc = { ":" ~ Expr }
+
+BindTuple = { "(" ~ BindLoc ~ ("," ~ BindLoc)* ~ ")" ~ TypeDesc? }
+BindSink = { "_" ~ TypeDesc? }
+BindName = { Word ~ TypeDesc? }
+BindLoc = _{ BindName | BindSink | BindTuple }
+InitBind = _{ BindLoc ~ ("=" ~ Expr)? }
+Let={"let"} Var={"var"} CVar={"cvar"} Field={"field"} Enum={"enum"}
+Bind = { (Let | Var | CVar | Field | Enum) ~ InitBind ~ ("," ~ InitBind)* }
+
+ArgList = { (Expr ~ ("," ~ Expr)*)? }
+
+Else = { "else" ~ Block }
+Finally = { "finally" ~ Block }
+
+// TODO: Should we firm things up and only allow BinExpr here?
+WhenArm = { "is" ~ BinOp? ~ Expr ~ ("->" ~ BindLoc)? ~ Block }
+IfArm = { Expr ~ ("->" ~ BindLoc)? ~ Block }
+
+When = { "when" ~ Expr ~ WhenArm* ~ Else? ~ Finally? }
+If = { "if" ~ IfArm ~ ("elif" ~ IfArm)* ~ Else? ~ Finally? }
+
+Loop = { "loop" ~ ("->" ~ BindLoc)? ~ Block }
+
+BiLoopCapt = _{ "->" ~ BindLoc ~ ("," ~ BindLoc)? }
+
+For = { "for" ~ Expr ~ BiLoopCapt? ~ Block }
+
+// TODO: PostTestLoops. (dowhile?)
+PreTestLoop = _{ Expr ~ BiLoopCapt? ~ Block }
+While = { "while" ~ PreTestLoop }
+Until = { "until" ~ PreTestLoop }
+
+// TODO: Explore adding this into calls for named arguments
+// If the `=Expr` isn't present, then `Word` is assumed to be both key and value
+Desig = { "." ~ Word ~ ("=" ~ Expr) }
+
+
+MLString = @{ (!NEWLINE ~ ANY)* }
+MLStr = _{ ("\\\\" ~ " "? ~ MLString ~ NEWLINE ~ WHITESPACE*)+ }
+String = @{ (!"\"" ~ ("\\"? ~ ANY))* }
+Str = _{ "\"" ~ String ~ "\"" }
+StrLit = ${ (Str | MLStr) }
+
+CompoundDesc = { ":" ~ Expr ~ ":" }
+// The `!`s here are needed to stop Access's atomicity from cascading
+Compound = !{ "[" ~ CompoundDesc? ~ (Desig ~ ("," ~ Desig)* | Expr ~ ("," ~ Expr)*)? ~ "]" }
+Tuple = !{ "(" ~ CompoundDesc? ~ Expr ~ ("," ~ Expr)* ~ ")" }
+Descent = !{ "." ~ Word }
+Index = !{ "[" ~ ArgList ~ "]" }
+Call = !{ "(" ~ ArgList ~ ")" }
+Pass = !{ "::" ~ Word ~ "(" ~ ArgList ~ ")" } // ::foo(args)
+Access = ${
+  (Tuple | Word | Compound | StrLit)
+  // Newlines only allowed before `.` or `::`, as they're unambiguous over newlines.
+  // Otherwise we'd need to require semicolons in places like `foo\n(tuple,tuple)`
+  ~ (WHITESPACE? ~ (Pass | Descent) | SPACE? ~ (Call | Index))*
+}
+
+// The Tuple|Compound is for initializing without exterior parens
+EnumLit = { Tag ~ (Tuple | Compound)? }
+
+Atom = _{
+  Access
+  | EnumLit
+  | Block
+	| If | When
+	| While | Until
+	| For
+	| Loop
+}
+
+Neg={"-"} BitNot={"~"} Not={"not"} 
+Const={"const"} Comptime={"comptime"} 
+Array={"array"} Slice={"slice"} Opt={"?"} 
+Pure={"pure"} Inline={"inline"} Struct={"struct"} Overload={"overload"} 
+Property={"property"} Ptr={"*"}
+// Enum={"enum"} -- Already defined as a bindspec
+UnaOp = _{
+  Neg | BitNot | Not |
+  Const | Comptime |
+  Array | Slice | Opt |
+  Pure | Inline | Struct | Enum | Overload | Property |
+  Ptr
+}
+UnaExpr = { UnaOp* ~ Atom }
+
+Equal={"="} NotEqual={"!="} 
+Less={"<"} Greater={">"} GreaterEq={">="} LessEq={"<="} Spaceship={"<=>"} 
+Or={"or"} Xor={"xor"} 
+And={"and"} 
+In={"in"} NotIn={"notin"} 
+OpenRange={".."} ClosedRange={"..="} 
+Add={"+"} Sub={"-"} 
+Mul={"*"} Div={"/"} Mod={"mod"} 
+BitOr={"|"} BitAnd={"&"} BitXor={"^"}
+BinOp = _{
+	// 
+  Equal | NotEqual |
+  Spaceship | GreaterEq | LessEq | Less | Greater |
+  Or | Xor |
+  And |
+  NotIn | In |
+  ClosedRange | OpenRange | 
+  Add | Sub |
+  Mul | Div | Mod |
+  BitOr | BitAnd | BitXor
+}
+BinExpr = { UnaExpr ~ (BinOp ~ UnaExpr)* }
+
+Expr = _{ BinExpr }
+
+Assg={"="} AddAssg={"+="} SubAssg={"-="} MulAssg={"*="} DivAssg={"/="}
+AssgOp = _{
+   Assg | AddAssg | SubAssg | MulAssg | DivAssg
+	 // | BitOrAssg | BitAndAssg | ShlAssg | ShrAssg
+}
+Assignment = { Expr ~ (AssgOp ~ Expr)? }
+
+// Hence: `break `label, val `, `break `label`, and `break val` all work
+Break = { "break" ~ (
+    Label ~ ("," ~ Expr)?
+    | Expr?
+  )
+}
+Return = { "return" ~ Expr? }
+Defer = { "defer" ~ Expr }
+
+Stmt = _{
+  // Bind must come first so `enum`-bind takes precedence over `enum`-operator
+  Bind
+  | Assignment
+	| Return
+	| Break
+	| Defer
+}
+
+Prog = _{ SOI ~ Stmt* ~ EOI }

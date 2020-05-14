@@ -8,8 +8,12 @@
 pub type OptBox<T> = Option<Box<T>>;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum BinOp {
+pub enum AssgOp {
   Assg, AddAssg, SubAssg, MulAssg, DivAssg, BitOrAssg, BitAndAssg, ShlAssg, ShrAssg,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum BinOp {
   Equal, NotEqual,
   Less, Greater, GreaterEq, LessEq, Spaceship,
   Or, Xor,
@@ -24,7 +28,7 @@ pub enum BinOp {
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum UnaOp {
-  Sub, BitNot, Not,
+  Neg, BitNot, Not,
   Const, Comptime,
   Array, Slice, Opt,
   Pure, Inline, Struct, Enum, Overload, Property,
@@ -42,7 +46,8 @@ pub enum Publicity {
   Private, ReadOnly, Public
 }
 
-pub type Block = (Option<String>, Vec<Expr>);
+#[derive(Debug, Clone, PartialEq)]
+pub struct Block(pub Option<String>, pub Vec<Expr>);
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Expr {
@@ -54,7 +59,7 @@ pub enum Expr {
   
   Block(Block),
   
-  
+  AssgExpr(AssgOp, Box<(Expr, Expr)>),
   BinExpr(BinOp, Box<(Expr, Expr)>),
   UnaExpr(UnaOp, Box<Expr>),
   /// Includes solitary words.
