@@ -3,8 +3,9 @@
 
 -- There will be two parts in this proposal, which may be added together or separately:
 ---- 0: Searching local namespaces to resolve functions
+------ Current plan: The `::` (pipeline) operator
 ---- 1: Calling functions without parentheses (i.e as unary or binary ops)
-
+------ Not currently planned.
 
 
 -- Part 0:
@@ -27,16 +28,6 @@ let pow = fn x, y -> p = when y
   else { x * x::pow(y - 1) }
 assert 2::pow(2) == pow(2, 2)
 
--- It wouldn't require () for single arg functions
--- Thus, 
-let sqr = pure fn x -> y = x * x
-assert 2::sqr == (2::sqr(), sqr(2))
--- I'm going to advise (as a style recommendation) that functions which don't return a value
--- always use () even if they have no args beyond the first :: arg, just because no ()
--- seems to be to look more like you're getting a value than performing an operation
--- (A bit like the advice to use snake_case for complex properties and camelCase for simple ones)
-
-
 -- The `::` operator would work below unary operators, at the same level as the `.` operator:
 assert foo::module.func(arg) == module(foo).func(arg)
 -- Thus, you must qualify function names if truly needed with parens:
@@ -44,8 +35,6 @@ assert foo::(module.func)(arg) == module.func(foo, arg)
 -- This is an intentional ugliness. If you want the function, you should just `use` it directly.
 
 -- This new operator would also make formatting a little prettier:
-
-
 "Hello, world"::printf() 
 "Hello, {}."::printf("John")
 
@@ -91,3 +80,6 @@ printf("1+2={}", 1 add 2)    -- BAD - Parsed as printf("", 1(add(2)))
 -- Thus, in summary, Part 1 would:
 ---- Essentially allow defining new unary operators
 ---- NOT allow defining new unary operators (because of ambiguity)
+
+
+-- Currently: The plan does NOT include Part 1
