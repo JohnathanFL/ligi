@@ -1,0 +1,43 @@
+-- This is to document the @Is system for types
+-- @Is is a simple builtin for each type, used to annotate types
+-- with flags.
+
+-- This will, for example, likely be used for Copy/Clone-able things
+
+let MyList = struct {
+  @Is[#Copyable] = false
+  -- ...
+}
+
+assert MyList.@Is[#Copyable]
+
+-- This does not, however, allow for storing arbitrary values in it (beyond bools)
+-- What we could do there is make the inner values a special "Any" type:
+let Any = enum {
+  enum Bool: bool, UInt: usize, Int: isize, Float: f64, Str: str
+  -- and so on
+
+  -- Providing conversions from all other types
+  -- (the type @vars and such aren't finalized constructs. Something similar will exist, though.
+  -- the way I imagine the .@class here is that #Int stores whether it's signed and how many bits,
+  -- with null bits for a *size. #Float would follow the same bits rule, only with an enum,
+  -- since there are a finite number of options there
+  -- )
+  @From = fn x -> a:@This = when x.@type.@class
+    is #Int(#Signed, _) { #Int(x.as(usize)) }
+    is #Int(#Unsigned, _) { #UInt(x.as(isize)) }
+    is #Bool { #Bool(x) }
+    is #Float(_) { #Float(x.as(f64)) }
+    else { @compileError("Unable to convert this type into an Any") }
+}
+
+-- We'd then change @Is to @Attrib, and overload the indexing to work for each of the @From
+-- supported types, allowing this syntax:
+let MyList = struct {
+  @Attrib[#Copyable] = true
+  @Attrib[#Other] = "Test attrib"
+  -- The overloaded [] would allow us to write the above instead of things like
+  @Attrib[#Other2] = #UInt(10)
+  -- ...
+}
+-- It's a little more verbose, but much more expandable

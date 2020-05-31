@@ -1,0 +1,57 @@
+-- This is to discuss comment style in Ligi
+
+-- Style:
+-- + Pro
+-- - Con
+-- * Neutral
+--   Continuation
+
+-- As much as I love the (: syntax for comments, it can be a little hard to type
+
+
+-- Current plan: going with #4
+  -- Line comments are now --
+  -- Doc comments will likely be ++ or --=
+  -- :: inside () will now be used for casting, similar to [::] with structs/arrays
+    -- Works well with compound tuples
+
+
+-- Suggestion #0: Keep the existing style
+
+-- + Looks nice, at least to me, and leads to a very nice inline comment style ( (: :) )
+-- + There's no possible ambiguity with `(:` and the way Ligi uses `:`
+-- - Harder to type, especially if your editor auto-inserts the )
+-- - Using something else could allow for `tuple casting`, like so:
+  --usize: 0)
+  assert --(usize, isize, f32): 0, 1, 2).@type == (usize, isize, f32)
+  -- Thus we'd have some parity between [:t: arg] and (:: arg)
+
+-- Suggestion #0.1: Use existing style as multi-/in-line comments and use one of the below
+
+-- Suggestion #1: Allow `#<space>` to start a line comment
+
+-- + This would not conflict with `#<character>`, like enum literals and `#{`
+-- + This is much easier to type
+-- * The existing style can be maintained as an alternative or for inline comments
+-- - Means that `#` cannot be treated as an operator (i.e `# <ident or other stuff>`)
+-- * Similarly, #= could be used for doc comments
+
+-- Suggestion #2: Allow `//` for comments
+
+-- +  This is widely known and used, so it's more familiar. (: is certainly not.
+-- +  Very clear, as `//` can't be used for anything else
+-- -  Longer to type than #
+-- +- The existing style can still be maintained as an alternative and for inline comments
+
+-- Suggestion #3: Use `#:` or similar for comments
+
+-- + At least on QWERTY keyboards, it's much easier to type
+-- + Allows `#` to be treated as an operator if we need to
+-- + Clearer than `#<space>`, since we also have #<word> for enum lits
+-- - Will be harder on Dvorak keyboards (essentially `#Z` to type)
+
+
+-- Suggestion #4: Use `--`, Lua or SQL style -- Now implemented
+-- + Just as easy to type as //, if not easier (middle/ring finger, not pinky/ring)
+-- - Removes any ability to use `--` as decrement, not that I was planning on that anyway
+-- + Could then use `++` as a doc comment

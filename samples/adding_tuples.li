@@ -1,0 +1,33 @@
+-- This is about adding tuple *types*
+-- For adding tuples like (1, 2) + (2, 1), see samples/simd.li
+
+
+-- If we allow adding tuple + struct, we could then do things like:
+let Vec3 = (f32, f32, f32) + struct {
+  let len = property {
+    let get+ = inline pure fn (x: f32, y: f32, z: f32) -> len: f32 = @sqrt(x*x + y+y + z*z)
+  }
+
+  -- We already get +, -, *, and / for free, as Ligi already defines tuple arithmetic like:
+    -- (x, y, z) + w === (x+w, y+w, z+w)
+    -- (x, y, z) + (p, q, r) === (x+p, y+q, z+r)
+    -- using SIMD where possible by default.
+}
+
+-- A tuple constructed in this way would inherit all old operator overloads from the last type
+-- by default, but allow them to be shadowed by new overloads ()
+
+
+-- This also means that you can effectively emulate Rust's `struct(T,V)` with
+-- `(T,V) + struct {}` in Ligi.
+
+-- You can also effectively make a distinct integer type like:
+let Miles = f64 + struct {}
+-- And convert back and forth like so:
+let dist = (:Miles: 1000.0)
+let distAsF64 = (:f64: dist)
+
+
+-- Problems: Do we simply say "tuple addition overloads default swizzling"?
+-- By default, (x, y, z).len expands to (x.len, y.len, z.len)
+-- We could simply say "that's only defined for primitive tuples. tuple-structs don't have it"

@@ -1,0 +1,23 @@
+-- This is to explore allowing binds to be used in expressions
+
+
+-- The basic idea is to be able to do stuff like this:
+let Vec2 = struct { field x: f32, y: f32 }
+let Vec3 = Vec2 + field z: f32
+-- So we're able to do stuff on a field/enum by field/enum basis, rather than
+-- requiring entire structures to add together.
+
+
+-- Problem: `enum` the bind will now conflict with `enum` the operator.
+-- Possible solution: Replace `enum` the operator with `union`:
+--  Using `tag` would be to general a word.
+let Meal = union (Breakfast, Lunch) + enum Supper: usize
+
+
+
+-- Alternative: Still allow binds to be expressions in the AST, but
+-- require the programmer to do things like:
+let Meal = union (Breakfast, Lunch) + @enum("Supper", usize)
+-- and
+let Vec3 = Vec2 + @field("z", f32)
+-- so the bind expressions are written as functions, with `@`s to disambiguate.

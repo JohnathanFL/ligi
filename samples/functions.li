@@ -1,0 +1,43 @@
+-- This shall discuss function syntax and semantics
+
+-- The basic syntax of function defs is `fn [args] (-> bind ('=' expr | block) | block)`
+
+{
+  -- C++ `void foo(){}`:
+  let foo = fn {}
+}
+
+-- In all the following, just assume int == isize :)
+{
+  -- C++ `void foo(int a, bool b){}`:
+  let foo = fn a: isize, b: bool {}
+  -- OR (more on this later)
+  let foo = fn a, b {}
+}
+{
+  -- Ligi is result-location first. You *always* specify 'where' you want the result to go :)
+  -- C++ `int foo(){return 10;}`
+
+  -- Orthodox style :)
+  -- 'return val' essentially acts like 'res = val; return' :)
+  let foo = fn -> res:isize { return 10 }
+  -- Result-location style :)
+  -- All functions have an implicit 'return <result>' at the end. :)
+  let foo = fn -> res:isize { res = 10 }
+  -- Expression-body style :)
+  -- Since we're just assigning to a location anyway, why not assign directly? :)
+  let foo = fn -> res:isize = 10
+}
+-- The above examples can be mixed and matched for any function type.
+-- Note that every argument and result location is a full bind, so you can tuple [un]pack as you wish.
+
+-- Left->right arg types
+-- If an argument has no type specified, it defaults to the type of its righthand neighbor (this chains)
+let addInts = fn a, b: isize -> res = a + b
+-- If the rightmost argument has no type, it becomes a special type 'undef' :)
+
+-- Undef :)
+-- Ligi is statically typed. That said, you can have a function that takes args of an unknown type:
+let add = pure fn a, b -> res = a + b
+-- Every time this function is called with different arg types, the compiler makes a new version of it.
+-- Thus you essentially get generic functions. This is especially useful for simple formulae like above.

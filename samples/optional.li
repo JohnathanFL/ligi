@@ -1,0 +1,57 @@
+-- This is to document the precise way Optionals work
+
+
+-- Optionals essentially work like enums.
+-- However, optionals are *not* enums.
+---- This is to allow optimizations like C-pointers becoming ?*T with the same size
+-- Optionals may only be compared against `null`.
+
+-- A pointer type is created with the unary `?` operator on another type
+let u: ?usize = 10, v: ?usize = null
+assert u != null
+-- assert u == 10 -- ERROR
+
+assert v == null
+-- assert v != 10 -- ERROR
+
+-- I *may* end up allowing comparison against the enum lit #val(val) to compare against
+-- an inner value.
+-- The problem I see with allowing implicit `?T == T` operations is for things like `??T == null`.
+-- There, null could be either the outer or inner optional's value
+
+-- If your comparison is asserting that the optional is present, then things like if/when-is/etc
+-- will allow capturing the inner value:
+if u != null -> uVal { assert uVal == 10 }
+-- Optionals can also be implicitly used as booleans in if statements
+if u -> uVal { assert uVal == 10 }
+
+-- Optional pointers have the same size as a normal pointer:
+let p: ?*usize = null, q: *usize = u.val.addr
+assert p.@size == q.@size
+-- They do this by considering a value of `0` for the pointer to be null.
+-- This has the drawback that you can't represent an optional pointer that may be 0.
+---- This may be fixed in the language in the future. You can, however, also just use
+---- enums for the rare times you need that.
+
+-- I plan to also allow users to override the `?` operator for user-defined types so they can
+-- define their own optimizations. (For example, considering a hashmap with no allocation as null)
+
+-- Optionals' inner value can be accessed with .val
+assert u.val == 10
+-- or with .? (This one may be dropped/never implemented)
+assert u.? == 10
+
+-- Whether an optional is present can be accessed with .has
+assert u.has
+
+-- Planned: 2 types of null coalescence
+-- #1: You can default to a value for an expression if any of the previous .? invocations failed
+-- with `?:` (Kotlin style)
+assert u.? ?: 0 == 10 -- This is a place where .val may be nice to use instead for clarity
+
+-- #2: You can default any individual optional by calling its .default method:
+---- (.default name subject to change.)
+assert u.default(0) == 10
+assert v.default(0) == 0
+
+

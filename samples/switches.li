@@ -1,0 +1,65 @@
+-- In dev feature: switches/matches/whatever it ends up being
+-- (Consider switch replacable with match in this document)
+  -- Update: We'll be going with the final `when` proposal with is-delayed binops
+
+
+-- Option:  Standard Ziggy/Rusty style
+let x = 10
+switch x {
+  10 => printf("Was 10"),
+  else => printf("Wasn't 10")
+}
+
+
+-- Option: C#-ish style (a.k.a the binary option)
+x switch {
+  10 => printf("Was 10"),
+  else => printf("Wasn't 10")
+}
+-- I'm immediately discarding this, as it would require switch to be a special binary operator
+
+
+-- Option: "delayed operator" style
+-- Essentially Ziggy style, but using binary operators to specify the operation used
+match x {
+  == 10 => printf("Was 10"),
+  in 0..5 => printf("Was 0,1,2,3 or 4"),
+  != 10 => printf("Wasn't 10"),
+  else => unreachable
+}
+-- Cons:
+  -- Somewhat less readable
+
+-- Variant Option: "is delayed operator" style
+-- Delayed operator style, but using 'is' to demarcate the binary operators
+match x {
+  is == 10 => printf("Was 10"),
+  is in 0..5 => printf("..."),
+  is != 10 => printf("Wasn't 10"),
+  else => unreachable,
+}
+-- Pros: Very readable, still allows for different binary operators
+-- Cons: Less writable than a pure Ziggy style.
+
+-- Variant option: Ziggy or "is delayed operator" style
+-- Use 'is' to figure out which style to use.
+match x {
+  10 => printf("Was 10"),
+  is != 10 => printf("Wasn't 10")
+}
+
+-- Final style: Whens with optional delayed operators
+-- `is` is always used to delimit cases
+-- If `is` is followed by an expression, it's matched against that directly
+-- If `is` is followed by a relational binary operator, it's matched against that + the next expr
+  -- The spaceship operator won't work here since it returns an enum, not a bool
+-- Instead of an "else", you just use `is` with a sink `_`, as `anything relop _` === true
+when avgGrade {
+  is 100 => "A+", -- `is <expr>` === `lhs == expr`
+  is >= 90 => "A", -- `is <binop> <expr>` === `lhs binop expr`
+  is >= 80 => "B",
+  is >= 70 => "C",
+  is >= 60 => "D",
+  is _ => "F" -- Since a comparison against a sink is always true
+}
+-- Highly readable: "When avgGrade is 100 it's A+. When it's >= 90 it's A..."

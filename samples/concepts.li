@@ -1,0 +1,84 @@
+-- Definite needed feature: Concepts
+
+
+-- Will follow essentially Nim's concept of a concept
+
+let StackConcept = pure fn T: type -> t:type = concept {
+  -- `@Self` is a special variable in concepts that represents the type being tested
+  let push: (fn self: *@Self, item:T)
+  let pop: (fn self: *@Self -> item:T)
+  let len: property usize
+  -- TODO: Find a way to denote a property with vs one without a .set function and vice versa
+
+  -- Thus you can read the above as:
+    -- A Stack(T) is the concept of something with a push method which takes the stack and
+    -- a T, a pop method which takes the stack and returns a T,
+    -- and a property named len which yields a usize.
+
+  -- Note that I currently plan to allow properties to be compared
+}
+
+let Stack = pure fn T: type -> t:type = concept {
+  field storage: slice T
+  -- Subslice of storage
+  field data: slice T
+  let push = fn self: *@This, item:T -> void =
+    if data.len < storage.len {
+      data = storage[0..data.len] -- Moves it forward one
+      data[data.len-1] = item
+    }
+
+  let pop = fn self: *@This -> item:T =
+    if data.len > 0 {
+      item = data[data.len-1]
+      data = data[0..data.len-1]
+    }
+
+  let len = property {
+    let get* = pure fn self: @This -> res:usize = self.data.len
+  }
+}
+
+-- 'in' and 'notin' will be overloaded for checking concept membership
+-- TODO: Should I add 'is' instead?
+assert Stack(usize) in StackConcept(usize)
+-- Alternative?
+assert Stack(usize).@matches(StackConcept(usize))
+
+-- Related subfeature: blocks
+-- Different from standard {}
+-- the 'block' type stores an entire block of code. (TODO: Maybe rename and use block as operator to make one)
+-- It's essentially a namespace. Files will move from being structs to being blocks
+
+-- Would conflict with myStuff.x
+-- let x = "Hey"
+let myStuff: block = {
+  let x* = 10 -- Marked as public* so it is accessible
+  let y = 20 -- Not marked, so not accessible
+}
+-- Doesn't conflict with myStuff.x
+let x = "Hey"
+
+-- Their main purpose is for being able to namespace concepts and the like inside structs
+let Vec2 = struct {
+  field x: f32, y: f32
+  let vec2: block = {
+    let add = pure fn lhs, rhs: @This -> sum:@This = [.x = lhs.x + rhs.x, .y = lhs.y + rhs.y]
+  }
+  @overload(#Add, @This.vec2.add)
+}
+
+let Vec3 = Vec2 + struct {
+  field z: f32
+  let vec3: block = {
+    -- Thus this one doesn't clash with Vec2.add
+    let add = pure fn lhs, rhs: @This -> sum:@This = [.x = lhs.x + rhs.x, .y = lhs.y + rhs.y, .z = lhs.z + rhs.z]
+  }
+  @overload(#Add, @This.vec3.add)
+}
+
+
+
+-- Possibility: Allow treating structs with @size == 0 differently
+-- Then we can just replace the above with a normal struct
+-- The problem is making the . and () operators backtrack to find the correct object to call on

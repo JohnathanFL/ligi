@@ -1,0 +1,70 @@
+-- This is to look at allowing fields in enums
+
+
+-- We already implicitly define a `.tag` field in enums:
+let MSAA = (2x, 4x, 16x, 32x) -- Ain't that digit/symbol parsing a beaut'
+let mssa = MSAA.2x
+assert mssa.tag == 0
+
+
+-- So why not allow more than just the tag?
+
+-- Case study: Storing the meal eaten, when it was eaten, and how many calories were eaten
+
+-- Normally, we'd have to implement it like so:
+let MealInstance = struct {
+  field timeOfDay: usize -- Packed as HHMM
+  field calories: usize
+
+  field which: enum (Breakfast, Lunch, Supper)
+}
+
+-- With enum-fields we could implement it like so:
+let Meal = enum {
+  field timeOfDay: usize -- Packed as HHMM
+  field calories: usize
+
+  enum
+    Breakfast: (bool, bool), -- Did we have cereal? Did we have orange juice?
+    Lunch,
+    Supper
+}
+-- Now we can represent a structure which is both in a discrete state AND contains
+-- state-agnostic information.
+
+
+-- Problems:
+---- #1: How do we instantiate it? #Tag(innerVal) doesn't work anymore.
+---- #2: How do we handle comparisons with enum lits and between instances?
+
+-- #1:
+-- Keep in mind you can already do this:
+let firstMeal = [:Meal: .Breakfast = (true, false), .timeOfDay = 0730, .calories = 500]
+-- This is the long form and will always be allowed.
+-- Unfortunately, it's also ugly. How do you know which one's the tag?
+
+---- Sol #1.1:
+------ Allow enum literals to use a struct literal instead of just a tuple:
+let firstMeal: Meal = #Breakfast[.timeOfDay = 0730, .calories = 500]
+------ Problem: How do we init an inner value?
+------ If we just did `.Breakfast = ` that's horribly repeating ourselves
+
+---- Sol #1.2:
+------ Allow a `:` in the initializer. Assuming Breakfast had an inner value:
+let firstMeal: Meal = #Breakfast((true, false): [.timeOfDay = 0730, .calories = 500])
+
+---- Sol #1.3:
+------ Don't directly use struct literals. I.e make #Tag[...] itself a new literal type
+-- For one that has no inner value:
+let firstMeal: Meal = #Breakfast[.timeOfDay = 0730, .calories = 500]
+-- For one that has an inner value:
+let firstMeal: Meal = #Breakfast[true, .timeOfDay = 0730, .calories = 500]
+
+---- Sol #1.4: Variation on #1.2
+let firstMeal: Meal = #Breakfast(true, false : .timeOfDay = 0730, .calories = 500)
+-- Thus we can still type an inner tuple without extra parens, and can also
+
+---- Sol #1.5:
+------ Use `.tag` to init the tag and inner value
+let firstMeal = [:Meal: .tag = #Breakfast(false, false), .timeOfDay = 0730, .calories = 500]
+-- This keeps #Tag(inner) stuff clean 

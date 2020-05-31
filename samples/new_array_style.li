@@ -1,0 +1,15 @@
+-- This is to document a possible new array type syntax
+-- This proposal is by no means finalized.
+
+-- Currently, we do arrays like so:
+let ar: array(3, usize) = [0, 1, 2]
+-- The problem I have here is that the parenthesis placement are just kinda...annoying
+
+-- This proposal would make `array` officially be builtin function.
+-- This wouldn't change the above syntax, but would allow for using the pipeline (`::`) operator:
+let ar: usize::array(3) = [0, 1, 2]
+-- You could do multidim arrays as either
+let mat: usize::array(4)::array(4) -- ...
+-- or
+let mat: usize::array((4, 4)) -- ...
+-- just like you could before (as array((4,4), usize))

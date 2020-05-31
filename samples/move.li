@@ -1,0 +1,32 @@
+-- This is primarily to explore possibilities for move/copy semantics in Ligi
+-- This won't be limited to those, however. This is for anything along the lines of
+-- Rust's ownership system.
+
+-- Prop #1: We could allow a new type to annotate itself as nocopy
+---- #1.1: A @Copyable attribute
+let MyList = struct {
+  @Copyable = false
+  -- ...
+}
+---- You could then only accept things which can be copied like so:
+let Copyable = concept {
+  @Copyable = true
+}
+---- and compose concepts together
+
+---- #1.2: An "attribute list" through an `@Is` function or map
+let MyList = struct {
+  @Is[#Copyable] = false
+}
+-- and then still do concepts
+let Copyable = concept { @Is[#Copyable] = true }
+
+
+
+-- Prop #2: Explicit moves
+-- I'd prefer to not require explicit copies, as that just gets somewhat tedious
+-- Remember that function parameters are always immutable in Ligi, so @Copyable can already be
+-- respected for dynamic lists and the like.
+foo(move bar)
+-- or
+foo(mv bar)

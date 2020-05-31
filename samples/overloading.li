@@ -1,0 +1,121 @@
+-- New Proposal: Overloadable functions
+-- Rather than allow shadowing, why not just make functions work like operators
+-- w.r.t overloading?
+
+-- `overload` would be an operator which takes a block
+  -- The block must only export functions
+-- `overloaded` would be the type of its variable.
+let show = overload {
+  -- Every overload may have a 'default' function.
+  -- This is only ever used if no other function matches
+  let default* = fn u -> void = printf("Hit fallback")
+
+  
+  -- Overloads are checked in order from first->last added
+  let showBool* = fn b:bool -> void = printf("Hit showBool")
+  let showISize* = fn i:isize -> void = printf("Hit showISize")
+  let showString = fn s:str -> void = printf("I'm never hit because I'm not public!")
+}
+show("Test") --= Hit fallback
+show(10) --= Hit fallback. -- overload won't try to coerce in this case.
+show(true) --= Hit showBool
+show(-10) --= Hit showISize
+
+-- As you can see, things like show(10) may be annoying.
+-- You can also access each functon directly:
+show.showISize(10) --= Hit showISize
+
+
+
+-- Applied example that combines with undef: Print the type of something
+--This only implements const and pointers:)
+--Note that this would be more efficient if you just used builtin @funcs:)
+let showType = overload {
+  let default* = pure fn c -> void = printf("unknown")
+  let showBool* = pure fn c:bool -> void = printf("bool")
+  let showUSize* = pure fn c: usize -> void = printf("usize")
+
+  let showPtr* = pure fn c: *undef -> void = {
+    printf("*")
+    showType(c.deref)
+  }
+  
+  let showConst* = pure fn c: const undef -> void = {
+    printf("const ")
+    -- Name here may change. @unConst would be a voodoo function to remove constness
+    showType(@unConst(c))
+  }
+}
+
+-- Lets are always const on the outer
+let num = 10
+let booly = true
+let numAddr = num.addr
+showType(numAddr) --= *const usize
+showType(booly.addr) --= *const bool
+
+-- I plan to make overloads inner-mutable, so you can add new overloads at compiletime:
+showType += pure fn c:isize -> void = printf("isize")
+-- Note that since overloads are checked first->last, it's impossible to extend a method such that
+-- it overrides existing logic.
+-- Exception: The `default` function is always checked last.
+-- If you don't want other people overloading your overloads, make it readonly (see readonly.li)
+
+showType(-1) --= isize
+
+
+-- Example use case: Serialization
+
+-- Marked public writable (*) so others can extend it with their own serializers
+let serialize* = overload {
+  let default* = pure fn _ -> void = printf("UNKNOWN TYPE")
+  let serializeBool = pure fn b:bool -> void = if b { printf("true") } else { printf("false") }
+  let serializeArray = pure fn a:array undef -> void = {
+    printf("[")
+    for a -> element {
+      serialize(element)
+      printf(",")
+    }
+    printf("]")
+  }
+}
+
+serialize([true, true, false, true]) --= '[true, true, false, true,]'
+serialize += pure fn i:isize -> void = printf("{}", i)
+serialize([1, 5, 2, 2]) --= '[1, 5, 2, 2,]'
+
+-- Note that additions can only be used *after* they've been added.
+
+
+-- Possible additional syntax: `overload` tuple
+-- Would be used to create a quick overload between multiple functions:
+let addInt = pure fn a: isize, b: isize -> c: isize = a + b
+let addFloat = pure fn a: f32, b: f32 -> c: f32 = a + b
+let add = overload (addInt, addFloat)
+_ = add(1.0, 2.0)
+_ = add(1, 2)
+
+-- This would be useful e.g to easily bring multiple functions into scope with the same name:
+let foo = overload(bar.foo, baz.foo)
+-- However this would require removing the ability to .index overloads, as these wouldn't be named
+
+
+
+-- Possible feature: Overload constraints
+-- Emphasis possible
+-- Essentially, the first overload block would introduce a constrain function like so:
+let my_func = overload {
+  -- Thus, if this function either fails an assert, its argument func cannot be added
+  -- func is the func to be added
+  let constraint* = pure fn func -> void = {
+    assert func.@type.FuncInfo.argc < 3
+  }
+}
+
+-- OK: Arg count is < 3
+my_func += pure fn -> void = printf("Hey")
+-- ERROR when adding function to overload: Failed constraint assertion ...
+my_func += pure fn a, b, c, d -> void = printf("Womp womp")
+
+-- This feature can be used e.g to constrain overloads for Add/For/etc to make sure they're
+-- pure/taking functions/etc
