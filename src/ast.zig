@@ -1,9 +1,11 @@
+// The idea is essentially to use AST as the lingua franca for the compiler.
+// The AST should have no dependencies on anything else, and exists only to
+// express code itself
+
 const std = @import("std");
 const str = []const u8;
 const ArrayList = std.ArrayList;
 const StrHashMap = std.StringHashMap;
-
-const Tag = @import("lexer.zig").Tag;
 
 pub const Op = enum {
 
@@ -23,58 +25,6 @@ pub const Op = enum {
   Neg, Enum, Ptr,
   Struct, Ref, Slice, Array, Const, Comptime,
   BitNot, Not, Opt, Pure, Inline, Overload, Property,
-
-  // Access
-  Access, Pipe,
-
-  // TODO: Write a function that converts these more efficiently.
-  pub fn fromTag(t: Tag, comptime binary: bool) Op {
-    return switch(t) {
-      .Assg => .Assg,
-      .AddAssg => .AddAssg,
-      .SubAssg => .SubAssg,
-      .MulAssg => .MulAssg,
-      .DivAssg => .DivAssg,
-      .Eq => .Eq,
-      .NotEq => .NotEq,
-      .Gt => .Gt,
-      .Lt => .Lt,
-      .GtEq => .GtEq,
-      .LtEq => .LtEq,
-      .Spaceship => .Spaceship,
-      .Or => .Or,
-      .Xor => .Xor,
-      .And => .And,
-      .In => .In,
-      .NotIn => .NotIn,
-      .OpenRange => .OpenRange,
-      .ClosedRange => .ClosedRange,
-      .Add => .Add,
-      .Sub => if(binary) .Sub else .Neg,
-      .Mul => if(binary) .Mul else .Ptr,
-      .Div => .Div,
-      .Mod => .Mod,
-      .BitOr => .BitOr,
-      .BitAnd => .BitAnd,
-      .BitXor => .BitXor,
-      .Struct => .Struct,
-      .Ref => .Ref,
-      .Slice => .Slice,
-      .Array => .Array,
-      .Const => .Const,
-      .Comptime => .Comptime,
-      .BitNot => .BitNot,
-      .Not => .Not,
-      .Opt => .Opt,
-      .Pure => .Pure,
-      .Inline => .Inline,
-      .Overload => .Overload,
-      .Property => .Property,
-      .Access => .Access,
-      .Pipe => .Pipe,
-      else => unreachable,
-    };
-  }
 };
 
 pub const BindOp = enum {

@@ -148,11 +148,7 @@ pub const Parser = struct {
   pub fn parseBindStmt(self: *Parser) Error!*ast.Expr {
     const using = if (self.tryMatch(.Using) != null) true else false;
     const op =
-      if(self.tryMatch(.Let) != null) ast.BindOp.Let
-      else if (self.tryMatch(.Var) != null) ast.BindOp.Var
-      else if (self.tryMatch(.CVar) != null) ast.BindOp.CVar
-      else if (self.tryMatch(.Field) != null) ast.BindOp.Field
-      else if (self.tryMatch(.Enum) != null) ast.BindOp.Enum
+      if(self.tryMatchOne(&BIND_OPS)) |tok| tok.tag.toBindOp()
       else return self.expected("a bind spec");
       
 
@@ -195,10 +191,8 @@ pub const Parser = struct {
     } else {
       const name = (try self.match(.Word)).str;
       const access =
-        if(self.tryMatch(.Add) != null) ast.BindLevel.Pub
-        else if (self.tryMatch(.Sub) != null) ast.BindLevel.Priv
-        else if (self.tryMatch(.Mul) != null) ast.BindLevel.ReadOnly
-        else ast.BindLevel.Priv;
+        if(self.tryMatchOne(&PUB_OPS)) |tok| tok.tag.toBindLevel()
+        else .Priv;
       const ty = try self.parseTypeSpec(false);
       return ast.BindLoc{.Named = .{ .name = name, .access = access, .ty = ty }};
     }
@@ -209,7 +203,7 @@ pub const Parser = struct {
     const lhs = try self.parseExpr();
     if(self.tryMatchOne(&[_]lex.Tag{.Assg, .AddAssg, .SubAssg, .MulAssg, .DivAssg})) |op| {
       const rhs = try self.parseExpr();
-      return self.newCall(.{ .Op = ast.Op.fromTag(op.tag, true) }, &[_]*ast.Expr{lhs, rhs});
+      return self.newCall(.{ .Op = op.tag.toOp(.Binary) }, &[_]*ast.Expr{lhs, rhs});
     } else return lhs;
   }
   // Just a sugar for a bin_expr
@@ -224,7 +218,7 @@ pub const Parser = struct {
         if(prec + 1 == BIN_OPS.len) try self.parseUna()
         else try self.parseBin(prec + 1);
       lhs = self.newCall(
-        .{ .Op = ast.Op.fromTag(tok.tag, true) },
+        .{ .Op = tok.tag.toOp(.Binary) },
         &[_]*ast.Expr{ lhs, rhs }
       );
     }
@@ -234,7 +228,7 @@ pub const Parser = struct {
   pub fn parseUna(self: *Parser) Error!*ast.Expr {
     if (self.tryMatchOne(&UNA_OPS)) |tok| {
       return self.newCall(
-        .{.Op = ast.Op.fromTag(tok.tag, false)},
+        .{ .Op = tok.tag.toOp(.Unary) },
         &[_]*ast.Expr{ try self.parseUna() }
       );
     } else {
@@ -405,7 +399,7 @@ pub const Parser = struct {
     
     var arms = std.ArrayList(ast.WhenArm).init(self.alloc);
     while(self.tryMatch(.Is)) |_| {
-      const op = if (self.tryMatchOne(&IS_OPS)) |tok| ast.Op.fromTag(tok.tag, true) else .Eq;
+      const op = if (self.tryMatchOne(&IS_OPS)) |tok| tok.tag.toOp(.Binary) else .Eq;
       const val = try self.parseExpr();
       const capt = if(self.tryMatch(.StoreIn)) |_| try self.parseBindLoc() else null;
       const then = try self.parseBlock(true);
@@ -477,5 +471,12 @@ pub const Parser = struct {
 
   const IS_OPS = [_]lex.Tag {
     .Eq, .NotEq, .In, .NotIn
+  };
+
+  const PUB_OPS = [_]lex.Tag {
+    .Add, .Sub, .Mul
+  };
+  const BIND_OPS = [_]lex.Tag {
+    .Let, .Var, .CVar, .Enum, .Field,
   };
 };

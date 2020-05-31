@@ -1,6 +1,8 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
+const ast = @import("ast.zig");
+
 pub const Tag = enum {
   Word, Label, 
   // The .str for these are not guaranteed to be allocated in the main file's .input
@@ -45,7 +47,69 @@ pub const Tag = enum {
   LBracket, RBracket,
   LBrace, RBrace,
 
-  EOF
+  EOF,
+
+  
+  pub const TagCtx = enum { Binary, Unary };
+  pub fn toOp(t: Tag, comptime ctx: TagCtx) ast.Op {
+    return switch(t) {
+      .Assg => .Assg,
+      .AddAssg => .AddAssg,
+      .SubAssg => .SubAssg,
+      .MulAssg => .MulAssg,
+      .DivAssg => .DivAssg,
+      .Eq => .Eq,
+      .NotEq => .NotEq,
+      .Gt => .Gt,
+      .Lt => .Lt,
+      .GtEq => .GtEq,
+      .LtEq => .LtEq,
+      .Spaceship => .Spaceship,
+      .Or => .Or,
+      .Xor => .Xor,
+      .And => .And,
+      .In => .In,
+      .NotIn => .NotIn,
+      .OpenRange => .OpenRange,
+      .ClosedRange => .ClosedRange,
+      .Add => .Add,
+      .Sub => if(ctx == .Binary) .Sub else .Neg,
+      .Mul => if(ctx == .Binary) .Mul else .Ptr,
+      .Div => .Div,
+      .Mod => .Mod,
+      .BitOr => .BitOr,
+      .BitAnd => .BitAnd,
+      .BitXor => .BitXor,
+      .Struct => .Struct,
+      .Ref => .Ref,
+      .Slice => .Slice,
+      .Array => .Array,
+      .Const => .Const,
+      .Comptime => .Comptime,
+      .BitNot => .BitNot,
+      .Not => .Not,
+      .Opt => .Opt,
+      .Pure => .Pure,
+      .Inline => .Inline,
+      .Overload => .Overload,
+      .Property => .Property,
+      else => unreachable,
+    };
+  }
+  pub fn toBindOp(t: Tag) ast.BindOp {
+    return switch(t) {
+      .Let => .Let, .Var => .Var, .CVar => .CVar, .Field => .Field, .Enum => .Enum,
+      else => unreachable
+    };
+  }
+  pub fn toBindLevel(t: Tag) ast.BindLevel {
+    return switch(t) {
+      .Mul => .Pub,
+      .Add => .ReadOnly,
+      .Sub => .Priv,
+      else => unreachable
+    };
+  }
 };
 
 pub const FilePos = struct {
