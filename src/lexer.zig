@@ -34,6 +34,7 @@ pub const Tag = enum {
   // Note Enum is here, so won't be in the unary ops section
   Using, // Actually a modifier on a bind statement
   Let, Var, CVar, Field, Enum, Alias,
+  Pub,
 
   // Keywords
   Assert, Break, Return, Defer,
@@ -102,14 +103,6 @@ pub const Tag = enum {
       else => unreachable
     };
   }
-  pub fn toBindLevel(t: Tag) ast.BindLevel {
-    return switch(t) {
-      .Mul => .Pub,
-      .Add => .ReadOnly,
-      .Sub => .Priv,
-      else => unreachable
-    };
-  }
 };
 
 pub const FilePos = struct {
@@ -146,6 +139,7 @@ pub const Lexer = struct {
   fn tp(str: []const u8, tag: Tag) TokPair { return .{ .str = str, .tag = tag }; }
   pub const TOKS = [_]TokPair{
     // Keywords
+    tp("pub", .Pub),
     tp("using", .Using), tp("assert", .Assert), tp("break", .Break),
     tp("defer", .Defer),
     tp("if", .If), tp("elif", .ElIf), tp("else", .Else),

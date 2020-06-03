@@ -1,1 +1,13 @@
-let x = #Ok
+let x = #Hey
+
+(x, y, z)
+
+#Hello
+#There("world")
+
+a
+a.b
+a(b)
+a.b(c)
+a.b(c).d
+a::printf()
