@@ -28,7 +28,7 @@ pub const Op = enum {
 
   Call, Index,
 
-  Pipe, Access
+  Access, Pipeline,
 };
 
 pub const BindOp = enum {
@@ -46,7 +46,7 @@ pub const BindLoc = union(enum) {
   Named: struct {
     name: str,
     ty: ?*Expr
-  }
+  },
 };
 
 pub const LocInit = struct {loc: BindLoc, init: ?*Expr};
@@ -103,7 +103,8 @@ pub const Expr = union(enum) {
     // For a void function (fn->{}), it's #sink("void")
     ret: BindLoc,
     // What gets assigned to ret's loc
-    body: *Expr,
+    // If null, then this is a function type, not a function definition
+    body: ?*Expr,
   },
   If: struct {
     arms: ArrayList(IfArm),

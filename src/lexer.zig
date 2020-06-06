@@ -43,7 +43,7 @@ pub const Tag = enum {
   Fn,
 
   // Punctuation
-  Colon, Comma, StoreIn,
+  Colon, Comma, StoreIn, Then,
   LParen, RParen,
   LBracket, RBracket,
   LBrace, RBrace,
@@ -159,6 +159,7 @@ pub const Lexer = struct {
     
 
     // Non-words
+    tp("=>", .Then),
     tp("->", .StoreIn), tp("#", .Tag),
     tp("~", .BitNot), tp("?", .Opt),
     tp("+=", .AddAssg), tp("+", .Add),

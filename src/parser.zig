@@ -101,6 +101,7 @@ pub const Parser = struct {
       return tok;
     } else {
       std.debug.warn("{}: Expected one of {}, but found {}\n", .{self.cur.pos, tags, self.cur.tag});
+      return error.Expected;
     }
   }
 
@@ -274,7 +275,7 @@ pub const Parser = struct {
       .While, .For => return try self.parseWhileFor(),
       .Label, .LBrace => return try self.parseBlock(true),
       .Tag => return try self.parseEnumLit(),
-      .Str => return self.newExpr(.{.Str = (try self.match(.Str)).str}),
+      .Fn => return try self.parseFn(),
       else => return try self.parsePipeline(false),
     }
   }
@@ -327,18 +328,14 @@ pub const Parser = struct {
   }
 
   pub fn parseTuple(self: *Parser) Error!*ast.Expr {
+    std.debug.warn("In parseTuple\n", .{});
     _ = try self.match(.LParen);
     var res = self.newExpr(.{.Tuple = .{
       .as = try self.parseTypeSpec(true),
       .vals = try self.parseExprList(.RParen)
     }});
 
-    // Don't return single item tuples that don't cast
-    if(res.Tuple.vals.items.len == 1 and res.Tuple.as == null) {
-      const true_res = res.Tuple.vals.items[0];
-      res.Tuple.vals.deinit();
-      return true_res;
-    } else return res;
+    return res;
   }
 
   /// Parse a csv list of expressions, which may have a trailing comma
@@ -354,6 +351,7 @@ pub const Parser = struct {
 
   /// Either `:expr` or `:expr:`, depending on trailing_colon
   pub fn parseTypeSpec(self: *Parser, comptime trailing_colon: bool) Error!?*ast.Expr {
+    std.debug.warn("In parseTypeSpec!\n", .{});
     if(self.tryMatch(.Colon) != null) {
       const res = try self.parseExpr();
       if(trailing_colon) _ = try self.match(.Colon);
@@ -443,13 +441,20 @@ pub const Parser = struct {
   // Lower than unary
   // access { `::` access }
   // If restricted, then accesses are restricted
+  // Parses like so:
+  // a.b::d.f()::e.g()
+  // ->
+  // Call.Pipe(a.b, d.f(), e.g())
+  // And will interpret like so:
+  // e.g(d.f(a.b()))
   pub fn parsePipeline(self: *Parser, comptime restricted: bool) Error!*ast.Expr {
     var res = try self.parseAccess(restricted);
+
     if(self.nextIs(.Pipe)) {
-      res = self.newCall(.Pipe, &[_]*ast.Expr{res});
-      const call = &res.Call;
-      while(self.tryMatch(.Pipe)) |_| {
-        try call.args.append(try self.parseAccess(restricted));
+      res = self.newCall(.Pipeline, &[_]*ast.Expr {res});
+      const pipes = &res.Call.args;
+      while (self.tryMatch(.Pipe)) |_| {
+        try pipes.append(try self.parseAccess(restricted));
       }
     }
     
@@ -457,53 +462,68 @@ pub const Parser = struct {
   }
 
 
+  // Can we do a foo() or a foo[]?
+  // ( or [ must be on the same line as foo
+  // foo must have already been matched
+  pub fn canCall(self: *Parser) bool {
+    if(self.nextIs(.LParen) or self.nextIs(.LBracket)) { return !self.newlined; }
+    else return false;
+  }
   
-  // (word|tuple|compound) ~ {'.' ~ (swizzle_group | word ) | call | index}
+  // (word|str|tuple|compound) ~ {'.' ~ (swizzle_group | word ) | call | index}
   // If restricted, then the first can only be a word, not a tuple or compound
   // // swizzle_group results in a call to a restricted parsePipeline inside
   // The entire access is parsed into a linear arraylist of args to a call (.Op=.Call)
   // Calls/indexes are just more "accesses" to the AST
   pub fn parseAccess(self: *Parser, comptime restricted: bool) Error!*ast.Expr {
+    std.debug.warn("In parseAccess, next is {}\n", .{self.cur});
     var res =
       if(restricted) try self.parseWord()
       else switch(self.cur.tag) {
         .Word => try self.parseWord(),
         .LParen => try self.parseTuple(),
         .LBracket => try self.parseCompound(),
+        .Str => try self.parseStr(),
         else => return self.expected("An access op")
       };
 
-    if(self.nextIsOne(&ACCESS_OPS)) {
+    if(self.nextIs(.Access) or self.canCall()) {
       res = self.newCall(.Access, &[_]*ast.Expr{res});
       const path = &res.Call.args;
-      while(self.tryMatchOne(&ACCESS_OPS)) |op| switch(op.tag) {
-        .Access => {
-          if(self.nextIs(.Word)) {
-            try path.append(try self.parseWord());
-          } else if(self.tryMatch(.LParen)) |_| {
-            const sub = self.newExpr(.{ .Tuple = .{
-              .as = null,
-              .vals = ast.ExprList.init(self.alloc)
-            }});
-            const vals = &sub.Tuple.vals;
-            while(!self.nextIs(.RParen)) {
-              // TODO: Ensure at least 1 swizzle
-              try vals.append(try self.parseAccess(true));
-              if(self.tryMatch(.Comma) == null) break;
-            }
-            try path.append(sub);
-            _ = try self.match(.RParen);
-          } else return self.expected("either a word or a swizzle group");
-        },
-        .LParen, .LBracket => {
-          const closer = if(op.tag == .LParen) lex.Tag.RParen else .RBracket;
-          try path.append(self.newCallFrom(
-            if(op.tag == .LParen) .Call else .Index,
-            try self.parseExprList(closer)
-          ));
-        },
-        else => unreachable,
-      };
+      while(self.nextIs(.Access) or self.canCall()) {
+        const accesser = (try self.matchOne(&ACCESS_OPS)).tag;
+        switch(accesser) {
+          .Access => {
+            if(self.nextIs(.Word)) {
+              try path.append(try self.parseWord());
+            } else if(self.tryMatch(.LParen)) |_| {
+              var els = self.newExprList();
+              while(!self.nextIs(.RParen)) {
+                try els.append(try self.parsePipeline(true));
+                if(self.tryMatch(.Comma) == null) break;
+              }
+              _ = try self.match(.RParen);
+              try path.append(self.newExpr(.{.Tuple = .{
+                .as = null,
+                .vals = els
+              }}));
+            } else return self.expected("either a word or a swizzle group");
+          },
+          .LParen, .RParen => {
+            const op = if(accesser == .LParen) ast.Op.Call else .Index;
+            const call = self.newCallFrom(
+              .Call,
+              try self.parseExprList(
+                if(accesser == .LParen) .RParen
+                else .RBracket
+              )
+            );
+            try path.append(call);
+          },
+          else => unreachable
+        }
+      }
+      
     }
     return res;
   }
@@ -511,6 +531,47 @@ pub const Parser = struct {
   pub fn parseWord(self: *Parser) Error!*ast.Expr {
     const word = try self.match(.Word);
     return self.newExpr(.{.Word = word.str});
+  }
+  pub fn parseStr(self: *Parser) Error!*ast.Expr {
+    const tok = try self.match(.Str);
+    return self.newExpr(.{.Str = tok.str});
+  }
+
+  pub fn parseFn(self: *Parser) Error!*ast.Expr {
+    _ = try self.match(.Fn);
+    var args = std.ArrayList(ast.BindLoc).init(self.alloc);
+    while(!self.nextIsOne(&[_]lex.Tag{.StoreIn, .Then})) {
+      try args.append(try self.parseBindLoc());
+      if(self.tryMatch(.Comma) == null) break;
+    }
+
+    // Functions are either of the form
+    // fn arg1, arg2, arg3 -> res = body
+    // or
+    // fn args1, arg2, arg3 => body
+    // which is equivalent to
+    // fn args1, arg2, arg3 -> _: void = body
+    // (where => is .Then)
+    var ret: ast.BindLoc = undefined;
+    var body: ?*ast.Expr = null;
+    if(self.tryMatch(.Then)) |_| {
+      // A => function must return void
+      // TODO: Should we find a way to relax this rule? Maybe => type = body?
+      ret = .{.Named = .{
+        .name = "_",
+        .ty = self.newExpr(.{.Word = "void"})
+      }};
+      body = try self.parseExpr();
+    } else if (self.tryMatch(.StoreIn)) |_| {
+      ret = try self.parseBindLoc();
+      if (self.tryMatch(.Assg)) |_| body = try self.parseExpr();
+    } else return self.expected("either => or ->");
+
+    return self.newExpr(.{.Func = .{
+      .args = args,
+      .ret = ret,
+      .body = body
+    }});
   }
   
 

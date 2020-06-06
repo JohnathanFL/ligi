@@ -1,0 +1,46 @@
+-- This is to explore whether or not to do SFINAE-styled overloading
+
+
+-- TLDR:
+---- With this: We are able to select which function overload to use based on logical expressions
+---- inside the funcs themselves.
+---- Without this: The most logic we can do is matching against types and concepts
+
+-- The gist of what this would allow is:
+let foo = overload {
+  let foo1* = fn arg => {
+    -- If this assert fails, then since the assert is based totally on
+    -- the type of the input, then under SFINAE, the function would silently check the next one
+    assert arg.@type.@typeInfo == #Int
+
+    printf("Got an int!\n")
+  }
+  let foo2* = fn arg: bool => {
+    printf("Got bool!\n")
+  }
+
+  let default* = fn arg => {
+    printf("Got other!\n")
+  }
+}
+
+foo(true) --= "Got bool!"
+foo(1) --= "Got an int!"
+foo("Hey") --= "Got other!"
+
+-- Even though foo1's signature can handle anything foo2 can, it's still checked first
+-- because it's listed first. However when supplying it a bool, the assert triggers
+-- and fails because a bool's not an int type. This is essentially C++'s
+-- enable_if trickery in pure Ligi.
+
+-- You might say that we could do the same as foo1 like:
+let foo1 = fn arg => when arg.@type.@typeInfo
+  is #Int => printf("Got an int!\n")
+  else => printf("Got other!\n")
+-- (and you'd be right)
+
+-- What makes this proposal at all worth examining is the ability for somewhat decentralized
+-- extensability, particularly in type arithmetic. Without this, a base class would need
+-- some complicated way of adding a derived type's overloads to its checklist.
+-- With this, the derived class can simply add new functions to the overload
+---- Thus this could tie in with the shadowing===overloading proposal

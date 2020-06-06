@@ -1,0 +1,39 @@
+-- This is to document an idea for allowing braceless control structures
+-- This would *not* replace the existing style, only supplement it
+
+
+-- Right now, all control structures require braces:
+if x { y }
+for ar -> x { printf(x) }
+-- and so on
+
+
+-- This proposal would implement the `=>` (implication punctuation) (not an operator) to allow
+-- using single expressions instead of full blocks:
+if x => y
+else => z
+for ar -> x => printf(x)
+
+-- You'd be able to mix and match these:
+if x => y -- Single operation
+else {
+  -- lots of operations
+}
+
+-- This would work anywhere a block would normally be required in a control structure:
+let a = when x
+  is y { b }
+  is z { c }
+  else { d }
+  finally { do_e() }
+-- Can become
+let a = when x
+  is y => b
+  is z => c
+  else => d
+  finally => do_e()
+
+-- This would tie in with the void funcs proposal by replacing that syntax with => :
+let say_hi = fn => printf("Hello, world!")
+-- This is because `->` is the "store in" operator, wheras `=>` is "do" or "implies",
+-- so it wouldn't make sense to use `->` with a block to begin with

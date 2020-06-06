@@ -1,0 +1,27 @@
+-- This is to document the possible new publicity style
+
+-- The gist:
+let public+, readOnly*, private
+-- becomes
+pub let public
+readonly let readOnly
+let private
+-- (readonly keyword subject to change)
+
+-- The keywords would apply to the entire section of binds:
+pub let
+  pubBind1,
+  pubBind2,
+  pubBind3
+
+
+-- Possible other ideas for readonly keyword:
+reo let readOnly
+-- or just removing "readonly" entirely and following Zig's example and having only pub/priv for
+-- functions
+-- I'm finding it harder and harder to justify having it
+
+
+-- For now, in the test implementation in Zig, I'm going to just go with Zig's
+-- style, where statics are either pub or priv, with no readonly, and where all
+-- fields/enums are public

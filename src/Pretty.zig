@@ -78,6 +78,24 @@ fn pretty(self: *@This(), node: *ast.Expr) void {
       self.write("Tuple: ");
       for(tup.vals.items) |item| self.pretty(item);
     },
+    .Func => |func| {
+      self.write("Func:");
+      self.indent += 1;
+      for(func.args.items) |arg| {
+        self.doIndent();
+        self.prettyLoc(arg);
+      }
+      self.doIndent();
+      self.write("-> ");
+      self.doIndent();
+      self.prettyLoc(func.ret);
+      if(func.body) |body| {
+        self.doIndent();
+        self.write(" =>");
+        self.pretty(body);
+      }
+      self.indent -= 1;
+    },
     else => self.fmt("UNIMPLEMENTED: {}", .{@tagName(node.*)}),
   }
 }
