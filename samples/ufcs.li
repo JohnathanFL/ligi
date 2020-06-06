@@ -17,7 +17,7 @@ let val = pure fn a:?usize = b:bool = a.has
 let v: ?usize = 10
 assert v.val == 10 -- Not a bool
 
--- New way for Part 1:
+-- New way for Part 0:
 -- Since `.` syntax makes it harder to differentiate between builtin methods and freestanding
 -- functions, I propose adding the `::` operator, which would act as a function applier:
 -- Inspiration from that C preprocessor dude in /r/ProgrammingLanguages on a UFCS thread
@@ -37,6 +37,28 @@ assert foo::(module.func)(arg) == module.func(foo, arg)
 -- This new operator would also make formatting a little prettier:
 "Hello, world"::printf() 
 "Hello, {}."::printf("John")
+
+-- Exact specification on how pipelines will work:
+-- Each access can be seen as a "call" to the `.` operator, with the set of arguments
+-- being the path. Each Call ( `()` and `[]` ) is then another argument in the list
+-- The pipeline works similarly, and translates each `::` delimited expression into one
+-- argument to the "call"
+-- In each expression, it passes the current accumulation to the first Call it finds
+-- in the access. So
+1::b.c().d()
+-- translates as
+1::b.c(1).d()
+-- not
+1::b.c().d(1)
+-- To override this, use parens
+1::(b.c()).d()
+
+-- If a pipeline can't find a Call by the time it reaches the end of the access, as in
+"Hello world"::printf
+-- it will add a call to the end. Thus the above translates as
+"Hello world"::printf()
+-- and then as
+printf("Hello world")
 
 
 
