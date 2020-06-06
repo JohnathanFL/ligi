@@ -27,9 +27,17 @@ fn doIndent(self: @This()) void {
 fn write(self: @This(), what: []const u8) void {
   _ = self.out.write(what) catch unreachable;
 }
+fn iwrite(self: @This(), what: []const u8) void {
+  self.doIndent();
+  self.write(what);
+}
 
 fn fmt(self: @This(), comptime what: []const u8, args: var) void {
   _ = self.out.print(what, args) catch unreachable;
+}
+fn ifmt(self: @This(), comptime what: []const u8, args: var) void {
+  self.doIndent();
+  self.fmt(what, args);
 }
 
 fn pretty(self: *@This(), node: *ast.Expr) void {
@@ -53,8 +61,7 @@ fn pretty(self: *@This(), node: *ast.Expr) void {
 
       for(block.body.items) |stmt| self.pretty(stmt);
       
-      self.doIndent();
-      self.write("}");
+      self.iwrite("}");
     },
     .Bind => |bind| {
       if(bind.using) { self.write("using "); }
@@ -78,6 +85,37 @@ fn pretty(self: *@This(), node: *ast.Expr) void {
       self.write("Tuple: ");
       for(tup.vals.items) |item| self.pretty(item);
     },
+    .If => |ifs| {
+      self.write("If");
+      for(ifs.arms.items) |arm| {
+        self.pretty(arm.cond);
+        self.indent += 1; defer self.indent -= 1;
+        if(arm.capt) |loc| {
+          self.iwrite("->");
+          self.prettyLoc(loc);
+        }
+        self.iwrite("=>");
+        self.pretty(arm.then);
+        self.prettyDefFin(ifs.default, ifs.finally);
+      }
+    },
+    .When => |when| {
+      self.write("When");
+      self.pretty(when.expr);
+      self.indent += 1; defer self.indent -= 1;
+      for(when.arms.items) |arm| {
+        self.ifmt("Is {}", .{@tagName(arm.op)});
+        self.pretty(arm.val);
+
+        if(arm.capt) |loc| {
+          self.iwrite("Capturing ");
+          self.prettyLoc(loc);
+        }
+        self.iwrite("=>");
+        self.pretty(arm.then);
+      }
+      self.prettyDefFin(when.default, when.finally);
+    },
     .Func => |func| {
       self.write("Func:");
       self.indent += 1;
@@ -95,7 +133,42 @@ fn pretty(self: *@This(), node: *ast.Expr) void {
       }
       self.indent -= 1;
     },
+    .Loop => |loop| {
+      self.write(
+        if(loop.op == .For) "For:"
+        else if (loop.op == .While) "While:"
+        else "Loop:"
+      );
+      self.indent += 1; defer self.indent -= 1;
+      if(loop.expr) |expr| self.pretty(expr);
+      if(loop.capt) |capt| {
+        self.doIndent();
+        self.write("Capture: ");
+        self.prettyLoc(capt);
+      }
+      if(loop.counter) |counter| {
+        self.doIndent();
+        self.write("Counter: ");
+        self.prettyLoc(counter);
+      }
+      self.doIndent(); self.write("Do:");
+      self.pretty(loop.body);
+      self.prettyDefFin(null, loop.finally);
+    },
     else => self.fmt("UNIMPLEMENTED: {}", .{@tagName(node.*)}),
+  }
+}
+
+// For anything that can have else/finally
+// If one is not applicable, just pass null
+fn prettyDefFin(self: *@This(), default: ?*ast.Expr, finally: ?*ast.Expr) void {
+  if(default) |d| {
+    self.iwrite("Else");
+    self.pretty(d);
+  }
+  if(finally) |f| {
+    self.iwrite("Finally");
+    self.pretty(f);
   }
 }
 

@@ -360,64 +360,78 @@ pub fn parseTypeSpec(self: *Parser, comptime trailing_colon: bool) Error!?*ast.E
   } else return null;
 }
 
+// Parse anything that can be either block or => expr
+pub fn parseThen(self: *Parser) Error!*ast.Expr {
+  if(self.tryMatch(.Then)) |_| {
+    // TODO: Should this be Assg or Expr?
+    return try self.parseAssg();
+  } else {
+    return try self.parseBlock(true);
+  }
+}
+
 
 pub fn parseIf(self: *Parser) Error!*ast.Expr {
   _ = try self.match(.If);
-  var arms = std.ArrayList(ast.IfArm).init(self.alloc);
-  while(true) {
-    const cond = try self.parseExpr();
-    const capt = if(self.tryMatch(.StoreIn)) |_| try self.parseBindLoc() else null;
-    const then = try self.parseBlock(true);
-    try arms.append(.{ .cond = cond, .capt = capt, .then = then });
-
-    if(self.tryMatch(.ElIf) == null) break;
-  }
-  const default = if(self.tryMatch(.Else)) |_| try self.parseBlock(true) else null;
-  const finally = if(self.tryMatch(.Finally)) |_| try self.parseBlock(true) else null;
   return self.newExpr(.{.If = .{
-    .arms = arms,
-    .default = default,
-    .finally = finally
+    .arms = val: {
+      var arms = std.ArrayList(ast.IfArm).init(self.alloc);
+      while(true) {
+        const cond = try self.parseExpr();
+        const capt = if(self.tryMatch(.StoreIn)) |_| try self.parseBindLoc() else null;
+        const then = try self.parseThen();
+        try arms.append(.{ .cond = cond, .capt = capt, .then = then });
+
+        if(self.tryMatch(.ElIf) == null) break;
+      }
+      break :val arms;
+    },
+    .default =
+      if(self.tryMatch(.Else) == null) null
+      else try self.parseThen(),
+    .finally =
+      if(self.tryMatch(.Finally) == null) null
+      else try self.parseThen(),
   }});
 }
 pub fn parseWhen(self: *Parser) Error!*ast.Expr {
   _ = try self.match(.When);
-  const expr = try self.parseExpr();
-  
-  var arms = std.ArrayList(ast.WhenArm).init(self.alloc);
-  while(self.tryMatch(.Is)) |_| {
-    const op = if (self.tryMatchOne(&IS_OPS)) |tok| tok.tag.toOp(.Binary) else .Eq;
-    const val = try self.parseExpr();
-    const capt = if(self.tryMatch(.StoreIn)) |_| try self.parseBindLoc() else null;
-    const then = try self.parseBlock(true);
-    try arms.append(.{ .op = op, .val = val, .capt = capt, .then = then });
-  }
-  const default = if(self.tryMatch(.Else)) |_| try self.parseBlock(true) else null;
-  const finally = if(self.tryMatch(.Finally)) |_| try self.parseBlock(true) else null;
   return self.newExpr(.{.When = .{
-    .expr = expr,
-    .arms = arms,
-    .default = default,
-    .finally = finally
+    .expr = try self.parseExpr(),
+    .arms = val: {
+      var arms = std.ArrayList(ast.WhenArm).init(self.alloc);
+      while(self.tryMatch(.Is)) |_| {
+        const op = if (self.tryMatchOne(&IS_OPS)) |tok| tok.tag.toOp(.Binary) else .Eq;
+        const val = try self.parseExpr();
+        const capt = if(self.tryMatch(.StoreIn)) |_| try self.parseBindLoc() else null;
+        const then = try self.parseThen();
+        try arms.append(.{ .op = op, .val = val, .capt = capt, .then = then });
+      }
+      break :val arms;
+    },
+    .default =
+      if(self.tryMatch(.Else) == null) null
+      else try self.parseThen(),
+    .finally =
+      if(self.tryMatch(.Finally) == null) null
+      else try self.parseThen(),
   }});
 }
 pub fn parseLoop(self: *Parser) Error!*ast.Expr {
   _ = try self.match(.Loop);
-  const counter = if(self.tryMatch(.StoreIn)) |_| try self.parseBindLoc() else null;
-  const body = try self.parseBlock(true);
   return self.newExpr(.{.Loop = .{
     .expr = null,
-    .cond = .NOP,
+    .op= .NOP,
     .capt = null,
-    .counter = counter,
-    .body = body,
+    .counter = if(self.tryMatch(.StoreIn)) |_| try self.parseBindLoc() else null,
+    .body = try self.parseThen(),
     .finally = null,
   }});
 }
 pub fn parseWhileFor(self: *Parser) Error!*ast.Expr {
-  const range =
-    if(self.tryMatch(.For)) |_| true
-    else if(self.tryMatch(.While)) |_| false
+  const op =
+    if(self.tryMatch(.For)) |_| ast.LoopOp.For
+    else if(self.tryMatch(.While)) |_| ast.LoopOp.While
     else return self.expected("while or for");
   const expr = try self.parseExpr();
 
@@ -427,11 +441,11 @@ pub fn parseWhileFor(self: *Parser) Error!*ast.Expr {
     capt = try self.parseBindLoc();
     if(self.tryMatch(.Comma)) |_| counter = try self.parseBindLoc();
   }
-  const body = try self.parseBlock(true);
+  const body = try self.parseThen();
   const finally = if(self.tryMatch(.Finally)) |_| try self.parseBlock(true) else null;
   return self.newExpr(.{.Loop = .{
+    .op = op,
     .expr = expr,
-    .cond = if (range) .For else .While,
     .capt = capt,
     .counter = counter,
     .body = body,

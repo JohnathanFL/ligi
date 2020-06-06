@@ -54,6 +54,7 @@ pub const LocInit = struct {loc: BindLoc, init: ?*Expr};
 pub const IfArm = struct { cond: *Expr, capt: ?BindLoc, then: *Expr };
 // .op must be one of .Eq, .NotEq, .Gt, .Lt, .GtEq, .LtEq, .NotIn, .In
 pub const WhenArm = struct { op: Op, val: *Expr, capt: ?BindLoc, then: *Expr };
+pub const LoopOp = enum { NOP, While, For };
 
 pub const ExprList = ArrayList(*Expr);
 
@@ -120,7 +121,7 @@ pub const Expr = union(enum) {
   Loop: struct {
     expr: ?*Expr,
     // How do we interpret .expr?
-    cond: enum { NOP, While, For },
+    op: LoopOp,
     capt: ?BindLoc,
     counter: ?BindLoc,
     body: *Expr,
