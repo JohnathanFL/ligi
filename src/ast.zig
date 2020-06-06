@@ -58,67 +58,43 @@ pub const LoopOp = enum { NOP, While, For };
 
 pub const ExprList = ArrayList(*Expr);
 
-// By convention, Exprs will never be stored by value.
-// By convention, everything else is stored by value (in ArrayLists, if need be)
-// TODO: Refactor the inner structs out into proper named structs
-pub const Expr = union(enum) {
-  /// TODO: The `$` operator
-  Expansion: *Expr,
-  
-  NOP: void,
-  Word: str,
-  Str: str,
-  Block: struct { label: ?str, body: ExprList },
-  EnumLit: struct { tag: str, inner: ?*Expr },
-  Tuple: struct { as: ?*Expr, vals: ExprList },
-  // If the field's value is null, then the field name is used to look up the value from scope
-  Struct: struct { as: ?*Expr, fields: StrHashMap(?*Expr) },
-  Array: struct { as: ?*Expr, vals: ExprList },
-  
-  Bind: struct {
+
+pub const Block = struct { label: ?str, body: ExprList };
+pub const EnumLit = struct { tag: str, inner: ?*Expr };
+pub const Tuple = struct { as: ?*Expr, vals: ExprList };
+// If the field's value is null, then the field name is used to look up the value from scope
+pub const Struct = struct { as: ?*Expr, fields: StrHashMap(?*Expr) };
+pub const Array = struct { as: ?*Expr, vals: ExprList };
+pub const Bind = struct {
     using: bool,
     level: BindLevel,
     op: BindOp,
     locs: ArrayList(LocInit),
-  },
-  Break: struct { label: ?str, val: ?*Expr },
-  Return: ?*Expr,
-  Assert: struct {
-    expr: *Expr,
-    msg: ?str
-  },
-  /// TODO: Why not rework the Block to have a list of deferred statements?
-  Defer: *Expr,
-
-  // This includes `.`, `::`, `()`, and `[]`
-  // TODO: Rework handling of `::` so you can specify which it's sent to
-  Call: struct {
-    // What type of call is this? (Add, Sub, (), [], ., ::, etc)
-    op: Op,
-    // What do we call it with?
-    args: ExprList,
-  },
-  
-  Func: struct {
+  };
+pub const Break = struct { label: ?str, val: ?*Expr };
+pub const Assert = struct { expr: *Expr, msg: ?str };
+// This includes `.`, `::`, `()`, and `[]`
+pub const Call = struct { op: Op, args: ExprList };
+pub const Func = struct {
     args: ArrayList(BindLoc),
     // For a void function (fn->{}), it's #sink("void")
     ret: BindLoc,
     // What gets assigned to ret's loc
     // If null, then this is a function type, not a function definition
     body: ?*Expr,
-  },
-  If: struct {
+  };
+pub const If = struct {
     arms: ArrayList(IfArm),
     default: ?*Expr,
     finally: ?*Expr,
-  },
-  When: struct {
+  };
+pub const When = struct {
     expr: *Expr,
     arms: ArrayList(WhenArm),
     default: ?*Expr,
     finally: ?*Expr,
-  },
-  Loop: struct {
+  };
+pub const Loop = struct {
     expr: ?*Expr,
     // How do we interpret .expr?
     op: LoopOp,
@@ -127,5 +103,32 @@ pub const Expr = union(enum) {
     body: *Expr,
     // Always null for inf loop
     finally: ?*Expr
-  }
+  };
+
+// By convention, Exprs will never be stored by value.
+// By convention, everything else is stored by value (in ArrayLists, if need be)
+// TODO: Refactor the inner structs out into proper named structs
+pub const Expr = union(enum) {
+  /// TODO: The `$` operator. Takes the value an "expands" it into the AST
+  Expansion: *Expr,
+  
+  NOP: void,
+  Word: str,
+  Str: str,
+  Block: Block,
+  EnumLit: EnumLit,
+  Tuple: Tuple,
+  Struct: Struct,
+  Array: Array,
+  Bind: Bind,
+  Break: Break,
+  Return: ?*Expr,
+  Assert: Assert,
+  /// TODO: Why not rework the Block to have a list of deferred statements?
+  Defer: *Expr,
+  Call: Call,
+  Func: Func,
+  If: If,
+  When: When,
+  Loop: Loop,
 };
