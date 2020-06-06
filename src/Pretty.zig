@@ -86,12 +86,11 @@ fn pretty(self: *@This(), node: *ast.Expr) void {
         self.prettyLoc(arg);
       }
       self.doIndent();
-      self.write("-> ");
-      self.doIndent();
+      self.write("returns ");
       self.prettyLoc(func.ret);
       if(func.body) |body| {
         self.doIndent();
-        self.write(" =>");
+        self.write("=>");
         self.pretty(body);
       }
       self.indent -= 1;
