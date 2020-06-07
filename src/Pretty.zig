@@ -58,9 +58,7 @@ fn pretty(self: *@This(), node: *ast.Expr) void {
         .Block => |block| {
             if (block.label) |lab| self.write(lab);
             self.write("{");
-
             for (block.body.items) |stmt| self.pretty(stmt);
-
             self.iwrite("}");
         },
         .Bind => |bind| {
@@ -129,12 +127,10 @@ fn pretty(self: *@This(), node: *ast.Expr) void {
                 self.doIndent();
                 self.prettyLoc(arg);
             }
-            self.doIndent();
-            self.write("returns ");
+            self.iwrite("returns ");
             self.prettyLoc(func.ret);
             if (func.body) |body| {
-                self.doIndent();
-                self.write("=>");
+                self.iwrite("=>");
                 self.pretty(body);
             }
             self.indent -= 1;
@@ -145,22 +141,23 @@ fn pretty(self: *@This(), node: *ast.Expr) void {
             defer self.indent -= 1;
             if (loop.expr) |expr| self.pretty(expr);
             if (loop.capt) |capt| {
-                self.doIndent();
-                self.write("Capture: ");
+                self.iwrite("Capture: ");
                 self.prettyLoc(capt);
             }
             if (loop.counter) |counter| {
-                self.doIndent();
-                self.write("Counter: ");
+                self.iwrite("Counter: ");
                 self.prettyLoc(counter);
             }
-            self.doIndent();
-            self.write("Do:");
+            self.iwrite("Do:");
             self.pretty(loop.body);
             self.prettyDefFin(null, loop.finally);
         },
         else => self.fmt("UNIMPLEMENTED: {}", .{@tagName(node.*)}),
     }
+}
+
+fn prettyBind(self: *@This(), bind: ast.Bind) void {
+    
 }
 
 // For anything that can have else/finally
@@ -181,8 +178,7 @@ fn prettyLoc(self: *@This(), loc: ast.BindLoc) void {
         .Tuple => |tup| {
             self.write("(");
             defer {
-                self.doIndent();
-                self.write(")");
+                self.iwrite(")");
             }
 
             self.indent += 1;
