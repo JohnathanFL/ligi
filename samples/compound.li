@@ -1,0 +1,55 @@
+-- This is to give better documentation on the Compound literals
+
+-- Although tuples are also a "compound" of values, it doesn't count as a Compund for
+-- these purposes.
+
+
+
+
+
+-- All compound lits are surrounded by []:
+-- This was chosen instead of {} so that {} can *always* mean a block.
+let ar = [ 0, 1, 2 ]
+let st = [ .x = 10, .y = 20 ]
+
+-- All compound literals may have a colon-delimited type-expr at their beginning
+let ar = [:usize::array(_): 0, 1, 2]
+let st = [:Vec3: .x = 10, .y = 20, .z = 30]
+-- This type-expr specifies the type that the *entire* compound should become, not just each value
+
+-- Struct literals use a `.` before each field
+let vec3 = [
+  .x = 1,
+  .y = 2,
+  .z = 3
+]
+
+-- The part immediately after the `.` is actually a fully functional bind location:
+-- This is mainly useful for unpacking things
+---- This will likely tie in with a future de-structuring proposal for structs
+let tup = (1, 2, 3)
+let vec3 = [
+  .(x, y, z) = tup
+]
+-- For anonymous struct literals (those with no :type-expr: or an inferred type), you can use this
+-- to specify types for storage
+let vec3 = [
+  .x: f32 = 1,
+  .y: f32 = 2,
+  .z: f32 = 3
+]
+
+-- Array literals have no leading `.`
+let ar = [ 0, 1, 2, 3, 4 ]
+
+
+-- As you'd expect, the locations are always evaluated sequentially:
+let say_a = fn a -> a1 = {
+  printf("{}", a)
+  a
+}
+let ar = [
+  say_a(1),
+  say_a(2),
+  say_a(3)
+] --= ar===[1,2,3], outputs `123`

@@ -68,8 +68,10 @@ fn pretty(self: *@This(), node: *ast.Expr) void {
                 self.fmt("{} ", .{@tagName(bind.level)});
             }
             self.fmt("{} ", .{@tagName(bind.op)});
-            //self.indent += 1; defer self.indent -= 1;
+            self.indent += 1;
+            defer self.indent -= 1;
             for (bind.locs.items) |loc| {
+                self.doIndent();
                 self.prettyLoc(loc.loc);
                 if (loc.init) |init| {
                     self.write(" =");
@@ -152,12 +154,24 @@ fn pretty(self: *@This(), node: *ast.Expr) void {
             self.pretty(loop.body);
             self.prettyDefFin(null, loop.finally);
         },
+        .Struct => |lit| {
+            self.write("[");
+            defer self.iwrite("]");
+
+            self.indent += 1;
+            defer self.indent -= 1;
+
+            for (lit.fields.items) |field| {
+                self.doIndent();
+                self.prettyLoc(field.loc);
+                if (field.val) |val| {
+                    self.write(" = ");
+                    self.pretty(val);
+                }
+            }
+        },
         else => self.fmt("UNIMPLEMENTED: {}", .{@tagName(node.*)}),
     }
-}
-
-fn prettyBind(self: *@This(), bind: ast.Bind) void {
-    
 }
 
 // For anything that can have else/finally

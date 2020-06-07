@@ -171,9 +171,9 @@ pub fn parseStmt(self: *Parser) Error!*ast.Expr {
 // not be mutually exclusive?
 pub fn parseBindStmt(self: *Parser) Error!*ast.Expr {
     const using = if (self.tryMatch(.Using)) |_| true else false;
-    const level = if (self.tryMatch(.Pub)) |t| ast.BindLevel.Pub else .Priv;
+    const used_pub = self.tryMatch(.Pub) != null;
 
-    if (level != .Priv and using) {
+    if (used_pub and using) {
         std.debug.warn("{}: `using` and `pub` are mutually exclusive!\n", .{self.cur.pos});
         return error.MutExc;
     }
@@ -184,7 +184,12 @@ pub fn parseBindStmt(self: *Parser) Error!*ast.Expr {
         .Bind = .{
             .op = op,
             .using = using,
-            .level = level,
+            // Fields and Enums are *always* public.
+            // Only statics can be private.
+            .level = if (used_pub) .Pub else switch (op) {
+                .Field, .Enum => ast.BindLevel.Pub,
+                else => .Priv,
+            },
             .locs = std.ArrayList(ast.LocInit).init(self.alloc),
         },
     });
@@ -292,12 +297,11 @@ pub fn parseCompound(self: *Parser) Error!*ast.Expr {
     // Note this technically means it's impossible to have an empty struct lit,
     // as it'll parse as an array lit
     if (self.nextIs(.Access)) { // struct lit
-        var fields = StrHashMap(?*ast.Expr).init(self.alloc);
+        var fields = ast.FieldList.init(self.alloc);
         while (self.tryMatch(.Access) != null) {
-            const name = (try self.match(.Word)).str;
-            const val = if (self.tryMatch(.Assg) != null) try self.parseExpr() else null;
-            try fields.putNoClobber(name, val);
-
+            const loc = try self.parseBindLoc();
+            const val = if (self.tryMatch(.Assg)) |_| try self.parseExpr() else null;
+            try fields.append(.{ .loc = loc, .val = val });
             // This combined with the while cond allows trailing commas
             if (self.tryMatch(.Comma) == null) break;
         }

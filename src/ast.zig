@@ -87,19 +87,19 @@ pub const BindLoc = union(enum) {
 };
 
 pub const LocInit = struct { loc: BindLoc, init: ?*Expr };
-
 pub const IfArm = struct { cond: *Expr, capt: ?BindLoc, then: *Expr };
 // .op must be one of .Eq, .NotEq, .Gt, .Lt, .GtEq, .LtEq, .NotIn, .In
 pub const WhenArm = struct { op: Op, val: *Expr, capt: ?BindLoc, then: *Expr };
 pub const LoopOp = enum { NOP, While, For };
+/// If the val is null, then the value is taken from context from the name of the bindloc
+pub const FieldList = ArrayList(struct { loc: BindLoc, val: ?*Expr });
 
 pub const ExprList = ArrayList(*Expr);
 
 pub const Block = struct { label: ?str, body: ExprList };
 pub const EnumLit = struct { tag: str, inner: ?*Expr };
 pub const Tuple = struct { as: ?*Expr, vals: ExprList };
-// If the field's value is null, then the field name is used to look up the value from scope
-pub const Struct = struct { as: ?*Expr, fields: StrHashMap(?*Expr) };
+pub const Struct = struct { as: ?*Expr, fields: FieldList };
 pub const Array = struct { as: ?*Expr, vals: ExprList };
 pub const Bind = struct {
     using: bool,
