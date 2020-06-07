@@ -43,3 +43,5 @@ let w = [
   .(x, y, z) = tup,
   .w: f32 = 10
 ]
+
+let \if = true

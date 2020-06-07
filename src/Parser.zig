@@ -79,8 +79,8 @@ fn match(self: *Parser, tag: lex.Tag) Error!lex.Token {
 fn tryMatch(self: *Parser, tag: lex.Tag) ?lex.Token {
     if (self.nextIs(tag)) {
         const prev = self.cur;
-        // TODO: Fix this. This could cause problems when it comes to .UnTermChar/Str
-        self.cur = self.lexer.lex() catch return null;
+        // TODO: A proper error system that can bubble up with no problem
+        self.cur = self.lexer.lex() catch |err| @panic("Lexer error");
         self.newlined = prev.pos.line != self.cur.pos.line;
         //std.debug.warn("Matched {}, newlined is now {}\n", .{@tagName(prev.tag), self.newlined});
         return prev;

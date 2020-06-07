@@ -331,7 +331,7 @@ pub const Lexer = struct {
         }
     }
 
-    pub const Error = error{ UnknownToken, UnTermStr, UnTermChar };
+    pub const Error = error{ UnknownToken, UnTermStr, UnTermChar, EmptyStrop, OutOfMemory };
 
     fn eof(pos: FilePos) Token {
         return .{
@@ -395,10 +395,10 @@ pub const Lexer = struct {
             var res = std.ArrayList(u8).init(self.alloc);
 
             while (self.match("\\\\")) {
-                if (res.items.len > 0) res.append('\n') catch unreachable;
+                if (res.items.len > 0) try res.append('\n');
                 var len: usize = 0;
                 while (self.input.len - len > 0 and self.input[len] != '\n') {
-                    res.append(self.input[len]) catch unreachable;
+                    try res.append(self.input[len]);
                     len += 1;
                 }
                 _ = self.munch(len);
@@ -409,6 +409,19 @@ pub const Lexer = struct {
                 .tag = .Str,
                 .pos = pos,
                 .str = res.toOwnedSlice(),
+            };
+        }
+
+        // Since the last block just ruled out \\ strings
+        if (self.match("\\")) {
+            if (self.input.len == 0 or !isWordChar(self.input[0])) {
+                std.debug.warn("{}: Expected a stropped variable name!", .{pos});
+                return error.EmptyStrop;
+            }
+            return Token{
+                .tag = .Word,
+                .pos = pos,
+                .str = self.matchWord(),
             };
         }
 

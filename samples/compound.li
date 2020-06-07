@@ -17,6 +17,17 @@ let ar = [:usize::array(_): 0, 1, 2]
 let st = [:Vec3: .x = 10, .y = 20, .z = 30]
 -- This type-expr specifies the type that the *entire* compound should become, not just each value
 
+-- As you'd expect, the locations are always evaluated sequentially:
+let say_a = fn a -> a1 = {
+  printf("{}", a)
+  a
+}
+let ar = [
+  say_a(1),
+  say_a(2),
+  say_a(3)
+] --= ar===[1,2,3], outputs `123`
+
 -- Struct literals use a `.` before each field
 let vec3 = [
   .x = 1,
@@ -38,18 +49,17 @@ let vec3 = [
   .y: f32 = 2,
   .z: f32 = 3
 ]
+-- I also plan on *maybe* letting users exploit this by using ._ as a "no-op":
+-- Example using code like the current Zig parser:
+let parse_assert = fn self -> a: Expr = #Assert[
+  ._ = self.match(#Assert),
+  .expr = self.parse_expr()
+]
+-- Although it's obviously overkill in the above example, it may be more useful in longer
+-- expressions where you're able to initialize fields sequentially but need work done
+-- in between
 
 -- Array literals have no leading `.`
 let ar = [ 0, 1, 2, 3, 4 ]
 
 
--- As you'd expect, the locations are always evaluated sequentially:
-let say_a = fn a -> a1 = {
-  printf("{}", a)
-  a
-}
-let ar = [
-  say_a(1),
-  say_a(2),
-  say_a(3)
-] --= ar===[1,2,3], outputs `123`
