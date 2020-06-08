@@ -13,7 +13,7 @@ let ar = [ 0, 1, 2 ]
 let st = [ .x = 10, .y = 20 ]
 
 -- All compound literals may have a colon-delimited type-expr at their beginning
-let ar = [:usize::array(_): 0, 1, 2]
+let ar = [:array(_, usize): 0, 1, 2]
 let st = [:Vec3: .x = 10, .y = 20, .z = 30]
 -- This type-expr specifies the type that the *entire* compound should become, not just each value
 
