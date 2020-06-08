@@ -33,10 +33,11 @@ let m = MSAA.2x
 assert m.rawTag == 2
 
 -- In a nutshell:
----- The compiler already maintains a cache of string literals
----- Doing `#Word` creates a new string literal "Word" and adds it to the cache
----- Coercing `#Word` into an `anyenum` just gets the hash of `#Word`
----- Getting an `anyenum.val` just uses the hash to look up its string value in the cache
+---- When the compiler encounters a new anyenum value, it assigns it a new tag
+---- anyenum tags are tracked in a DB that persists across compilations and should be in VCS
+------ This is purely for being able to store anyenum values in a DB/etc across runs of the prog
+---- The compiler auto-generates lookup tables to go enum<->anyenum for the .tag property
+------ This allows translating between enums based on names (e.g Tag <=> Op)
 
 -- This will become the new *preferred* way of doing error handling:
 let Result = pure fn T: type -> res = enum {
