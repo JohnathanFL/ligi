@@ -1,0 +1,12 @@
+-- This is to propose a "divrem" styled operator
+
+
+-- Although the exact sigil is up in the air, it'd work like this:
+let int1 = 11, int2 = 20
+let (quotient, remainder) = int1 /% int2
+assert quotient == 1 and remainder == 9
+
+-- Some things:
+
+-- Should it return a tuple or a struct? If it's a struct, it can be named. (quot, rem)
+-- If it's a tuple, it can be easily destructured.
