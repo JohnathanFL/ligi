@@ -61,3 +61,19 @@ when list.get(1)
 -- How could we make it a little more sugary?
 ---- How about providing built in functions to translate between enums by name?
 ---- Then, you could do something like return innerError.as(OuterErrorT) and not have to worry
+
+
+
+-- New error handling (still WIP): Gettin a little Ziggy
+-- New error handling will provide the !T type, which acts like a mix between ?T and enums:
+let ArrayList = pure fn T -> t = struct {
+  field
+    all: []T,
+    items: []
+
+  let get = fn self: @This, i: usize -> el: !ref T = when i
+    -- !T is always either #Ok(T) or #Err(anyenum)
+    is <= self.items.len => #Ok(self.items[i].addr)
+    else => #Err(#OutOfBounds)
+}
+
