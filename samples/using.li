@@ -39,3 +39,4 @@ using let x = ResType.init()
 
 -- This won't work for things that need more complex deinits, but it can at least help some of the
 -- verbosity
+

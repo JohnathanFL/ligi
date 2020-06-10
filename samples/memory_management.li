@@ -1,0 +1,21 @@
+-- This is to try and lay out a plan for how memory is to be managed
+-- "idiomatically" in Ligi
+
+
+-- Right now, our memory toolbox looks like:
+---- Explicit allocators that are passed around everywhere.
+---- `defer` to automatically perform cleanup actions
+---- `using` to automatically call defer when explicitly asked
+
+-- This is essentially just Zig's formula with a little syntactic sugar so far.
+
+
+-- I'm planning on focusing heavily on Zig's Arena Allocator idea:
+---- Wherever you have a series of allocations you can clean up at once, you create
+---- a new arena.
+---- Pass the arena's allocator to all actions in that "group"
+---- Call .deinit on the arena when done
+
+-- This avoids the need for constant `using` and `defer`
+
+
