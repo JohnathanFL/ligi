@@ -8,7 +8,7 @@
 
 -- However, the syntax always struck me as rather ugly. Taken from Zig's stdlib, translated to .li:
 let ArenaAllocator = struct {
-  let alloc = fn allocator: *Allocator, n: usize, alignment: u29 -> mem: ![]u8 = {
+  let alloc = fn allocator: *Allocator, n: usize, alignment: u29 -> mem: !slice u8 = {
     let self: *ArenaAllocator = @fieldParentPtr(ArenaAllocator, "allocator", allocator)
     -- ... do stuff with self
   }
@@ -19,7 +19,7 @@ let ArenaAllocator = struct {
   field allocator: Allocator
   -- field allocator2: Allocator -- for the second case
   
-  let alloc = fn self: *Allocator in ArenaAllocator, n: usize, alignment: u29 -> mem: ![]u8 = {
+  let alloc = fn self: *Allocator in ArenaAllocator, n: usize, alignment: u29 -> mem: !slice u8 = {
     -- self is already a *ArenaAllocator
   }
   -- If there was more than one *Allocator inside ArenaAllocator, you'd specify the fieldname in a
@@ -27,19 +27,25 @@ let ArenaAllocator = struct {
   let alloc = fn
     self: (*Allocator, "allocator") in ArenaAllocator,
     n: usize,
-    alignment: u29 -> mem: ![]u8 = {
+    alignment: u29 -> mem: !slice u8 = {
       -- self is already a *ArenaAllocator
     }
 }
 
 -- In the first case, if ArenaAllocator has only one Allocator inside it, `in` can
 -- deduce which field you mean. This makes it read very naturally:
----- self is a pointer to an Allocator found inside the ArenaAllocator we need
+---- self is a pointer to the Allocator found inside the ArenaAllocator we need
 
 -- In the second case, there are two Allocators inside, so we need to specify which we have
 -- a pointer to. This still reads pretty naturally:
----- self is a pointer to an Allocator named "allocator" found inside the ArenaAllocator we need
+---- self is a pointer to the Allocator named "allocator" found inside the ArenaAllocator we need
 
 -- In both cases, the `in` operator takes args of either (*T, type) or ((*T, str), type),
 -- so it shouldn't conflict with normal `in` usages (I think. Verify this.)
 -- This would essentially allow a nice sugar over top of Zig's normal "composite polymorphism"
+
+-- This would also work with `ref`:
+let ArenaAllocator = struct {
+  let alloc = fn self: ref Allocator in ArenaAllocator, n: usize, alignment: u29 -> mem: !slice u8
+    = {}
+}
