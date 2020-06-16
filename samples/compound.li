@@ -59,6 +59,14 @@ let parse_assert = fn self -> a: Expr = #Assert[
 -- expressions where you're able to initialize fields sequentially but need work done
 -- in between
 
+-- I plan to let users assign to both fields *and* properties in a lit
+-- It will track what variables the property modifies, so you have to
+-- init a field before using a property which reads from it.
+-- It would also enforce a purity check on the properties used
+-- so they can only change the resulting struct itself
+-- Thus the 'struct literal' allows description of the resulting struct,
+-- rather than purely asserting what data is in it.
+
 -- Array literals have no leading `.`
 let ar = [ 0, 1, 2, 3, 4 ]
 
