@@ -146,6 +146,7 @@ pub const Tag = enum {
             .Inline => .Inline,
             .Overload => .Overload,
             .Property => .Property,
+            .Enum => .Enum,
             else => unreachable,
         };
     }
@@ -192,7 +193,7 @@ pub const Lexer = struct {
     fn tp(str: []const u8, tag: Tag) TokPair {
         return .{ .str = str, .tag = tag };
     }
-    pub const TOKS = [_]TokPair{
+    pub const KEYWORDS = [_]TokPair{
         // Keywords
         tp("pub", .Pub),
         tp("using", .Using),
@@ -235,7 +236,8 @@ pub const Lexer = struct {
         tp("and", .And),
         tp("mod", .Mod),
         tp("alias", .Alias),
-
+    };
+    pub const SIGILS = [_]TokPair{
         // Non-words
         tp("=>", .Then),
         tp("->", .StoreIn),
@@ -320,14 +322,21 @@ pub const Lexer = struct {
 
     fn skipWs(self: *Lexer) void {
         // Remember hasLen === hasAtLeastLen
-        while (self.hasLen(1) and std.ascii.isSpace(self.input[0])) {
-            if (self.input[0] == '\n') {
-                self.pos.col = 1;
-                self.pos.line += 1;
-            } else {
-                self.pos.col += 1;
+        while (true) {
+            while (self.hasLen(1) and std.ascii.isSpace(self.input[0])) {
+                if (self.input[0] == '\n') {
+                    self.pos.col = 1;
+                    self.pos.line += 1;
+                } else {
+                    self.pos.col += 1;
+                }
+                self.input = self.input[1..];
             }
-            self.input = self.input[1..];
+            if (!self.nextIs("--")) break;
+            // comment
+            while (!self.nextIs("\n")) {
+                _ = self.munch(1);
+            }
         }
     }
 
@@ -347,7 +356,7 @@ pub const Lexer = struct {
         if (!self.hasLen(1)) return eof(pos);
 
         // Maybe not the most performant, but we'll worry about that later....
-        for (TOKS) |pair| {
+        for (SIGILS) |pair| {
             if (self.match(pair.str)) {
                 return Token{
                     .tag = pair.tag,
@@ -356,12 +365,21 @@ pub const Lexer = struct {
                 };
             }
         }
-        // Wasn't a reserved token
+        // Wasn't a sigil
         if (isWordChar(self.input[0])) {
+            const str = self.matchWord();
+            for (KEYWORDS) |keyword| {
+                if (std.mem.eql(u8, str, keyword.str))
+                    return Token{
+                        .tag = keyword.tag,
+                        .pos = pos,
+                        .str = str,
+                    };
+            }
             return Token{
                 .tag = .Word,
                 .pos = pos,
-                .str = self.matchWord(),
+                .str = str,
             };
         }
 
@@ -441,8 +459,19 @@ pub const Lexer = struct {
     }
 };
 
+fn doTest(comptime expected: []const Tag, input: []const u8) !void {
+    var lexer = Lexer.init(input, 0, std.heap.page_allocator);
+
+    //std.debug.warn("\n", .{});
+    for (expected) |tag| {
+        const res = try lexer.lex();
+        //std.debug.warn("{} === {}\n", .{ res.tag, tag });
+        assert(res.tag == tag);
+    }
+}
+
 test "recognize reserved" {
-    const expected = [_]Tag{
+    try doTest(&[_]Tag{
         .Assg,     .AddAssg,   .SubAssg,   .MulAssg,     .DivAssg,
         .Eq,       .NotEq,     .Gt,        .Lt,          .GtEq,
         .LtEq,     .Spaceship, .Or,        .Xor,         .And,
@@ -457,20 +486,18 @@ test "recognize reserved" {
         .Loop,     .For,       .Finally,   .Fn,          .Colon,
         .Comma,    .StoreIn,   .LParen,    .RParen,      .LBracket,
         .RBracket, .LBrace,    .RBrace,
-    };
-    const input =
+    },
         \\ = += -= *= /= == != > < >= <= <=> or xor and in notin .. ..=
         \\ + - * / mod | & ^ struct ref slice array const comptime ~ not ?
-        \\ pure inline overload property . :: let var cvar field enum alias
+        \\ pure inline overload property . :: using let var cvar field enum alias
         \\ if elif else when is while loop for finally fn : , -> ( ) [ ] { }
-    ;
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    var lexer = Lexer.init(input, 0, &arena.allocator);
+    );
+}
 
-    //std.debug.warn("\n", .{});
-    for (expected) |tag| {
-        const res = try lexer.lex();
-        //std.debug.warn("{} === {}\n", .{res.Ok.tag, tag});
-        assert(res.tag == tag);
-    }
+test "recognize comma after word" {
+    try doTest(&[_]Tag{
+        .Word, .Comma, .Word,
+    },
+        \\usize, isize
+    );
 }

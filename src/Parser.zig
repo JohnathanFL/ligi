@@ -82,7 +82,11 @@ fn tryMatch(self: *Parser, tag: lex.Tag) ?lex.Token {
         // TODO: A proper error system that can bubble up with no problem
         self.cur = self.lexer.lex() catch |err| @panic("Lexer error");
         self.newlined = prev.pos.line != self.cur.pos.line;
-        //std.debug.warn("Matched {}, newlined is now {}\n", .{@tagName(prev.tag), self.newlined});
+        std.debug.warn("{}: Matched `{}`, newlined is now {}\n", .{
+            prev.pos,
+            prev.str,
+            self.newlined,
+        });
         return prev;
     } else {
         return null;
@@ -130,7 +134,7 @@ pub fn parseBlock(self: *Parser, comptime braces: bool) Error!*ast.Expr {
 
 pub fn parseStmt(self: *Parser) Error!*ast.Expr {
     switch (self.cur.tag) {
-        .Let, .Var, .CVar, .Field, .Property, .Using, .Pub => return self.parseBindStmt(),
+        .Let, .Var, .CVar, .Enum, .Field, .Property, .Using, .Pub => return self.parseBindStmt(),
         // assert expr [',' str]
         .Assert => {
             _ = try self.match(.Assert);
@@ -347,12 +351,22 @@ pub fn parseExprList(self: *Parser, closer: lex.Tag) Error!std.ArrayList(*ast.Ex
 }
 
 /// Either `:expr` or `:expr:`, depending on trailing_colon
-pub fn parseTypeSpec(self: *Parser, comptime trailing_colon: bool) Error!?*ast.Expr {
-    //std.debug.warn("In parseTypeSpec!\n", .{});
+pub fn parseTypeSpec(
+    self: *Parser,
+    /// Is it a :type: spec?
+    comptime trailing_colon: bool,
+) Error!?*ast.Expr {
     if (self.tryMatch(.Colon) != null) {
-        const res = try self.parseExpr();
-        if (trailing_colon) _ = try self.match(.Colon);
-        return res;
+        if (trailing_colon) {
+            return self.newExpr(.{
+                .Tuple = .{
+                    .as = null,
+                    .vals = try self.parseExprList(.Colon),
+                },
+            });
+        } else {
+            return try self.parseExpr();
+        }
     } else return null;
 }
 
@@ -516,7 +530,7 @@ pub fn parseAccess(self: *Parser, comptime restricted: bool) Error!*ast.Expr {
                         }));
                     } else return self.expected("either a word or a swizzle group");
                 },
-                .LParen, .RParen => {
+                .LParen, .LBracket => {
                     const op = if (accesser == .LParen) ast.Op.Call else .Index;
                     const call = self.newCallFrom(.Call, try self.parseExprList(if (accesser == .LParen) .RParen else .RBracket));
                     try path.append(call);
