@@ -13,7 +13,7 @@ let mat4x4: array((4, 4), f32) = [
   [0, 0, 0, 1]
 ]
 -- ...same with the compound literal's type
-let mat4x4: = [:array((4, 4), f32)
+let mat4x4 = [:array((4, 4), f32):
   [1, 0, 0, 0],
   [0, 1, 0, 0],
   [0, 0, 1, 0],

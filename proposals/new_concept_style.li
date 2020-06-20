@@ -16,7 +16,7 @@
 -- For example: A stack logically should be a struct:
 -- Also: Exploring the possibility of endorsing the IName style for concepts
 
--- Thus: Let Stack be based on the type T and be the concept of a struct which...
+-- Thus: Let IStack be based on the type T and be the concept of a struct which...
 let IStack = pure fn T:type -> Stack = concept struct {
   -- @This would just be assumed to refer to the final type
   let push: fn self: @This, val: T -> void
@@ -38,7 +38,7 @@ let Result2 = enum { enum Ok: u32, OutOfBounds, NoBuffer }
 -- Note that there's no need for a `concept fn` or similar.
 -- You can simply leave an argument as undef for that
 -- So both of the following branches are correct:
-let my_func: fn a, b -> c = if true {
+let my_func: (fn a, b -> c) = if true {
   pure fn a: u32, b: u32 -> c: u32 = a + b
 } else {
   pure fn a: bool, b: f32 -> c: f32 = if a { b } else { 1.0 }

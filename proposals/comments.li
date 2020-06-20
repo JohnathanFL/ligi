@@ -23,7 +23,7 @@
 -- - Harder to type, especially if your editor auto-inserts the )
 -- - Using something else could allow for `tuple casting`, like so:
   --usize: 0)
-  assert --(usize, isize, f32): 0, 1, 2).@type == (usize, isize, f32)
+  assert (:usize, isize, f32: 0, 1, 2).@type == (usize, isize, f32)
   -- Thus we'd have some parity between [:t: arg] and (:: arg)
 
 -- Suggestion #0.1: Use existing style as multi-/in-line comments and use one of the below

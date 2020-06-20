@@ -30,10 +30,10 @@ KAK
 
 add-highlighter shared/ligi/code/ regex \b(using|const|property|field|alias|let|cvar|var|extern|packed|export|pub|noalias|inline|comptime|nakedcc|stdcallcc|atomic|volatile|align|section)\b 0:keyword
 add-highlighter shared/ligi/code/ regex \b(block|overload|distinct|struct|enum|union|concept)\b 0:keyword
-add-highlighter shared/ligi/code/ regex \b(array|ref|slice|pure|assert|break|return|continue|asm|defer|errdefer|unreachable|try|catch|orelse|async|suspend|await|cancel)\b 0:keyword
+add-highlighter shared/ligi/code/ regex \b(array|ref|slice|pure|assert|break|return|continue|defer|errdefer|unreachable|async|suspend|await|cancel)\b 0:keyword
 add-highlighter shared/ligi/code/ regex \b(caseof|if|elif|finally|else|switch|and|or|xor|not|in)\b 0:keyword
 add-highlighter shared/ligi/code/ regex \b(until|while|for|loop|when|is)\b 0:keyword
-add-highlighter shared/ligi/code/ regex \b(fn|use|test)\b 0:keyword
+add-highlighter shared/ligi/code/ regex \b(fn|macro|do|use|test)\b 0:keyword
 
 add-highlighter shared/ligi/code/ regex \b(anyenum|str|bool|f32|f64|f128|void|noreturn|type|error|promise)\b 0:type
 add-highlighter shared/ligi/code/ regex \b(u\d+|i\d+|isize|usize)\b|\b(\d+(\.\d+)?)(u\d+|i\d+|isize|usize|f32|f64)\b 1:type 2:variable 4:type

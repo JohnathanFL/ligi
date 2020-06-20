@@ -5,7 +5,7 @@
 -- If we allow adding tuple + struct, we could then do things like:
 let Vec3 = (f32, f32, f32) + struct {
   let len = property {
-    let get+ = inline pure fn (x: f32, y: f32, z: f32) -> len: f32 = @sqrt(x*x + y+y + z*z)
+    pub let get = inline pure fn (x: f32, y: f32, z: f32) -> len: f32 = @sqrt(x*x + y+y + z*z)
   }
 
   -- We already get +, -, *, and / for free, as Ligi already defines tuple arithmetic like:

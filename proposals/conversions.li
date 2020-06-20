@@ -43,7 +43,7 @@ let sl: slice usize = ar
 -- Explicit :)
 -- @as is the direct casting operator
 let k = @as(i32, 10)
--- Or the more readable version, .as is defined for any number or boolean
+-- Or the more readable version, .as is defined for builtin types
 let j = 10.as(i98)
 let intBool = true.as(i32) -- true is defined as 1, false as 0 :)
 -- Works the other way around as well.

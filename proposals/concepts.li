@@ -5,7 +5,7 @@
 
 let StackConcept = pure fn T: type -> t:type = concept {
   -- `@Self` is a special variable in concepts that represents the type being tested
-  let push: (fn self: *@Self, item:T)
+  let push: (fn self: *@Self, item:T -> _:void)
   let pop: (fn self: *@Self -> item:T)
   let len: property usize
   -- TODO: Find a way to denote a property with vs one without a .set function and vice versa
@@ -35,7 +35,7 @@ let Stack = pure fn T: type -> t:type = concept {
     }
 
   let len = property {
-    let get* = pure fn self: @This -> res:usize = self.data.len
+    pub let get = pure fn self: @This -> res:usize = self.data.len
   }
 }
 
@@ -53,7 +53,7 @@ assert Stack(usize).@matches(StackConcept(usize))
 -- Would conflict with myStuff.x
 -- let x = "Hey"
 let myStuff: block = {
-  let x* = 10 -- Marked as public* so it is accessible
+  pub let x = 10 -- Marked as public* so it is accessible
   let y = 20 -- Not marked, so not accessible
 }
 -- Doesn't conflict with myStuff.x

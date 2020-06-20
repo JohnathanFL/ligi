@@ -39,6 +39,11 @@ el2 = 99
 assert el2 == 99
 assert data2[2] == 99
 
+-- Additionally, I plan on never allowing references to be stored in fields/slices/arrays/etc
+-- You can `?ref T`, but that's it. This is because once a `ref T` has been initialized, it acts
+-- exactly like a value type. Given that, it becomes tricky, if not impossible, to change the
+-- reference to something else, as writes will just go straight through to the inner value.
+
 -- So in short
   -- `ref`s are nothing but pointers with a bit of sugar over top
   -- `ref`s get explicitly initialized by a pointer

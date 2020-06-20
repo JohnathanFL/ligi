@@ -1,0 +1,53 @@
+-- This is to toy with an idea I've had while trying to specify error handling
+
+
+-- The gist of this idea would be that we follow Nim's example with the `macro` function type.
+-- You could already have written a function that returned an AST node, then used the `$`
+-- operator to expand that. This would just be a sugar around that.
+
+-- Real world example: A non-keyword "try"
+
+let Result = pure fn T: type -> R = enum {
+  enum Ok: T
+  enum Err: anyenum
+
+  -- Note that `try` is not a keyword under Ligi
+  -- A macro must always use => syntax. No result locations here.
+  let try = macro self: @This => when self
+    is #Ok -> val => val
+    -- Assuming all enums have an @enumInto to convert between tags of the same inner type
+    -- Using the @ReturnType builtin that gives the return type of the current func
+    else { return self.@enumInto(@ReturnType) } 
+}
+
+-- Dumb example. Not intended to be real code. Just to show the idea.
+let alloc = fn n: usize -> mem: Result(slice u8) =
+  if can_alloc(n) => #Ok(get_mem(n))
+  else => #Err(#CantAlloc)
+
+let parse = fn input: str -> res: Result(Expr) = {
+  -- ...
+
+  let mem = alloc(1024).try()
+  -- The above is auto-translated into
+  let mem = {
+    let self = alloc(1024)
+    when self
+      is #Ok -> val => val
+      else { return self.@enumInto(@ReturnType) }
+  }
+}
+
+-- It's important to note that the way I imagine it right now, the arguments act *exactly* the
+-- same as fn args. Unless you specify it as `*T` or `ref T`, the arguments are immutable
+-- inside the macro's scope.
+
+-- The macros are treated as if they're enclosed in `{}`, so you can't make a macro to make a new
+-- bind in the current scope
+
+-- A "pure" macro has the same semantics as a pure block - you can't change things not declared
+-- in that scope or access non-const globals
+
+-- Macros need to be explored much more thoroughly.
+-- I'm not a huge fan of how they can do hidden actions, but it does
+-- make it easy to implement some things, and it fits with Ligi's "Just don't be a dumdum" motto

@@ -19,16 +19,18 @@ const Name = []const u8;
 
 // A "Context" is a scope which contains bindings of names -> Locations
 pub const Context = struct {
+    pub const BindHook = *fn (*Context, Name) ?*Binding;
+    // Per-scope stuff
     alloc: *Allocator,
     parent: ?*Context,
     // Checked before checking .binds
     // Used for hooking into things like u8/u9/u10/etc
     // If the function returns null, it goes on to the next hook
     // If it returns a Binding, then that's used as the binding for that name
-    pub const BindHook = *fn (*Context, Name) ?*Binding;
     bind_hooks: ArrayList(BindHook),
     bind_names: StrHashMap(*Binding),
     pub_binds: StrHashMap(*Binding),
+    // Each Context owns its bindings. This means an out-of-scope context's Binding cannot be ref'd
     binds: SegList(Binding, 16),
     // All get executed when leaving a context
     deferred: ArrayList(*Expr),
@@ -60,16 +62,37 @@ pub const Context = struct {
     }
 };
 
-pub const Binding = struct {
+/// init may be null for fields
+/// For fields, init specifies what's evaluated into the field when the struct is made
+/// *without* specifying that field.
+/// For statics, it specifies the init expression that's run at application start.
+pub const Binding = struct { name: Name, ty: TypeId, init: ?*Expr };
+
+pub const LocationID = usize;
+pub const Location = struct {
     shadowable: bool,
     ty: TypeId,
-    val: *Val,
+    val: Val,
 };
 
-// A "Val" is something
+// Similar to TypeInfo, this shouldn't own any memory, and should be trivially copyable
 pub const Val = union(enum) {
     Void: void,
-    Ast: Expr,
+    Int: struct { ty: TypeId, val: i128 },
+    Float: union(enum) { F32: f32, F64: f64, F128: f128 },
+    Bool: bool,
+    Sink: void,
+    Ast: *Expr,
+    AnyEnum: []const u8,
+    Type: TypeId,
+
+    // We'll keep a global DB of functions, similar to the TypeDB
+    pub const FuncID = usize;
+    Func: struct {
+        // Must be a function type
+        ty: TypeId,
+        id: FuncID,
+    },
 
     // Since the `type` type to be passed around by the user is a typeid,
     // this maps directly to the @typeOf function/method/property
@@ -85,8 +108,8 @@ pub const Val = union(enum) {
 };
 
 pub const TypeId = usize;
-// Global singleton for TypeId <-> TypeInfo
-// Existing types are immutable. May only add new types
+/// Global singleton for TypeId <-> TypeInfo
+/// Existing types are immutable. May only add new types
 pub const TypeDB = struct {
     var alloc: *Allocator = undefined;
     var list: ArrayList(TypeInfo) = undefined;
@@ -137,6 +160,7 @@ pub const TypeDB = struct {
             2057 => return .{ .Ast = .{} },
 
             2058 => return .{ .AnyEnum = .{} },
+            2059 => return .{ .Type = .{} },
 
             // Dynamic
             else => {
@@ -150,13 +174,14 @@ pub const TypeDB = struct {
 
 /// Immutable info structure
 /// This will be the structure that's exposed to the user when they do .@typeInfo, so also
-/// no complex datatypes (HashMap, etc).
-/// Any slices are expected to be allocated by TypeDB.alloc
+/// no complex datatypes (HashMap, etc). Thus, we use slices of const values.
+/// Any slices are expected to be allocated by TypeDB.alloc.
 pub const TypeInfo = union(enum) {
     // Can't read or write
     Void: void,
     // If !bits, then it's a *size
     Int: struct { signed: bool, bits: ?usize },
+    // TODO: To keep F16?
     Float: enum { F16, F32, F64, F128 },
     Bool: void,
 
@@ -170,6 +195,7 @@ pub const TypeInfo = union(enum) {
     Ast: void,
 
     AnyEnum: void,
+    Type: void,
 
     // Types that depend on other types
 
@@ -177,20 +203,21 @@ pub const TypeInfo = union(enum) {
     // Each TypeId is a Func that the overload contains
     Overload: []const TypeId,
 
-    Opt: TypeId,
-    Ptr: TypeId,
-    Ref: TypeId,
+    Opt: TypeId, // ?T
+    Err: TypeId, // TODO: !T. A union of AnyEnum | T, whereas Opt is void | T
+    Ptr: TypeId, // *T
+    Ref: TypeId, // ref T
     Const: TypeId,
     Comptime: TypeId,
     Slice: TypeId,
-    Array: struct {
-        // TODO: Specify this
-        // indexer: TypeId,
-        size: usize,
-        inner: TypeId,
-    },
+    Packed: TypeId, // Been a while since I've had this in Ligi's code
+
+    // TODO: Specify a .indexer (i.e array(SomeEnum, SomeType) -> ar[#Tag])
+    Array: struct { size: usize, inner: TypeId },
     // Only the primitive tuple. For a compound-tuple, see #User
     Tuple: []const TypeId,
+    // TODO: Do I need this one, or could I get away with just using tuples? Requires research.
+    // SIMD: enum { F32x4, F16x8, ... }
 
     // Either struct or enum, since they're both `user` types
     // Enum "fields" are just discriminants. I'd use `field` for that in the language
@@ -199,15 +226,14 @@ pub const TypeInfo = union(enum) {
     User: struct {
         kind: enum { Struct, Enum, Distinct },
         /// If this User-type came from another type (like usize + struct{...}),
-        /// then it can also be converted to/from that type. Mark as such.
+        /// and doesn't add new fields, then it can also be converted to/from that type.
+        /// Mark as such.
         from: ?TypeId,
         /// Using a [] instead of StrHashMap because order matters
         /// Also, there should be few enough fields/etc that the search cost should be trivial
         /// If it's an enum, this should be kept in asc. sorted order
         /// Compound-tuples just use [.name = (0, 1, 2, 3...)] and always have name.len > 1
-        fields: []const struct { name: Name, ty: TypeId, init: *Expr },
-        /// Used to store statics
-        /// May not have deferred (so far)
-        ctx: *Context,
+        fields: []const Bind,
+        statics: []const Bind,
     },
 };

@@ -22,6 +22,9 @@ cur: lex.Token,
 newlined: bool,
 // I'd say 1024 expressions is a reasonable starting place
 exprs: std.SegmentedList(ast.Expr, 1024),
+/// Since Zig's stack traces are a wee bit too much
+pub const ParseStack = std.ArrayList(struct { func: []const u8, pos: lex.FilePos });
+parse_stack: ParseStack,
 
 const Error = error{ Expected, Unimplemented, OutOfMemory, MutExc } || lex.Lexer.Error;
 
@@ -30,12 +33,23 @@ pub fn init(main: str, file: usize, alloc: *mem.Allocator) Error!Parser {
         .alloc = alloc,
         .lexer = lex.Lexer.init(main, file, alloc),
         .exprs = std.SegmentedList(ast.Expr, 1024).init(alloc),
+        .parse_stack = ParseStack.init(alloc),
         .cur = undefined,
         .newlined = false,
     };
     // There's no way for the first
     res.cur = try res.lexer.lex();
     return res;
+}
+
+fn record(self: *Parser, func: []const u8) void {
+    self.parse_stack.append(.{
+        .func = func,
+        .pos = self.cur.pos,
+    }) catch unreachable;
+}
+fn unrecord(self: *Parser) void {
+    _ = self.parse_stack.pop();
 }
 
 fn newExpr(self: *Parser, e: ast.Expr) *ast.Expr {
@@ -72,8 +86,13 @@ fn match(self: *Parser, tag: lex.Tag) Error!lex.Token {
     if (self.tryMatch(tag)) |t| {
         return t;
     } else {
-        std.debug.warn("{}: Expected {}, but found {}\n", .{ self.cur.pos, tag, self.cur.tag });
-        return error.Expected;
+        self.expected(
+            "{}, but found {}\n",
+            .{
+                tag,
+                self.cur.tag,
+            },
+        );
     }
 }
 fn tryMatch(self: *Parser, tag: lex.Tag) ?lex.Token {
@@ -82,9 +101,10 @@ fn tryMatch(self: *Parser, tag: lex.Tag) ?lex.Token {
         // TODO: A proper error system that can bubble up with no problem
         self.cur = self.lexer.lex() catch |err| @panic("Lexer error");
         self.newlined = prev.pos.line != self.cur.pos.line;
-        std.debug.warn("{}: Matched `{}`, newlined is now {}\n", .{
+        std.debug.warn("{}: Matched `{}`({}), newlined is now {}\n", .{
             prev.pos,
             prev.str,
+            prev.tag,
             self.newlined,
         });
         return prev;
@@ -107,12 +127,25 @@ fn matchOne(self: *Parser, tags: []const lex.Tag) !lex.Token {
     }
 }
 
-fn expected(self: *Parser, comptime what: str) Error {
-    std.debug.warn("{}: Expected {}, but found a {}", .{ self.cur.pos, what, self.cur.tag });
-    return error.Expected;
+fn expectedBut(self: *Parser, comptime what: str) noreturn {
+    self.expected("{}, but got `{}`", .{ what, self.cur.str });
+}
+
+fn expected(self: *Parser, comptime what: str, fmts: var) noreturn {
+    std.debug.warn("{}: Expected ", .{self.cur.pos});
+    std.debug.warn(what, fmts);
+    std.debug.warn("\nTrace: \n", .{});
+
+    for (self.parse_stack.items) |call| {
+        std.debug.warn("At {}: {}\n", .{ call.pos, call.func });
+    }
+
+    std.process.exit(1);
 }
 
 pub fn parseBlock(self: *Parser, comptime braces: bool) Error!*ast.Expr {
+    self.record("Block");
+    defer self.unrecord();
     var res = self.newExpr(.{
         .Block = .{
             .label = null,
@@ -124,8 +157,10 @@ pub fn parseBlock(self: *Parser, comptime braces: bool) Error!*ast.Expr {
     if (braces) _ = try self.match(.LBrace);
     const end: lex.Tag = if (braces) .RBrace else .EOF;
 
-    while (!self.nextIs(end))
+    while (!self.nextIs(end)) {
+        while (self.tryMatch(.Semicolon)) |_| {}
         try this.body.append(try self.parseStmt());
+    }
 
     _ = try self.match(end);
 
@@ -133,8 +168,10 @@ pub fn parseBlock(self: *Parser, comptime braces: bool) Error!*ast.Expr {
 }
 
 pub fn parseStmt(self: *Parser) Error!*ast.Expr {
+    self.record("Stmt");
+    defer self.unrecord();
     switch (self.cur.tag) {
-        .Let, .Var, .CVar, .Enum, .Field, .Property, .Using, .Pub => return self.parseBindStmt(),
+        .Let, .Var, .CVar, .Enum, .Field, .Property, .Alias, .Using, .Pub => return self.parseBindStmt(),
         // assert expr [',' str]
         .Assert => {
             _ = try self.match(.Assert);
@@ -167,6 +204,10 @@ pub fn parseStmt(self: *Parser) Error!*ast.Expr {
             _ = try self.match(.Defer);
             return self.newExpr(.{ .Defer = try self.parseExpr() });
         },
+        .Use => {
+            _ = try self.match(.Use);
+            return self.newExpr(.{ .Use = try self.parseAccess(false) });
+        },
         else => return try self.parseAssg(),
     }
 }
@@ -174,6 +215,8 @@ pub fn parseStmt(self: *Parser) Error!*ast.Expr {
 // TODO: If we go ahead with state-machine-like functions, could using and pub
 // not be mutually exclusive?
 pub fn parseBindStmt(self: *Parser) Error!*ast.Expr {
+    self.record("BindStmt");
+    defer self.unrecord();
     const using = if (self.tryMatch(.Using)) |_| true else false;
     const used_pub = self.tryMatch(.Pub) != null;
 
@@ -182,7 +225,7 @@ pub fn parseBindStmt(self: *Parser) Error!*ast.Expr {
         return error.MutExc;
     }
 
-    const op = if (self.tryMatchOne(&BIND_OPS)) |tok| tok.tag.toBindOp() else return self.expected("a bind spec");
+    const op = if (self.tryMatchOne(&BIND_OPS)) |tok| tok.tag.toBindOp() else self.expected("a bind spec", .{});
 
     const res = self.newExpr(.{
         .Bind = .{
@@ -214,6 +257,8 @@ pub fn parseBindStmt(self: *Parser) Error!*ast.Expr {
 // Thus, you can unpack a tuple without specifying each inside variable's type while
 // still having type safety (for functions and the like)
 pub fn parseBindLoc(self: *Parser) Error!ast.BindLoc {
+    self.record("BindLoc");
+    defer self.unrecord();
     if (self.tryMatch(.LParen) != null) {
         var locs = std.ArrayList(ast.BindLoc).init(self.alloc);
         // No trailing commas allowed for binds
@@ -235,6 +280,8 @@ pub fn parseBindLoc(self: *Parser) Error!ast.BindLoc {
 
 // Just a special case of parseBin
 pub fn parseAssg(self: *Parser) Error!*ast.Expr {
+    self.record("Assg");
+    defer self.unrecord();
     const lhs = try self.parseExpr();
     if (self.tryMatchOne(&[_]lex.Tag{ .Assg, .AddAssg, .SubAssg, .MulAssg, .DivAssg })) |op| {
         const rhs = try self.parseExpr();
@@ -246,6 +293,8 @@ pub fn parseExpr(self: *Parser) Error!*ast.Expr {
     return self.parseBin(0);
 }
 pub fn parseBin(self: *Parser, comptime prec: usize) Error!*ast.Expr {
+    self.record("Bin");
+    defer self.unrecord();
     var lhs = if (prec + 1 == BIN_OPS.len) try self.parseUna() else try self.parseBin(prec + 1);
     // TODO: Verify that this has left associativity
     while (self.tryMatchOne(BIN_OPS[prec])) |tok| {
@@ -256,6 +305,8 @@ pub fn parseBin(self: *Parser, comptime prec: usize) Error!*ast.Expr {
     return lhs;
 }
 pub fn parseUna(self: *Parser) Error!*ast.Expr {
+    self.record("Una");
+    defer self.unrecord();
     if (self.tryMatchOne(&UNA_OPS)) |tok| {
         return self.newCall(tok.tag.toOp(.Unary), &[_]*ast.Expr{try self.parseUna()});
     } else {
@@ -264,6 +315,8 @@ pub fn parseUna(self: *Parser) Error!*ast.Expr {
 }
 
 pub fn parseAtom(self: *Parser) Error!*ast.Expr {
+    self.record("Atom");
+    defer self.unrecord();
     switch (self.cur.tag) {
         .If => return try self.parseIf(),
         .When => return try self.parseWhen(),
@@ -272,11 +325,14 @@ pub fn parseAtom(self: *Parser) Error!*ast.Expr {
         .Label, .LBrace => return try self.parseBlock(true),
         .Tag => return try self.parseEnumLit(),
         .Fn => return try self.parseFn(),
+        .Macro => return try self.parseMacro(),
         else => return try self.parsePipeline(false),
     }
 }
 // '#' word [ tuple | compound ]
 pub fn parseEnumLit(self: *Parser) Error!*ast.Expr {
+    self.record("EnumLit");
+    defer self.unrecord();
     _ = try self.match(.Tag);
     const tag = (try self.match(.Word)).str;
     const inner = if (!self.newlined) switch (self.cur.tag) {
@@ -295,6 +351,8 @@ pub fn parseEnumLit(self: *Parser) Error!*ast.Expr {
 
 // '[' [':' expr ':'] {'.'word ['=' expr] | expr}  ']'
 pub fn parseCompound(self: *Parser) Error!*ast.Expr {
+    self.record("Compound");
+    defer self.unrecord();
     _ = try self.match(.LBracket);
     const as = try self.parseTypeSpec(true);
 
@@ -327,6 +385,8 @@ pub fn parseCompound(self: *Parser) Error!*ast.Expr {
 }
 
 pub fn parseTuple(self: *Parser) Error!*ast.Expr {
+    self.record("Tuple");
+    defer self.unrecord();
     //std.debug.warn("In parseTuple\n", .{});
     _ = try self.match(.LParen);
     var res = self.newExpr(.{
@@ -341,6 +401,8 @@ pub fn parseTuple(self: *Parser) Error!*ast.Expr {
 
 /// Parse a csv list of expressions, which may have a trailing comma
 pub fn parseExprList(self: *Parser, closer: lex.Tag) Error!std.ArrayList(*ast.Expr) {
+    self.record("ExprList");
+    defer self.unrecord();
     var vals = std.ArrayList(*ast.Expr).init(self.alloc);
     while (!self.nextIs(closer)) {
         try vals.append(try self.parseExpr());
@@ -356,6 +418,8 @@ pub fn parseTypeSpec(
     /// Is it a :type: spec?
     comptime trailing_colon: bool,
 ) Error!?*ast.Expr {
+    self.record("TypeSpec");
+    defer self.unrecord();
     if (self.tryMatch(.Colon) != null) {
         if (trailing_colon) {
             return self.newExpr(.{
@@ -372,6 +436,8 @@ pub fn parseTypeSpec(
 
 // Parse anything that can be either block or => expr
 pub fn parseThen(self: *Parser) Error!*ast.Expr {
+    self.record("Then");
+    defer self.unrecord();
     if (self.tryMatch(.Then)) |_| {
         // TODO: Should this be Assg or Expr?
         return try self.parseAssg();
@@ -381,6 +447,8 @@ pub fn parseThen(self: *Parser) Error!*ast.Expr {
 }
 
 pub fn parseIf(self: *Parser) Error!*ast.Expr {
+    self.record("If");
+    defer self.unrecord();
     _ = try self.match(.If);
     return self.newExpr(.{
         .If = .{
@@ -402,6 +470,8 @@ pub fn parseIf(self: *Parser) Error!*ast.Expr {
     });
 }
 pub fn parseWhen(self: *Parser) Error!*ast.Expr {
+    self.record("When");
+    defer self.unrecord();
     _ = try self.match(.When);
     return self.newExpr(.{
         .When = .{
@@ -423,6 +493,8 @@ pub fn parseWhen(self: *Parser) Error!*ast.Expr {
     });
 }
 pub fn parseLoop(self: *Parser) Error!*ast.Expr {
+    self.record("Loop");
+    defer self.unrecord();
     _ = try self.match(.Loop);
     return self.newExpr(.{
         .Loop = .{
@@ -436,7 +508,9 @@ pub fn parseLoop(self: *Parser) Error!*ast.Expr {
     });
 }
 pub fn parseWhileFor(self: *Parser) Error!*ast.Expr {
-    const op = if (self.tryMatch(.For)) |_| ast.LoopOp.For else if (self.tryMatch(.While)) |_| ast.LoopOp.While else return self.expected("while or for");
+    self.record("While/For");
+    defer self.unrecord();
+    const op = if (self.tryMatch(.For)) |_| ast.LoopOp.For else if (self.tryMatch(.While)) |_| ast.LoopOp.While else self.expected("while or for", .{});
     const expr = try self.parseExpr();
 
     var capt: ?ast.BindLoc = null;
@@ -469,6 +543,8 @@ pub fn parseWhileFor(self: *Parser) Error!*ast.Expr {
 // And will interpret like so:
 // e.g(d.f(a.b()))
 pub fn parsePipeline(self: *Parser, comptime restricted: bool) Error!*ast.Expr {
+    self.record("Pipelin");
+    defer self.unrecord();
     var res = try self.parseAccess(restricted);
 
     if (self.nextIs(.Pipe)) {
@@ -497,13 +573,15 @@ pub fn canCall(self: *Parser) bool {
 // The entire access is parsed into a linear arraylist of args to a call (.Op=.Call)
 // Calls/indexes are just more "accesses" to the AST
 pub fn parseAccess(self: *Parser, comptime restricted: bool) Error!*ast.Expr {
+    self.record("Access");
+    defer self.unrecord();
     //std.debug.warn("In parseAccess, next is {}\n", .{self.cur});
     var res = if (restricted) try self.parseWord() else switch (self.cur.tag) {
         .Word => try self.parseWord(),
         .LParen => try self.parseTuple(),
         .LBracket => try self.parseCompound(),
         .Str => try self.parseStr(),
-        else => return self.expected("An access op"),
+        else => self.expectedBut("An accessible item"),
     };
 
     if (self.nextIs(.Access) or self.canCall()) {
@@ -528,11 +606,16 @@ pub fn parseAccess(self: *Parser, comptime restricted: bool) Error!*ast.Expr {
                                 .vals = els,
                             },
                         }));
-                    } else return self.expected("either a word or a swizzle group");
+                    } else self.expected("either a word or a swizzle group", .{});
                 },
                 .LParen, .LBracket => {
                     const op = if (accesser == .LParen) ast.Op.Call else .Index;
-                    const call = self.newCallFrom(.Call, try self.parseExprList(if (accesser == .LParen) .RParen else .RBracket));
+                    const call = self.newCallFrom(
+                        .Call,
+                        try self.parseExprList(
+                            if (accesser == .LParen) .RParen else .RBracket,
+                        ),
+                    );
                     try path.append(call);
                 },
                 else => unreachable,
@@ -543,15 +626,21 @@ pub fn parseAccess(self: *Parser, comptime restricted: bool) Error!*ast.Expr {
 }
 
 pub fn parseWord(self: *Parser) Error!*ast.Expr {
+    self.record("Word");
+    defer self.unrecord();
     const word = try self.match(.Word);
     return self.newExpr(.{ .Word = word.str });
 }
 pub fn parseStr(self: *Parser) Error!*ast.Expr {
+    self.record("Word");
+    defer self.unrecord();
     const tok = try self.match(.Str);
     return self.newExpr(.{ .Str = tok.str });
 }
 
 pub fn parseFn(self: *Parser) Error!*ast.Expr {
+    self.record("Fn");
+    defer self.unrecord();
     _ = try self.match(.Fn);
     var args = std.ArrayList(ast.BindLoc).init(self.alloc);
     while (!self.nextIsOne(&[_]lex.Tag{ .StoreIn, .Then })) {
@@ -581,12 +670,35 @@ pub fn parseFn(self: *Parser) Error!*ast.Expr {
     } else if (self.tryMatch(.StoreIn)) |_| {
         ret = try self.parseBindLoc();
         if (self.tryMatch(.Assg)) |_| body = try self.parseExpr();
-    } else return self.expected("either => or ->");
+    } else self.expected("either => or ->", .{});
 
     return self.newExpr(.{
         .Func = .{
             .args = args,
             .ret = ret,
+            .body = body,
+        },
+    });
+}
+
+pub fn parseMacro(self: *Parser) Error!*ast.Expr {
+    self.record("Macro");
+    defer self.unrecord();
+    _ = try self.match(.Macro);
+    var args = std.ArrayList(ast.BindLoc).init(self.alloc);
+    while (!self.nextIs(.Then)) {
+        try args.append(try self.parseBindLoc());
+        if (self.tryMatch(.Comma) == null) break;
+    }
+
+    // Macro bodies are always of the form `=> expr`
+    // I may change this in the future.
+    _ = try self.match(.Then);
+    const body = try self.parseExpr();
+
+    return self.newExpr(.{
+        .Macro = .{
+            .args = args,
             .body = body,
         },
     });
@@ -619,5 +731,5 @@ const IS_OPS = [_]lex.Tag{
 };
 
 const BIND_OPS = [_]lex.Tag{
-    .Let, .Var, .CVar, .Enum, .Field,
+    .Let, .Var, .CVar, .Enum, .Field, .Alias,
 };

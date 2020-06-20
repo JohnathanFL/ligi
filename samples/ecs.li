@@ -6,10 +6,10 @@
 let MaxEnts = 1024
 let EntRange = 0..MaxEnts
 
-let Position = struct {
+let Position; struct {
   field
   	x: f32,
-  	y: f32,
+  	y: f32
 
   var storage = [:array(MaxEnts, ?@This): ]
 
@@ -17,11 +17,12 @@ let Position = struct {
     pos.x += vel.x * step
     pos.y += vel.y * step
   }
-  let distTo = pure fn from: @This, to: @This = (x: f32, y: f32) = (from.x - to.x, from.y - to.y)
+  let distTo = pure fn from: @This, to: @This -> (x: f32, y: f32) = (from.x - to.x, from.y - to.y)
+}
 let Velocity = struct {
   field
   	x: f32,
-  	y: f32,
+  	y: f32
 
   var storage = [:array(MaxEnts, ?@This): ]
 }
@@ -68,7 +69,7 @@ Entity = struct {
 var ents = [:array(MaxEnts, Entity):]
 for 0..MaxEnts -> i {
   ents[i] = World.newEnt()
-  use curEnt = ents[i] -- use can essentially be used as C++'s &
+  alias curEnt = ents[i]
   curEnt.addComponent(Position, [.x = i.as(f32), .y = i.as(f32)])
   curEnt.addComponent(Velocity, [.x = 0, .y = 0])
 
@@ -78,7 +79,7 @@ for 0..MaxEnts -> i {
 -- Simulation
 let timeStep: f32 = 0.25 -- quarter second at a time
 let simSteps = 10000
-for 0..simSteps {
+for 0..simSteps => {
   -- Move the particles
   for ents -> ent {
     ent.getComponent(Position).val.move(ent.getComponent(Velocity).val)

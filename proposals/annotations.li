@@ -11,6 +11,7 @@ assert make_type.@[#CName] == "type"
 -- Option 1: The stack pushers
   -- Requires no syntax changes
   -- Doesn't allow for annotations on individual binds in a bind group(e.g let x, y, z)
+  -- My current favorite
 
 
 -- Under this setup, we'd just have a special @() function (literally just `@`)
@@ -21,8 +22,8 @@ let make_type = pure extern fn -> void = {}
 -- When something new is bound, the current stack is removed and associated with that bind
 
 
--- Option 2: Allow enum literals inside binds:
+-- Option 2: Allow enum literals inside binds: (Not likely)
   -- Requires changes to the bind parser
   -- Allows annotations on a per-bind basis inside bind blocks
   -- Disallows any kind of enum-bind-unpacking stuff in the future
-let #CName("type") make_type = pure fn -> void = {}
+-- let #CName("type") make_type = pure fn -> void = {}

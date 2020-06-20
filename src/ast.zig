@@ -119,6 +119,10 @@ pub const Func = struct {
     // If null, then this is a function type, not a function definition
     body: ?*Expr,
 };
+pub const Macro = struct {
+    args: ArrayList(BindLoc),
+    body: ?*Expr,
+};
 pub const If = struct {
     arms: ArrayList(IfArm),
     default: ?*Expr,
@@ -144,6 +148,8 @@ pub const Loop = struct {
 pub const Expr = union(enum) {
     /// TODO: The `$` operator. Takes the value an "expands" it into the AST
     Expansion: *Expr,
+    // Must be an access
+    Use: *Expr,
 
     NOP: void,
     Word: str,
@@ -161,6 +167,7 @@ pub const Expr = union(enum) {
     Defer: *Expr,
     Call: Call,
     Func: Func,
+    Macro: Macro,
     If: If,
     When: When,
     Loop: Loop,

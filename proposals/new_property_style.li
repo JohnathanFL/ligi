@@ -95,3 +95,15 @@ let prop = property fn -> val = 1 -- Only a getter. setter is invalid.
 let prop = property (fn -> val = 1, fn val -> void = printf("Got {}", val)) -- getter + setter
 -- Thus you can declare shorter properties if you don't need more than getters/setters
 -- In particular, it makes pure getters nicer
+
+
+
+-- The newer new property style:
+-- Property is still a unary operator, but we go back to struct initializers for setting
+-- the funcs
+let Vec2 = struct {
+  field x: f64, y: f64
+  let len: property f64 = property [
+    .get = pure fn self: @This -> l = @sqrt(self.x * self.x + self.y * self.y),
+  ]
+}

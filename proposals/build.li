@@ -24,12 +24,12 @@ let builtin = @modules[#Builtin] -- We'll get to this in a bit
 
 -- Could also be just the tuple, rather than a property.
 -- Ligi's builder will just be doing a `.pkgver` anway
-let pkgver*: property (usize, usize, usize) -- Major, minor, patch
+let pkgver: property (usize, usize, usize) -- Major, minor, patch
 
 -- Prepare the build environment
 
 -- Any modules required to run the prepare/install functions
-let makeDepends* = []
+let makeDepends = []
 
 
 -- Note that this one is *not* pure.
@@ -38,9 +38,9 @@ let makeDepends* = []
 ---- This ensures that builds are more reproducible, as those files don't change between
 ---- invocations of `li build`
 ---- This function is only allowed to do file IO in a special `prepared` folder.
-let prepare* = fn -> void = {}
+let prepare = fn -> void = {}
 -- Install the built artifacts
-let install* = fn -> void = {}
+let install = fn -> void = {}
 
 -- `li prepare` and `li install` are the only explicitly scriptable build commands. There's no
 -- way to define further commands like `li foo`. You will, however, be able to give args to prepare
@@ -61,7 +61,7 @@ let install* = fn -> void = {}
 ---------- builtin.ligi_ver_str is assumed to be a string that matches the compiler's version,
 ---------- that way all modules being compiled share a std
 ------ #CLib would use the defined 
-let depends* = [
+let depends = [
   (#Std, #Static, #Git("https://github.com/Ligi/std", #Tag(builtin.ligi_ver_str))),
   (#CStd, #Static, #CLib("c"))
 ]
@@ -73,13 +73,13 @@ let depends* = [
 -- to your 
 
 -- Our project's file. It is assumed that all modules have only one root.
-let root* = "src/main.li"
+let root = "src/main.li"
 -- What this module creates.
 -- It is assumed that every build.li (and thus every module) produces only one thing.
-let output* = #Executable("bob")
+let output = #Executable("bob")
 
 -- Any options we need to give the compiler
-let opts* = [
+let opts = [
   #CIncludePath("/usr/include"), -- Add a .h search path
   #CLinkPath("/usr/lib") -- Add a .so/.a search path
 ]

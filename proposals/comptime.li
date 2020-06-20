@@ -10,12 +10,12 @@ var t: slice const u8 = "Hello"
 -- 't' is currently 'comptime', despite not being constant or explicitly marked comptime. :)
 t = "world" -- Still comptime known. That's because the value we assigned to it is comptime :)
 
-let foo = fn x: slice const u8 {}
+let foo = fn x: slice const u8 => {}
 foo("Hello")
 -- 'x' is not comptime known here, because it crossed a function boundary. :)
 -- (This could change if the compiler is doing more aggressive inline optimizations) :)
 
-let bar = fn x: comptime slice const u8 {}
+let bar = fn x: comptime slice const u8 => {}
 bar("Hello")
 -- 'x' is comptime known here, as we explicitly annotated it as such :)
 

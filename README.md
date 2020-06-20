@@ -2,6 +2,20 @@
 
 This is the home for Ligi: an attempt at a modern C replacement.
 
+It should be noted that Ligi takes **heavy** inspiration from Zig and its ideas.
+It wouldn't be wrong to describe Ligi as a language that wants to be Zig, but doesn't
+like the explicitness and inflexibility of Zig.
+
+It should be noted that the comments used to be `(:` to start and `:)` to close, so don't
+be surprised if you see a lot of `:)` in the code. :)
+
+## Short overview
+- Expression-oriented, semicolon-optional, and (almost) whitespace-insensitive
+- Explicit allocators and memory management. No RAII *as such*.
+- Heavy focus on compiletime features, including the ability to create new types programmatically.
+- Heavy focus on making syntax sugary but readable. Things should be close to an English sentence
+  in readability.
+
 
 ## Small taste
 ```
@@ -9,29 +23,40 @@ This is the home for Ligi: an attempt at a modern C replacement.
 
 -- Expression oriented
 -- Optionally enforce functional purity
--- Statically typed with inferred types where needed
--- Result location sematics (always)
+-- Statically typed, but inferred types where needed
+-- Result location sematics everywhere but void functions
 let fib = pure fn n: usize -> f = when n
+  -- `in` operator for ranges. Can also work with tuples of ranges to create discontinuous ranges
   is in (0, 1) => n
-  else => fib(n - 1) + fib(n - 2)
+  -- Control structures can use either => for a simple expression or a full block if desired
+  else { fib(n - 1) + fib(n - 2) }
 
+-- Types are expressions. 
+-- Struct is an operator, {} is a normal ol' block of code. No special syntax inside.
 let Vec2 = struct {
+  -- `field` is a bind specifier like `let` or `var`. It binds a new field. Obviously.
   field x: f32, y: f32
   
+  -- `let` and `var` binds in a type become statics in the type's "namespace".
   let add = pure fn lhs: @This, rhs: @This -> res = [ .x = lhs.x + rhs.x, .y = lhs.y + rhs.y ]
 }
+-- Arrays and structs are initialized with []
 let a = [:Vec2: .x = 1, .y = 2], b = [:Vec2: .x = 4, .y = 5]
 
 -- Functions which take the current struct as an arg can be called as methods
 let c = a.add(b)
 -- Built in assertions
 -- GLSL-styled "swizzling" support
+assert c.(x,y) == (c.x, c.y)
 assert c.(x, y) == (5, 7)
 
 -- 2D Vector (alternative distinct-tuple version)
+-- Adding a tuple-type to a struct makes it a "compound tuple". (i.e "distinct from normal")
 let Vec2 = (f32, f32) + struct {}
+-- Tuples can have a :type: specifier at the beginning just like arrays and structs
 let a = (:Vec2: 1, 2), b = (:Vec2: 4, 5)
--- All tuples have arithmetic operators defined for 1:n and n:n
+-- All tuples have arithmetic operators defined for 1:n and n:n, so we
+-- don't need to explicitly make them here.
 let c = a + b
 
 -- Pipelines (pseudo-UFCS)

@@ -74,6 +74,7 @@ pub const Tag = enum {
     Pub,
 
     // Keywords
+    Use,
     Assert,
     Break,
     Return,
@@ -88,6 +89,7 @@ pub const Tag = enum {
     For,
     Finally,
     Fn,
+    Macro,
 
     // Punctuation
     Colon,
@@ -100,6 +102,7 @@ pub const Tag = enum {
     RBracket,
     LBrace,
     RBrace,
+    Semicolon,
 
     EOF,
 
@@ -157,6 +160,7 @@ pub const Tag = enum {
             .CVar => .CVar,
             .Field => .Field,
             .Enum => .Enum,
+            .Alias => .Alias,
             else => unreachable,
         };
     }
@@ -195,7 +199,9 @@ pub const Lexer = struct {
     }
     pub const KEYWORDS = [_]TokPair{
         // Keywords
+        tp("macro", .Macro),
         tp("pub", .Pub),
+        tp("use", .Use),
         tp("using", .Using),
         tp("assert", .Assert),
         tp("break", .Break),
@@ -276,6 +282,7 @@ pub const Lexer = struct {
         tp("{", .LBrace),
         tp("}", .RBrace),
         tp(",", .Comma),
+        tp(";", .Semicolon),
     };
 
     fn hasLen(self: *Lexer, len: usize) bool {
@@ -455,6 +462,7 @@ pub const Lexer = struct {
             };
         }
 
+        std.debug.warn("{}: Unknown token!", .{pos});
         return error.UnknownToken;
     }
 };

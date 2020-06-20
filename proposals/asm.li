@@ -1,11 +1,8 @@
 -- This is to document possible ways of doing inline assembly
 
 
--- Sol #1: The asm macero function:
--- Relies on the ##{} (tokenizer) proposal, where #{} is the raw AST and ##{} is a token stream
--- Relies on the $ (expansion) proposal, which expands an AST type into the current AST
-let builtin = @module[#Builtin]
-$builtin.asm(##{
+-- Sol #1: The asm macro function:
+@asm(##{
   mov eax, 0
   add eax, 1
   -- Blah blah
