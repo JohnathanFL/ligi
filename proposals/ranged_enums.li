@@ -1,0 +1,65 @@
+-- This is to document a way of making "ranged enums"
+
+-- While working on Ligi's evaluator, I found myself making a switch
+-- statement to translate ranges of ints to certain enums.
+-- I thought that it was horribly inefficient that I could give names to some
+-- of the arms (like VOID_ID), but couldn't for others (like the u1-u1024 range)
+
+-- In a nutshell, using the above as an example implementation
+let TypeID = enum {
+  enum
+    Void = 0,
+    Unsigned = 1..=1024,
+    Signed = 1025..=2048,
+    USize = 2049,
+    ISize = 2050
+}
+
+-- You can still assign to the single values like normal
+var t: TypeID = #Void
+-- But on the ranges, you have to use other methods
+t = [ .raw = 64 ]
+assert t == #Unsigned and t.raw == 64
+
+-- You could also use this for things like health bars in games
+let Health = enum {
+  @tagType = u8
+  enum
+    Dead     =  0,
+    Critical =  1..25,
+    Bad      =  25..50,
+    Ok       =  50..75,
+    Fine     =  75..100,
+    Perfect  = 100
+  alias val = @This.raw
+  @overloads[#AddAssg] += pure fn self: ref @This, amt => self.val += amt
+  @overloads[#SubAssg] += pure fn self: ref @This, amt => self.val -= amt
+}
+
+var myHealth = Health.Perfect
+myHealth -= 1
+assert myHealth == #Fine
+myHealth -= 25
+-- ...and so on
+
+-- You would be able to use @as and similar to convert to them
+myHealth = 1.as(Health)
+myHealth = (:Health: 1)
+-- Although these obviously wouldn't work with a payload.
+-- For that, you'd have to use a struct literal
+let Foo = enum {
+  enum
+    Faa: str =   0..100,
+    Baa      = 100
+}
+let f = [:Foo: .raw = 10, .Faa = "Bar"]
+
+-- This would tie in with shorthand enums:
+let Health = enum (
+  (Perfect, 100),
+  (Fine,     75..100),
+  (Ok,       50..75),
+  (Bad,      25..50),
+  (Critical,  1..25),
+  (Dead,      0)
+)
