@@ -21,6 +21,13 @@ let make_type = pure extern fn -> void = {}
 -- Each invocation of @() would push another annotation to a stack
 -- When something new is bound, the current stack is removed and associated with that bind
 
+-- Note that the annotations would apply for *all* binds in a group.
+-- Thus, you could do something like this when binding a C library:
+@(#CallConv(#C))
+let
+  c_func1: extern fn a: c_uint, b: *c_void -> _:void,
+  printf: extern fn a: *u8, args: varargs -> _:void
+
 
 -- Option 2: Allow enum literals inside binds: (Not likely)
   -- Requires changes to the bind parser
