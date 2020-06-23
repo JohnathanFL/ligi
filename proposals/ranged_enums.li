@@ -63,3 +63,8 @@ let Health = enum (
   (Critical,  1..25),
   (Dead,      0)
 )
+
+
+-- You would be able to obtain the range of any given enum with
+assert Health.@rangeof(#Ok) == 50..75
+assert Health.@rangeof(#Dead) == 0..=0
