@@ -57,6 +57,7 @@ pub const Tag = enum {
     Inline,
     Overload,
     Property,
+    Concept,
 
     // Access ops
     Access,
@@ -90,6 +91,7 @@ pub const Tag = enum {
     Finally,
     Fn,
     Macro,
+    Continue,
 
     // Punctuation
     Colon,
@@ -190,19 +192,16 @@ pub const Lexer = struct {
         return .{ .alloc = alloc, .input = input, .pos = .{ .file = file, .line = 1, .col = 1 } };
     }
 
-    // Care must be taken to keep these in sorted order
-    // For example, `..=` must come before `..`
-    // TODO: Just make this thing get sorted by .len desc once at runtime.
     pub const TokPair = struct { str: []const u8, tag: Tag };
     fn tp(str: []const u8, tag: Tag) TokPair {
         return .{ .str = str, .tag = tag };
     }
+    // These ones don't have to be kept sorted, as they're checked after parsing the full word
     pub const KEYWORDS = [_]TokPair{
         // Keywords
+        tp("continue", .Continue),
         tp("macro", .Macro),
-        tp("pub", .Pub),
         tp("use", .Use),
-        tp("using", .Using),
         tp("assert", .Assert),
         tp("break", .Break),
         tp("defer", .Defer),
@@ -217,13 +216,26 @@ pub const Lexer = struct {
         tp("for", .For),
         tp("finally", .Finally),
         tp("fn", .Fn),
+        tp("return", .Return),
 
+        // Binds
+        tp("using", .Using),
+        tp("pub", .Pub),
         tp("let", .Let),
         tp("var", .Var),
         tp("cvar", .CVar),
         tp("field", .Field),
         tp("enum", .Enum),
+        tp("alias", .Alias),
 
+        // Binaries
+        tp("or", .Or),
+        tp("xor", .Xor),
+        tp("and", .And),
+        tp("mod", .Mod),
+
+        // Unaries
+        tp("concept", .Concept),
         tp("struct", .Struct),
         tp("ref", .Ref),
         tp("slice", .Slice),
@@ -237,12 +249,10 @@ pub const Lexer = struct {
         tp("in", .In),
         tp("overload", .Overload),
         tp("property", .Property),
-        tp("or", .Or),
-        tp("xor", .Xor),
-        tp("and", .And),
-        tp("mod", .Mod),
-        tp("alias", .Alias),
     };
+    // Care must be taken to keep these in sorted order
+    // For example, `..=` must come before `..`
+    // TODO: Just make this thing get sorted by .len desc once at runtime.
     pub const SIGILS = [_]TokPair{
         // Non-words
         tp("=>", .Then),
@@ -467,14 +477,18 @@ pub const Lexer = struct {
     }
 };
 
+fn assert_eq(lhs: var, rhs: var) void {
+    if (lhs != rhs) {
+        std.debug.warn("\nTest failed: {} !== {}\n", .{ lhs, rhs });
+        @panic("Failed");
+    }
+}
 fn doTest(comptime expected: []const Tag, input: []const u8) !void {
     var lexer = Lexer.init(input, 0, std.heap.page_allocator);
 
-    //std.debug.warn("\n", .{});
     for (expected) |tag| {
         const res = try lexer.lex();
-        //std.debug.warn("{} === {}\n", .{ res.tag, tag });
-        assert(res.tag == tag);
+        assert_eq(res.tag, tag);
     }
 }
 
@@ -493,12 +507,14 @@ test "recognize reserved" {
         .ElIf,     .Else,      .When,      .Is,          .While,
         .Loop,     .For,       .Finally,   .Fn,          .Colon,
         .Comma,    .StoreIn,   .LParen,    .RParen,      .LBracket,
-        .RBracket, .LBrace,    .RBrace,
+        .RBracket, .LBrace,    .RBrace,    .Return,      .Defer,
+        .Assert,   .Concept,   .Continue,  .Macro,
     },
         \\ = += -= *= /= == != > < >= <= <=> or xor and in notin .. ..=
         \\ + - * / mod | & ^ struct ref slice array const comptime ~ not ?
         \\ pure inline overload property . :: using let var cvar field enum alias
         \\ if elif else when is while loop for finally fn : , -> ( ) [ ] { }
+        \\ return defer assert concept continue macro
     );
 }
 

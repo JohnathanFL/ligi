@@ -153,6 +153,7 @@ pub const Expr = union(enum) {
 
     NOP: void,
     Word: str,
+    Continue: ?str,
     Str: str,
     Block: Block,
     EnumLit: EnumLit,

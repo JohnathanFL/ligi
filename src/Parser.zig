@@ -101,12 +101,13 @@ fn tryMatch(self: *Parser, tag: lex.Tag) ?lex.Token {
         // TODO: A proper error system that can bubble up with no problem
         self.cur = self.lexer.lex() catch |err| @panic("Lexer error");
         self.newlined = prev.pos.line != self.cur.pos.line;
-        std.debug.warn("{}: Matched `{}`({}), newlined is now {}\n", .{
-            prev.pos,
-            prev.str,
-            prev.tag,
-            self.newlined,
-        });
+        //std.debug.warn("{}: Matched `{}`({}) in {}, newlined is now {}\n", .{
+        //    prev.pos,
+        //    prev.str,
+        //    @tagName(prev.tag),
+        //    self.parse_stack.items[self.parse_stack.items.len - 1].func,
+        //    self.newlined,
+        //});
         return prev;
     } else {
         return null;
@@ -122,12 +123,11 @@ fn matchOne(self: *Parser, tags: []const lex.Tag) !lex.Token {
     if (self.tryMatchOne(tags)) |tok| {
         return tok;
     } else {
-        std.debug.warn("{}: Expected one of {}, but found {}\n", .{ self.cur.pos, tags, self.cur.tag });
-        return error.Expected;
+        self.expectedBut(tags);
     }
 }
 
-fn expectedBut(self: *Parser, comptime what: str) noreturn {
+fn expectedBut(self: *Parser, what: var) noreturn {
     self.expected("{}, but got `{}`", .{ what, self.cur.str });
 }
 
@@ -207,6 +207,11 @@ pub fn parseStmt(self: *Parser) Error!*ast.Expr {
         .Use => {
             _ = try self.match(.Use);
             return self.newExpr(.{ .Use = try self.parseAccess(false) });
+        },
+        .Continue => {
+            _ = try self.match(.Continue);
+            const label = if (self.tryMatch(.Label)) |l| l.str else null;
+            return self.newExpr(.{ .Continue = label });
         },
         else => return try self.parseAssg(),
     }
@@ -666,7 +671,7 @@ pub fn parseFn(self: *Parser) Error!*ast.Expr {
                 .ty = self.newExpr(.{ .Word = "void" }),
             },
         };
-        body = try self.parseExpr();
+        body = try self.parseAssg();
     } else if (self.tryMatch(.StoreIn)) |_| {
         ret = try self.parseBindLoc();
         if (self.tryMatch(.Assg)) |_| body = try self.parseExpr();
@@ -694,7 +699,7 @@ pub fn parseMacro(self: *Parser) Error!*ast.Expr {
     // Macro bodies are always of the form `=> expr`
     // I may change this in the future.
     _ = try self.match(.Then);
-    const body = try self.parseExpr();
+    const body = try self.parseAssg();
 
     return self.newExpr(.{
         .Macro = .{
@@ -727,7 +732,7 @@ const UNA_OPS = [_]lex.Tag{
 
 /// Operators allowed to be used with `when...is OP expr`
 const IS_OPS = [_]lex.Tag{
-    .Eq, .NotEq, .In, .NotIn,
+    .Eq, .NotEq, .In, .NotIn, .Gt, .GtEq, .Lt, .LtEq,
 };
 
 const BIND_OPS = [_]lex.Tag{
