@@ -8,23 +8,28 @@ let ArrayList = fn T: type -> A: type = struct {
   field storage: slice T
   -- This is a slice of storage
   field items: slice T
-  pub let len = property pure fn self -> l = self.items.len
+  pub let len = property pure fn self: @This -> l = self.items.len
   
   -- A `ref T` is always initialized by a pointer, and thereafter acts like a `T&` in C++
   -- A macro is a straight substitution of the function body wherever it's called.
   let IndexType = macro self => if self.@type.@isConst {ref const T} else {ref T}
-  @overloads[#Index] += pure fn self, i -> item: IndexType(self) = self.items[i].addr
+  @overloads[#Index] += pure fn self: @This, i -> item: IndexType(self) = self.items[i].addr
   
   -- Alternatively, you could write the above as:
-  @overloads[#Index] += pure fn self: *const @This, i -> item: ref const T = self.items[i].addr
+  @overloads[#Index] += pure fn self: @This, i -> item: ref const T = self.items[i].addr
   @overloads[#Index] += pure fn self: *@This, i -> item: ref T = self.items[i].addr
-  -- in a more "C++"-style. 2 lines either way, just depends on how you like to read it.
+  -- for a more "C++"-style. 2 lines either way, just depends on how you like to read it.
+  -- Another alternative:
+  @overloads[#Index] += overload (
+    pure fn self: *const @This, i -> item: ref const T = self.items[i].addr,
+    pure fn self: *@This(), i -> item: ref T = self.items[i].addr
+  )
   
   -- We can now do ar[i] and get ar.len as if this was a real array
-  
-  pub let capacity = property fn self -> c = self.storage.len
 
-  pub let init = pure fn alloc -> self = [
+  pub let capacity = property fn self: @This -> c = self.storage.len
+
+  pub let init = pure fn alloc -> self: @This = [
     .alloc = alloc,
     -- Intializing slices with the address of an empty array is fine,
     -- as the .len is set to zero by that.
@@ -34,21 +39,20 @@ let ArrayList = fn T: type -> A: type = struct {
 
   -- => is how you write a void function (no result location)
   -- (You could also do `-> _:void = ...`)
-  pub let push = fn self, item: T => {
+  pub let push = fn self: @This, item: T => {
     -- Ligi has no implicit "this".
     -- `use` takes the end of each `.` access and puts it in the current scope,
     -- where `use x.y` means that every instance of `y` is as if `x.y` was typed.
     -- In the future, I also plan full struct unpacking, so you could do it in the
     -- function signature.
     use self.(items, storage, alloc)
-    if self.items.len == self.storage.len {
+    if self.items.len == self.storage.len =>
       self.storage = self.alloc.realloc(self.storage, self.storage.len * 2)
-      -- The above may invalidate self.items, but we re-assign below anyway
-    }
+    -- The above may invalidate self.items, but we re-assign below anyway
     self.items = self.storage[0..=self.items.len]
     self.items[self.items.len - 1] = item
   }
-  pub let pop = fn self -> item: T = {
+  pub let pop = fn self: @This -> item: T = {
     self.items.len -= 1
     -- If a block assigns to the value it's used as a value for, it counts as having
     -- yielded a value.

@@ -1,0 +1,68 @@
+-- This sample is just a collection of random mini-samples that don't really
+-- warrant their own files
+
+-- IsEven. It should be its own package, but we'll include it here :)
+let is_even = pure fn x -> isEven = x mod 2 == 0
+
+-- Fizzbuzz
+-- ..= is inclusive range [n,m], .. is [n,m)
+for 0..=100 -> i => when (i mod 3, i mod 5)
+  is (0, 0) => printf("FizzBuzz\n")
+  is (0, _) => printf("Fizz\n")
+  is (_, 0) => printf("Buzz\n")
+  else => printf("{}\n", i)
+
+-- Fibonacci
+let fib = pure fn n -> f = when n
+  is > 2 => fib(n - 1) + fib(n - 2)
+  else => 1
+
+
+-- Largest element
+let ar = [12, 5, 123, 64, 1235, 654]
+let largest: ref const usize = {
+  -- You can assign to a location from within its initializer.
+  largest = ar[0].addr
+  for ar -> el => if el > largest => largest = el.addr
+}
+assert largest == 1235
+assert largest.addr == ar[4].addr
+
+-- Reverse an array in place
+var ar = [12, 5, 123, 64, 1235, 654]
+for ar[0..ar.len/2] -> el, i => (el, ar.rev[i]) = (ar.rev[i], el)
+-- .rev is a special property defined on arrays/slices that indexes in reverse.
+
+-- Rotate an array in place n slots
+var arr = [12, 5, 123, 64, 1235, 654]
+-- The naive solution: Rotate n times in a row
+let rotate = fn ar: ref _, n => when n
+  is 0 {}
+  is 1 => for (ar[0..ar.len], ar[1..ar.len]) -> (x, y) => (x, y) = (y, x)
+  else => for 0..n => rotate(ar.addr, 1)
+-- The optimized solution:
+let rotate = fn ar: ref _, n =>
+  for ar -> el, i {
+    alias el2 = ar[(i + n) mod ar.len] -- aliases are lazily evaluated each time they're used
+    (el, el2) = (el2, el)
+  }
+
+
+-- List Interface
+-- Ligi uses concepts to define "interfaces". By convention, we follow the `I` naming scheme.
+-- Ligi follows Nim's concept of a "concept" definition, for the most part
+-- Ligi just checks to see if the concept's block can pass type checking. Additionally,
+-- comptime code (like asserts) are evaluated.
+let IList = fn T: comptime type -> L = concept {
+  -- @This is defined inside here, just as with struct and enum, and is the type
+  -- we're checking against the idea of a List
+  var list: @This -- Only checks type checking, so we don't need to give a value
+  var el: T, optEl: ?T
+  
+  list.push(el)
+  optEl = list.pop()
+  list[0] = el -- check for both indexing and indexing as `ref T`
+  -- A type which satisfies a concept is at least as good as it. Thus >= is `implements`
+  assert list.insert(0, el).@type >= builtin.IResult(void)
+}
+
