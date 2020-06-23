@@ -1,0 +1,15 @@
+-- This is to allow "partial types" - types in which we only know part of it
+
+-- The essence:
+let change_it = fn it: ref _ => it = 0
+-- The above restricts `it` such that it must be passed by reference.
+
+-- Thus these won't compile:
+change_it(0)
+var x = 0
+change_it(x)
+-- But this will
+change_it(x.addr)
+
+-- In a nutshell, it's just a way of restricting generic types from the outset.
+-- It adds no new syntax, only new semantics.
