@@ -6,6 +6,9 @@ It should be noted that Ligi takes **heavy** inspiration from Zig and its ideas.
 It wouldn't be wrong to describe Ligi as a language that wants to be Zig, but doesn't
 like the explicitness and inflexibility of Zig.
 
+This language is still in a heavy state of flux. Quite a few proposals may conflict with each
+other. I do, however, try to keep the samples/ directory up to date.
+
 It should be noted that the comments used to be `(:` to start and `:)` to close, so don't
 be surprised if you see a lot of `:)` in the code. :)
 
