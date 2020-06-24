@@ -1,0 +1,23 @@
+-- This is to document the idea of adding Odin-styled
+-- inferred type-parameters.
+
+-- In essence, you'd be able to do this:
+
+-- Either using % or repurposing $, though I like the way $ is right now
+let reverse = fn ar: slice %A, stack: IStack(A) => {
+  for ar -> el => stack.push(el)
+  while stack.pop -> el, i => ar[i] = el
+}
+-- The first instance of %A bound a new variable named A to the type passed for `ar` which is then
+-- available for the rest of the function.
+
+-- You could already have done this:
+let reverse = fn ar, stack => {
+  assert ar.@type.@info == #Slice or ar.@type.@info == #Ref(#Array)
+  assert stack.@type >= IStack(@typeOf(ar[0]))
+  
+  for ar -> el => stack.push(el)
+  while stack.pop() -> el, i => ar[i] = el
+}
+-- In fact, I'm a bigger fan of this one, as the first example would restrict you to
+-- only slices, whereas this one allows much more flexibility.

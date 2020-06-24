@@ -1,0 +1,29 @@
+-- This is a proposal to supplant the other concept style from new_concept_style.li
+-- It is already used in the samples/basics.li example.
+
+-- Essentially, instead of making `concept` act on a struct/enum to match fields,
+-- we just make it a block of code which is typechecked and comptime-evaluated,
+-- ignoring undefined values.
+
+
+-- Thus, a stack is represented as
+let IStack = pure fn T: comptime type -> S = concept {
+  var stack: @This
+  var el: T, optEl: ?T
+  
+  stack.push(el)
+  optEl = stack.pop()
+}
+-- For the expression `Q >= IStack(T)`, IStack is evaluated, yielding a concept type.
+-- The body of that concept type is then evaluated, replacing @This with Q.
+-- If typechecking passes, then Q is considered as being "at least as good" as the concept
+-- (Hence `<=` - "at least as good at satisfying the requirements")
+
+-- Note that concepts still have no virtual functions or anything like that.
+-- They are only for expressing limits on generic types in a cleaner way.
+
+-- You could already write:
+let reverse = fn ar, stack: ref _ => {
+  for ar -> el => stack.push(el)
+  while stack.pop() -> el, i => ar[i] = el
+}
