@@ -53,7 +53,8 @@ let vec = [:MyVec2: .x = 0, .y = 20]
 -- while being able to change the x/y without affecting the original values
 
 -- Second form: Specify the inner name and outer name
-{ let [.myX = x, .myY = y] = vec }
+-- The form is .fieldName = bindName
+{ let [.x = myX, .y = myY] = vec }
 -- Here, the `x` and `y` must match the vec.(x,y) field names
 
 -- Thus, for structs, unpacking form is just a more readable form of
