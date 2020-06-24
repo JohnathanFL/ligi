@@ -48,6 +48,10 @@ fn pretty(self: *@This(), node: *ast.Expr) void {
         .NOP => _ = self.write("NOP"),
         .Word => |w| _ = self.fmt("$\"{}\"", .{w}),
         .Str => |s| _ = self.fmt("\"{}\"", .{s}),
+        .Assert => |a| {
+            self.write("Assert");
+            self.pretty(a.expr);
+        },
         .EnumLit => |e| {
             self.fmt("#{}", .{e.tag});
             if (e.inner) |inner| {
@@ -191,9 +195,7 @@ fn prettyLoc(self: *@This(), loc: ast.BindLoc) void {
     switch (loc) {
         .Tuple => |tup| {
             self.write("(");
-            defer {
-                self.iwrite(")");
-            }
+            defer self.iwrite(":)");
 
             self.indent += 1;
             defer self.indent -= 1;
