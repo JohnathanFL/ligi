@@ -28,28 +28,24 @@ nop %sh{
 KAK
 }
 
-add-highlighter shared/ligi/code/ regex \b(using|const|property|field|alias|let|cvar|var|extern|packed|export|pub|inline|comptime|volatile)\b 0:keyword
-add-highlighter shared/ligi/code/ regex \b(block|overload|distinct|struct|enum|union|concept)\b 0:keyword
-add-highlighter shared/ligi/code/ regex \b(array|ref|slice|pure|assert|break|return|continue|defer)\b 0:keyword
-add-highlighter shared/ligi/code/ regex \b(if|elif|finally|else|and|or|xor|not|in|notin)\b 0:keyword
-add-highlighter shared/ligi/code/ regex \b(while|dowhile|for|loop|when|is)\b 0:keyword
-add-highlighter shared/ligi/code/ regex \b(fn|macro|do|use|test)\b 0:keyword
-
-add-highlighter shared/ligi/code/ regex \b(anyenum|str|bool|f32|f64|f128|void|type)\b 0:type
+add-highlighter shared/ligi/code/ regex \b(?<!@)(using|const|property|field|alias|let|cvar|var|extern|packed|export|pub|inline|comptime|block|overload|distinct|struct|enum|union|array|ref|slice|pure|assert|break|return|continue|if|elif|finally|else|and|or|xor|not|in|while|dowhile|for|loop|when|fn|macro|use|volatile|concept|defer|notin|is|test)\b 0:keyword
+add-highlighter shared/ligi/code/ regex \b(?<!@)(anyenum|str|bool|f32|f64|f128|void|type)\b 0:type
 add-highlighter shared/ligi/code/ regex \b(u\d+|i\d+|isize|usize)\b|\b(\d+(\.\d+)?)(u\d+|i\d+|isize|usize|f32|f64)\b 1:type 2:variable 4:type
 add-highlighter shared/ligi/code/ regex \b(c_short|c_ushort|c_int|c_uint|c_long|c_ulong|c_longlong|c_ulonglong|c_longdouble|c_void)\b 0:type
 
 add-highlighter shared/ligi/code/ regex \b(null|undef)\b 0:variable
 add-highlighter shared/ligi/code/ regex \b(true|false)\b 0:value
 
-add-highlighter shared/ligi/code/ regex @(addWithOverflow|bitCast|bitreverse|bytesToSlice|clz|compileError|compileLog|ctz|divExact|divFloor|divTrunc|embedFile|enumToInt|fence|inlineCall|memcpy|memset|mulWithOverflow|panic|popCount|rem|setCold|shlExact|shlWithOverflow|shrExact|sizeOf|sliceToBytes|sqrt|subWithOverflow|This|typeName|typeOf|Vector)\b 0:builtin
 
 add-highlighter shared/ligi/code/ regex ((\+|-|\*|<<)%?|/|=|\^|&|\?|\||!|>|<|%|>>)=? 0:operator
 add-highlighter shared/ligi/code/ regex -> 0:operator
 
 
 
-add-highlighter shared/ligi/code/  regex `(\w|\d)+\b 0:variable
+#add-highlighter shared/ligi/code/  regex (\w|\d|_)+\b 0:variable
+add-highlighter shared/ligi/code/ regex @(\w|\d|_|@)+\b 0:builtin
+add-highlighter shared/ligi/code/  regex \b\d+\b\s*(\.\s*\d+)* 0:value
+
 
 # Commands
 
@@ -90,6 +86,7 @@ hook -group ligi-highlight global WinSetOption filetype=ligi %{
 
 hook global WinSetOption filetype=ligi %[
     set-option buffer comment_line '--'
+    set-option -add buffer extra_word_chars '@'
     hook -group ligi-hooks window ModeChange insert:.* ligi-filter-around-selections
     hook -group ligi-indent window InsertChar \n ligi-indent-on-new-line
     hook -group ligi-indent window InsertChar \} ligi-indent-on-closing-curly-brace
