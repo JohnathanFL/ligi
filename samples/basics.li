@@ -48,6 +48,20 @@ let rotate = fn ar: ref _, n =>
   }
 
 
+-- Sort an array: Simple bubble sort (in place)
+let bubble_sort = fn items =>
+  for items -> x, i =>
+    for items[i..items.len] -> y =>
+      if y < x => (x, y) = (y, x)
+-- Unit test
+test "bubble_sort" {
+  var ar     = [1, 6, 2, 3, 7, 1]
+  let sorted = [1, 1, 2, 3, 6, 7]
+  ar::bubble_sort()
+  -- Don't ya love zipped iteration
+  for (ar, sorted) -> (x, y) => assert x == y
+}
+
 -- List Interface
 -- Ligi uses concepts to define "interfaces". By convention, we follow the `I` naming scheme.
 -- Ligi follows Nim's concept of a "concept" definition, for the most part
