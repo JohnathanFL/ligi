@@ -18,6 +18,54 @@ let fib = pure fn n -> f = when n
   else => 1
 
 
+-- Make and initialize a struct
+let Food = struct {
+  field name: str
+  field calories: usize
+}
+let turkey = [.name = "Turkey", .calories = 1000]
+
+
+-- Store an arbitrary enum
+let t = #Taggy
+assert t.@type == anyenum -- Objects have a special property called @type to get their type
+assert t == #Taggy
+-- Note that the tag (the part after #) can be any ligi word, including reserved words
+-- If you want to restrict anyenum to a particular subset of values, you need a full enum
+
+
+-- Make an enum
+-- `enum` at the start of a statement is a bind specifier. `enum` in an expression is a unary op
+-- Long form:
+let Meal = enum {
+  -- Could also combine these into one `enum Breakfast, Lunch, Supper` line
+  enum Breakfast
+  enum Lunch
+  enum Supper
+}
+-- Shortest form:
+let Meal = enum (Breakfast, Lunch, Supper)
+
+let m = Meal.Breakfast
+-- or
+let m: Meal = #Breakfast
+
+-- Make an algebraic data type:
+let Health = enum {
+  enum Dead
+  enum Alive: usize
+}
+
+let h: Health = #Alive(100)
+assert
+  h != #Dead
+  and h == #Alive -- Comparison against an anyenum (#Word) checks only the tag
+  and h == #Alive(100) -- Comparison against a full enum literal (#Word(vals)) checks tag and vals
+  and h == #Alive(_) -- Comparison against a sink (`_`) is always true, so this just checks the tag
+  and h != #Alive(99)
+  and h.Health == 99 -- Can also access it like a field. This would fail if h was #Dead
+
+
 -- Largest element
 let ar = [12, 5, 123, 64, 1235, 654]
 let largest: ref const usize = {
@@ -49,7 +97,7 @@ let rotate = fn ar: ref _, n =>
 
 
 -- Sort an array: Simple bubble sort (in place)
-let bubble_sort = fn items =>
+let bubble_sort = fn items: slice _ =>
   for items -> x, i =>
     for items[i..items.len] -> y =>
       if y < x => (x, y) = (y, x)
@@ -79,4 +127,24 @@ let IList = fn T: comptime type -> L = concept {
   -- A type which satisfies a concept is at least as good as it. Thus >= is `implements`
   assert list.insert(0, el).@type >= builtin.IResult(void)
 }
+
+
+-- Overloaded functions
+let describe = overload (
+  fn b: bool => printf("It's a bool"),
+  fn i: isize => printf("It's an int")
+)
+describe(true) --= It's a bool
+describe(-1) --= It's an int
+
+
+-- Overloading operators
+let Vec2 = struct {
+  field x: f32, y: f32
+  @overloads[#Add] += pure fn lhs, rhs -> res = [ .x = lhs.x + rhs.x, .y = lhs.y + rhs.y ]
+}
+let (v1, v2): (Vec2, Vec2) =  ([.x = 1, .y = 2], [.x = 2, .y = 1])
+assert (v1 + v2) == [.x = 3, .y = 3]
+-- Of course, the above is better accomplished by just using a tuple (f32,f32) and letting the
+-- builtin overloads handle it
 
