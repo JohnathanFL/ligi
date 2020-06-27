@@ -44,7 +44,8 @@ add-highlighter shared/ligi/code/ regex -> 0:operator
 
 #add-highlighter shared/ligi/code/  regex (\w|\d|_)+\b 0:variable
 add-highlighter shared/ligi/code/ regex @(\w|\d|_|@)+\b 0:builtin
-add-highlighter shared/ligi/code/  regex \b\d+\b\s*(\.\s*\d+)* 0:value
+add-highlighter shared/ligi/code/ regex \b\d+\b\s*(\.\s*\d+)* 0:value
+add-highlighter shared/ligi/code/ regex '#(\w|\d|_|@)+\b' 0:value
 
 
 # Commands
