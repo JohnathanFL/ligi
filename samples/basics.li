@@ -45,6 +45,7 @@ let Meal = enum {
 }
 -- Shortest form:
 let Meal = enum (Breakfast, Lunch, Supper)
+-- The above can assign values, but cannot set types for algebraic data types
 
 let m = Meal.Breakfast
 -- or
@@ -55,7 +56,6 @@ let Health = enum {
   enum Dead
   enum Alive: usize
 }
-
 let h: Health = #Alive(100)
 assert
   h != #Dead
@@ -65,6 +65,43 @@ assert
   and h != #Alive(99)
   and h.Health == 99 -- Can also access it like a field. This would fail if h was #Dead
 
+-- An even better version of the above, using ranged enums:
+let Health = enum {
+  @tagType = usize -- similar to enum class Health : unsigned {} in C++
+  alias val = @This.rawTag -- .tag stores the anyenum of the enum, .rawTag stores the tag value
+  enum Dead = 0
+  enum Alive = 1..=100
+}
+var h = (:Health: 1)
+assert h == #Alive and h == (:Health: 1)
+h.val -= 1
+assert h == #Dead
+-- Thus, you can have a sort of "named range", as well as an algebraic data type that stores
+-- its state and its inner value in one field
+
+-- Mutually recursive
+-- Functions:
+-- (these funcs aren't supposed to make sense)
+let foo: (fn n: usize -> nn: usize), bar: (fn u: usize -> b: bool)
+foo = pure fn n -> nn = if bar(n) => n * 10 else => foo(n + 1)
+bar = pure fn u -> b = if u > 100 => true else => foo(u + 20) > 100
+-- Structs:
+-- You can also do the above and below in "one" statement using an init block
+-- This is the preferred way, as it clearly delimits the "recursive zone"
+let (Stmt: type, Expr: type) = {
+  Stmt = enum {
+    enum
+      Expr: Expr,
+      Assert: Expr
+  }
+  Expr = enum {
+    enum
+      Bin: (*Expr, anyenum, *Expr),
+      Una: (anyenum, *Expr),
+      Word: str,
+      Block: slice Stmt
+  }
+}
 
 -- Largest element
 let ar = [12, 5, 123, 64, 1235, 654]
