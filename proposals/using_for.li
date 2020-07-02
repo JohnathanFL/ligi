@@ -1,0 +1,38 @@
+-- This would be an extension to the using.li proposal
+
+-- Currently, we can do
+using var x = Foo.init()
+-- and the compiler auto-inserts `defer x.deinit()`
+
+-- This can't currently work with for loops:
+for Foo.init() -> f => printf("Got {}", f)
+-- The range of the for is never deinited
+
+-- We can do
+using var foo = Foo.init()
+for foo -> f => printf("Got {}", f)
+-- but that partially defeats the purpose of using
+
+
+
+-- In a for loop, the range expression is already only evaluated once before having its
+-- @overload[#For] called each iteration.
+-- I propose 2 solutions
+using for Foo.init() -> f => printf("Got {}", f) -- #1
+for using Foo.init() -> f => printf("Got {}", f) -- #2
+
+-- #1:
+-- - Would introduce a minor complexity bump in the parser, as we can no longer assume `using`
+--   marks a bind.
+-- + Would keep `using` at the beginning of any statements, making it more consistent
+
+-- #2:
+-- + Would make the compiler slightly simpler
+-- + Reads a little better. (You aren't using the `for`, you're doing a for and using its range)
+
+-- So far, I'm inclined to go with #2
+
+
+-- Some things:
+-- * Should the deinit be deferred until the end of the block, or just the for loop?
+--   Until the block would be more consistent, but perhaps less efficient
