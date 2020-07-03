@@ -5,12 +5,12 @@ const ast = @import("ast.zig");
 
 pub const Tag = enum {
     Word,
-    Label,
+    Label, // #Word
     // The .str for these are not guaranteed to be allocated in the main file's .input
     Str,
     Char,
 
-    Tag, // #
+    // Tag, // # - Merged into Label for now. Will eventually be used for #{}
 
     Assg,
     AddAssg,
@@ -257,7 +257,7 @@ pub const Lexer = struct {
         // Non-words
         tp("=>", .Then),
         tp("->", .StoreIn),
-        tp("#", .Tag),
+        //tp("#", .Tag),
         tp("~", .BitNot),
         tp("?", .Opt),
         tp("+=", .AddAssg),
@@ -400,7 +400,7 @@ pub const Lexer = struct {
             };
         }
 
-        if (self.input[0] == '`') {
+        if (self.input[0] == '#') {
             return Token{
                 .tag = .Label,
                 .pos = pos,

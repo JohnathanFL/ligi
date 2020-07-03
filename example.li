@@ -45,3 +45,12 @@ let w = [
 ]
 
 let \if = true
+
+
+#label {
+  printf("In block")
+  break
+  break #label
+  break : value
+  break #label : value
+}

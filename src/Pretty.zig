@@ -53,7 +53,7 @@ fn pretty(self: *@This(), node: *ast.Expr) void {
             self.pretty(a.expr);
         },
         .EnumLit => |e| {
-            self.fmt("#{}", .{e.tag});
+            self.fmt("{}", .{e.label});
             if (e.inner) |inner| {
                 self.write(":");
                 self.pretty(inner);
@@ -172,6 +172,13 @@ fn pretty(self: *@This(), node: *ast.Expr) void {
                     self.write(" = ");
                     self.pretty(val);
                 }
+            }
+        },
+        .Break => |b| {
+            self.write("Break");
+            if (b.label) |lab| self.fmt(" {}", .{lab});
+            if (b.val) |val| {
+                self.pretty(val);
             }
         },
         else => self.fmt("UNIMPLEMENTED: {}", .{@tagName(node.*)}),

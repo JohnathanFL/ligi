@@ -97,7 +97,7 @@ pub const FieldList = ArrayList(struct { loc: BindLoc, val: ?*Expr });
 pub const ExprList = ArrayList(*Expr);
 
 pub const Block = struct { label: ?str, body: ExprList };
-pub const EnumLit = struct { tag: str, inner: ?*Expr };
+pub const EnumLit = struct { label: str, inner: ?*Expr };
 pub const Tuple = struct { as: ?*Expr, vals: ExprList };
 pub const Struct = struct { as: ?*Expr, fields: FieldList };
 pub const Array = struct { as: ?*Expr, vals: ExprList };

@@ -9,12 +9,6 @@ const str = []const u8;
 
 const Parser = @This();
 
-// Will eventually be a complete file-recursing parser
-pub fn parse(input: str, alloc: *mem.Allocator) !*ast.Expr {
-    var parser = try Parser.init(input, 0, alloc);
-    return parser.parseBlock(false);
-}
-
 alloc: *mem.Allocator,
 lexer: lex.Lexer,
 cur: lex.Token,
@@ -25,6 +19,12 @@ exprs: std.SegmentedList(ast.Expr, 1024),
 /// Since Zig's stack traces are a wee bit too much
 pub const ParseStack = std.ArrayList(struct { func: []const u8, pos: lex.FilePos });
 parse_stack: ParseStack,
+
+// Will eventually be a complete file-recursing parser
+pub fn parse(input: str, alloc: *mem.Allocator) !*ast.Expr {
+    var parser = try Parser.init(input, 0, alloc);
+    return parser.parseBlock(null, false);
+}
 
 const Error = error{ Expected, Unimplemented, OutOfMemory, MutExc } || lex.Lexer.Error;
 
@@ -143,12 +143,18 @@ fn expected(self: *Parser, comptime what: str, fmts: var) noreturn {
     std.process.exit(1);
 }
 
-pub fn parseBlock(self: *Parser, comptime braces: bool) Error!*ast.Expr {
+// Just a helper over parseBlock for when you know it's a block but don't know about the label
+pub fn parseLabeledBlock(self: *Parser) Error!*ast.Expr {
+    const label = if (self.tryMatch(.Label)) |label| label.str else null;
+    return self.parseBlock(label, true);
+}
+
+pub fn parseBlock(self: *Parser, label: ?str, comptime braces: bool) Error!*ast.Expr {
     self.record("Block");
     defer self.unrecord();
     var res = self.newExpr(.{
         .Block = .{
-            .label = null,
+            .label = label,
             .body = std.ArrayList(*ast.Expr).init(self.alloc),
         },
     });
@@ -182,16 +188,11 @@ pub fn parseStmt(self: *Parser) Error!*ast.Expr {
                 },
             });
         },
-        // break [label [',' expr]]
+        // break [ label ] [ ":" expr ]
         .Break => {
             _ = try self.match(.Break);
-            var lab: ?str = null;
-            var val: ?*ast.Expr = null;
-            if (self.tryMatch(.Label)) |label| {
-                lab = label.str;
-                if (self.tryMatch(.Comma) != null)
-                    val = try self.parseExpr();
-            }
+            const lab = if (self.tryMatch(.Label)) |label| label.str else null;
+            const val = if (self.tryMatch(.Colon)) |_| try self.parseExpr() else null;
             return self.newExpr(.{ .Break = .{ .label = lab, .val = val } });
         },
         .Return => {
@@ -327,28 +328,30 @@ pub fn parseAtom(self: *Parser) Error!*ast.Expr {
         .When => return try self.parseWhen(),
         .Loop => return try self.parseLoop(),
         .While, .For => return try self.parseWhileFor(),
-        .Label, .LBrace => return try self.parseBlock(true),
-        .Tag => return try self.parseEnumLit(),
+        .LBrace => return try self.parseBlock(null, true),
+        .Label => return try self.parseLabeled(),
         .Fn => return try self.parseFn(),
         .Macro => return try self.parseMacro(),
         else => return try self.parsePipeline(false),
     }
 }
-// '#' word [ tuple | compound ]
-pub fn parseEnumLit(self: *Parser) Error!*ast.Expr {
+// '#' ( word [ tuple | compound ] | block )
+pub fn parseLabeled(self: *Parser) Error!*ast.Expr {
     self.record("EnumLit");
     defer self.unrecord();
-    _ = try self.match(.Tag);
-    const tag = (try self.match(.Word)).str;
+    const label = try self.match(.Label);
+
+    if (self.cur.tag == .LBrace) return try self.parseBlock(label.str, true);
+
     const inner = if (!self.newlined) switch (self.cur.tag) {
-        .LParen => try self.parseTuple(),
         .LBracket => try self.parseCompound(),
+        .LParen => try self.parseTuple(),
         else => null,
     } else null;
 
     return self.newExpr(.{
         .EnumLit = .{
-            .tag = tag,
+            .label = label.str,
             .inner = inner,
         },
     });
@@ -447,7 +450,7 @@ pub fn parseThen(self: *Parser) Error!*ast.Expr {
         // TODO: Should this be Assg or Expr?
         return try self.parseAssg();
     } else {
-        return try self.parseBlock(true);
+        return try self.parseLabeledBlock();
     }
 }
 
@@ -525,7 +528,7 @@ pub fn parseWhileFor(self: *Parser) Error!*ast.Expr {
         if (self.tryMatch(.Comma)) |_| counter = try self.parseBindLoc();
     }
     const body = try self.parseThen();
-    const finally = if (self.tryMatch(.Finally)) |_| try self.parseBlock(true) else null;
+    const finally = if (self.tryMatch(.Finally)) |_| try self.parseThen() else null;
     return self.newExpr(.{
         .Loop = .{
             .op = op,
