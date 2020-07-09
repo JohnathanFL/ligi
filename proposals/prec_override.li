@@ -1,0 +1,21 @@
+-- This is a proposal to allow .bin_operator syntax to override precedence
+
+
+-- Essentially, this is an extension on the theme of allowing things to be written left-right
+-- without having to go back and add parens as you go.
+
+a or b + 10
+-- Normally, a logical `or` would be higher than a `+`. It'd normally parse like:
+-- or(a, +(b, 10))
+
+a.or(b) + 10
+-- With this change, the above is parsable and acts the same as
+-- +(or(a, b), 10)
+-- Use case: Optionals
+let o: ?usize = null
+assert o.or(10) == 10 -- normally `o or 10 == 10` would be `or(o, ==(10, 10))`
+
+-- This would NOT allow things like
+a::or(b) + 10
+-- as the above is useless. a `.bin_operator` syntax calls the same operator/overload
+-- as if it had been called like a normal operator. This just lets you override precedence.
