@@ -1,3 +1,11 @@
+-- I'm a happy little comment!
+
+print(
+  \\ I'm a happy
+  -- string literal
+  \\ multiline string literal
+)
+
 printf("At the beginning")
 defer printf("At the end")
 
