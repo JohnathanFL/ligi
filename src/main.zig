@@ -49,6 +49,7 @@ pub fn main() !void {
             } else {
                 std.debug.warn("\nFile: {}\n", .{arg});
                 var file = try std.fs.cwd().openFile(arg, .{});
+                try file.inStream().readAllArrayList(&input, MAX_INT);
             }
             var block = try Parser.parse(input.items, &arena.allocator);
             Pretty.print(block, 0);
