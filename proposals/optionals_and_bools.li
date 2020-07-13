@@ -1,0 +1,64 @@
+-- This is to document how I'll (probably) make optionals (and enums) interact with bools
+
+
+let opt: ?usize = null
+
+
+-- To start, optionals can be coerced to a bool for ifs and the like:
+if opt {
+  
+} else {}
+
+-- Obviously, you can also capture if you so choose
+if opt -> inner {}
+else {}
+
+-- However, you'll also be able to do stuff like
+let b = true
+if b and opt -> inner {}
+else {}
+-- The way this'll work is `and` will be overloaded to
+-- work on (bool, ?T) and (?T, bool), returning an ?T like so:
+---- b and opt === if b { opt }
+
+-- Phase 2: `enum == anyenum` will generate an ?T if the tag in question
+-- has an inner value
+---- (this sort of overloading will obviously rely on the tag being comptime-known)
+let ConfigOpt = enum {
+  enum
+    Verbose,
+    CfgFile: str
+}
+let o = ConfigOpt.CfgFile("../config.cfg")
+let has = o == #CfgFile
+assert has.@type == ?str
+-- The actual function that overloads == would work something like: (pseudocode .@ funcs)
+let eq = pure fn lhs, rhs: comptime anyenum -> res = {
+  assert lhs.@type.@isEnum -- Make sure we're doing enum == anyenum
+  let info = lhs.@type.@Info.Enum -- Assuming it's some structure that describes lhs's type
+  assert info.hasTag(rhs.val) -- Make sure lhs actually contains a tag with that name
+  res.@type = ?lhs.@type.@typeOfTag(rhs.val)  -- Set the function's result type
+
+  -- Since all enums have a .tag to get the current tag as an anyenum
+  if lhs.tag == rhs {
+    -- Assuming I give things a @fields, which indexes them by strings and ints
+    return lhs.@fields[rhs.val]
+  } else {
+    return null
+  }
+}
+-- I'd also likely disallow `enum == non-comptime anyenum`, as it could otherwise
+-- be somewhat confusing.
+
+-- This would actually allow you to also do stuff like
+let tag = #CfgFile
+if o == tag -> inner {}
+-- because tag is comptime, and the -> would be a compile error if tag became #Verbose.
+-- This is a bit of a foot-nuke, but that's kinda Ligi's style at this point.
+-- "I'll give you all the tools to be a martyr, just don't be a dumdum."
+
+-- In short, this proposal makes optionals the core of all capturing, and even technically
+-- allows defining captures from enums in userspace.
+-- Later, in order to allow comparing an enum against a pattern, I plan on adding
+-- a special builtin type *called* builtin.pattern or something like that that could be
+-- used.

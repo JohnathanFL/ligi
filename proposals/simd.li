@@ -1,0 +1,14 @@
+-- This is to try and hammer out a better way for SIMD
+
+
+-- In other samples, I've typically said we could just auto-optimize
+-- tuples of numbers of the same type into SIMD vectors.
+
+-- This proposal is to make that explicit.
+
+
+-- The basic idea: SIMD vectors would be created from a type-function, something like:
+-- (Exploiting that I'll define T*N === (T1, ... TN))
+let Vec = pure fn N: comptime usize, T: comptime type -> V = T * N + struct {
+  @overloads[#Add] += -- some function using SIMD instructions
+}

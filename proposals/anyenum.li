@@ -1,0 +1,61 @@
+-- This is to specify the `anyenum` type (name not finalized)
+
+
+-- Essentially, it may often become neccesary to be able to provide arbitrary enum literals.
+
+-- Ruby allows it with `:word` syntax, but we already have enum literals (`#word`),
+-- so why not just provide another type that `#word` can be implicitly coerced into.
+
+-- For now, we'll call it `anyenum`, as I can't think of another word that covers the usage
+-- without being a word that programmers will want to use, like `id` or `uid`
+
+var asd: anyenum = #Hello
+asd = #World
+asd = #asdasdasd
+
+assert asd.@sizeOf == usize.size -- An `anyenum` is always the same size as a usize
+let asdInt = asd.tag -- An `anyenum` has a `tag` field that gives its value as a usize
+-- An `anyenum` has a `val` property that looks up its string value
+printf("{}", asd.val) --: "asdasdasd"
+asd = #World
+printf("{}", asd.val) --: "World"
+
+-- Additionally, enums will now use `.tag` to return an anyenum that matches the enum literal:
+let Meal = enum(Breakfast, Lunch, Dinner)
+let m = Meal.Breakfast
+assert m.tag.@type == anyenum
+assert m.tag == #Breakfast
+-- To support manually assigned values (like when mapping C enums), `.rawTag` will have the int
+let MSAA = enum {
+  enum 2x = 2, 4x = 4, 8x = 8, 16x = 16, 32x = 32
+}
+let m = MSAA.2x
+assert m.rawTag == 2
+
+-- In a nutshell:
+---- When the compiler encounters a new anyenum value, it assigns it a new tag
+---- anyenum tags are tracked in a DB that persists across compilations and should be in VCS
+------ This is purely for being able to store anyenum values in a DB/etc across runs of the prog
+---- The compiler auto-generates lookup tables to go enum<->anyenum for the .tag property
+------ This allows translating between enums based on names (e.g Tag <=> Op)
+
+-- This will become the new *preferred* way of doing error handling:
+let Result = pure fn T: type -> res = enum {
+  enum Ok: T
+  enum Err: anyenum
+}
+
+-- Thus you can keep pushing an err back up the stack arbitrarily without worrying about what each
+-- precise Result(T) was.
+
+-- Obviously, this error handling won't work if you need to be able to return another type with the
+-- error (i.e `Result(R,E)`), but typically I'd imagine you're more concerned with the fact that
+-- an error happened at all than you are with passing extra data.
+
+-- Also planned is that enums will by default use their `anyenum` values instead of 0/1/2/3/4/etc
+-- You would still be able to change it to another tag type if needed.
+
+-- Issues:
+
+---- Related to error handling:
+

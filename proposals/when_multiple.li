@@ -1,0 +1,36 @@
+-- This will be a simple extension on top of normal whens
+
+-- Right now, you must do multiple conditions within and/or or by taking advantage
+-- of tuples, as in
+when x is in (10..100, 200..300) => printf("Was in one of them!")
+
+-- This may not play nicely with everything in the future though (think overloads)
+-- This proposal simply adds the following syntaxes:
+when x is in 10..100, and is in 200..300 => printf("Impossible!")
+when x is in 10..100, or is in 200..300 => printf("Was in one of them!")
+when x is in 10..100, xor is in 200..300 => printf("Was in one of them!")
+
+-- This would also allow for more complex conditions
+
+-- In short: multiple `is` arms may be and/or/xor-ed together in order to have multiple conditions
+-- for a single result while still having the `is <op>` syntax
+  -- Each `is` arm will allow captures as normal, as I can't find a reason to disallow them
+  -- They would be short circuiting.
+  -- They would not be required to have the same `is` operator (the `in` above)
+  -- The commas are required to distinguish the and/or/xor 
+  -- Official style would require newlines between them
+  when x
+    is in 10..100,
+    or is in 200..300 => printf("Was in one of them")
+
+
+-- This still needs some serious polish, especially w.r.t precedence and ordering of the and/or/xor
+-- How should the following be interpreted?
+when x
+  is 10,
+  or is 11,
+  and is > 10 {}
+-- Should we just drop and/xor altogether? Most `is` conditions will end up being mutually
+-- exclusive
+
+

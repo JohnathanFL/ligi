@@ -1,0 +1,16 @@
+-- This is to document a proposed shorthand to $"..."
+
+-- Normally if you want to use a reserved word for a variable name, you'd
+-- use an expansion, as in
+let $"if" = true
+if $"if" => printf("if if if?")
+
+-- This proposal would allow "escaping" reserved words
+let \if = true
+if \if => printf("if.")
+-- This wouldn't conflict with any other existing proposals and is consistent with the general
+-- usage of a single `\` in strings and such
+
+-- This would *not* allow whitespace, dashes, or any other "non-word" characters inside a variable.
+-- Those would require the standard $"..." syntax.
+-- This is simply a lexer-level proposal to avoid the extra typing that $"..." brings

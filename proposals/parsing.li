@@ -1,0 +1,17 @@
+-- This is to track some changes I'd like to make to Ligi's parsing
+
+
+-- Allowing `?` as a part of a variable
+-- It might be nice to be able to write stuff like
+let int?  = true
+-- Some things:
+  -- It couldn't be the first character, or it would be ambiguos with the optional `?`
+  -- It makes it somewhat harder to ask autocomplete for all `is*` stuff
+
+
+-- Allowing symbols to start with numbers:
+let 1stNum = 10
+--
+  -- This would only require a minor change to the tokenizer to make it work
+  -- Arbitrarily requiring no numbers at the start is kinda stupid
+  -- This allows for more expressive variable names

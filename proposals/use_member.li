@@ -1,0 +1,28 @@
+-- This is to document how I plan to let `use` and `alias` be used
+-- with regards to fields and other members accessed through a `.`.
+-- This is coming after taking a look through the Odin language
+
+-- Essentially, I plan to allow things like:
+let Foo = struct {
+  field x: u32, y: u32
+}
+
+let FooWrapper = struct {
+  field inner: Foo
+  -- Either `use` or `alias` works, since `use` is just a sugar over `alias`
+  use inner.(x, y)
+  alias (x1, y1) = inner.(x, y)
+}
+
+let f = [:FooWrapper: .inner = [.x = 10, .y = 20]]
+assert f.x == 10 and f.y == 20
+assert f.x1 == 10 and f.y1 == 20
+assert f.(x, y).addr == f.inner.(x, y).addr
+
+-- Since they're treated like "fields" of FooWrapper, you can also initialize them
+-- in a compound initializer
+let f1 = [:FooWrapper: .x = 10, .y = 20]
+assert f.inner.(x, y) == (10, 20)
+
+-- This does mean we can't allow fields/enums and lets to conflict in naming, as otherwise it
+-- becomes ambiguous.

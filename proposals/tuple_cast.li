@@ -1,0 +1,37 @@
+-- This is to specify the new 'tuple casting' syntax
+
+
+-- This is also the first file to ever be written with the new `--` comment syntax
+-- Note after writing this file: I hadn't realized how -- had worked its way into my muscle mem
+
+
+-- With -- comments going the way of the Cobol, we're free to use things like:
+let x = (:u23: 0)
+
+-- This will work exactly the same as compound literals:
+let arOfUsize = [:usize: 0, 1, 2, 3, 4]
+assert arOfUsize.@type == array(5, usize)
+
+let myTup = (:(usize, isize, u32, f32): 1, 2, 3, 4)
+assert myTup.@type == (usize, isize, u32, f32)
+
+-- Also planned: Tuple casts will treat the following the same:
+assert (:(usize, isize): 0, 1).@type == (:usize, isize: 0, 1).@type
+-- Since you're usually casting a full tuple anyway, why bother with the ()?
+
+-- To be precise, the latter will be implicitly converted to the former
+-- This is to allow things like this to work:
+let MyType = (usize, isize)
+assert (:usize, isize: 0, 1).@type == (:MyType: 0, 1).@type
+
+
+-- This proposal is also designed to interoperate with the compound tuples proposal:
+let Vec3 = (f32, f32, f32) + struct {}
+let instance = (:Vec3: 0, 1, 2)
+-- Note that the above would be the same as
+let tup = (0, 1, 2)
+let instance = (:Vec3: tup)
+-- As there's no such thing as a 1-tuple
+-- (or perhaps its better to say that every solitary value is a 1-tuple)
+
+-- Ain't that nice and clean?

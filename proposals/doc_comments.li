@@ -1,0 +1,79 @@
+-- This is to begin specifying a documentation style for Ligi
+-- Actual comment parsing is a long-term plan. Nothing that'll be ready any time soon.
+-- This is just to start laying out the rules for it.
+
+
+
+-- As a part of this, I plan on actually making the parser put comments in the AST as
+-- their own special nodes.
+-- I feel this is needed because of Ligi's ability to add different bits of code together.
+-- With comments being included in the AST, the compiler/editor plugins can more easily
+-- give the user hints.
+
+
+-- Comments always start with `--`. Anything after a `--` becomes a comment, with or without
+-- an extra space.
+-- Plain comments (i.e not doc comments) have no style restrictions imposed upon them.
+
+-- Doc comments have this extra `=` directly at the end of the last `-`. Thus:
+-- Doc comments must always be placed at the block level (i.e not inside expressions)
+
+--= This is a doc comment
+----= This is also a doc comment
+------= And so is this
+--= This is part of the same doc comment
+
+--= This is a new doc comment
+
+-- To be specific, the above is a hierarchical doc comment. A doc comment always starts at
+-- the same indentation as the surrounding code, but additional `-`s are used to further indent it.
+-- This allows expanding upon things in a clear way.
+-- Note that a line break ends a doc comment
+
+
+
+-- Documenting functions looks like this:
+
+--= Add two numbers [opt]
+--= A longer description of how to add two numbers [opt]
+--= a: Argument a is the lhs of the addition
+--= b: Argument b is the rhs of the addition
+--= c: The result of using the normal `+` operator on a and b
+let add = pure fn a, b -> c = a + b
+
+-- A normal line is required as a brief description.
+-- Any non-parameter lines that come after that are considered a longer description.
+-- Any line that looks like `word:` is considered a parameter line.
+---- This just means that it describes the parameter named `word`
+---- Ligi scans from the `=` to the first `:` and decides if what's inside looks like an ident.
+-- Since Ligi requires the usage of a return value, documenting the returned value is the same as
+-- documenting any other parameter.
+
+-- When documenting overloads, you may only give the brief/long descriptions on the outside:
+
+--= Init a usize
+--= This initializes a usize to a particular value
+let init* = overload {
+  --= Initialize given a particular size
+  --= u: The new usize. Simply an order of magnitude bigger than `val`
+  let initWithSize* = fn val:usize -> u:usize = val * 10
+
+  --= Initialize the usize to 0
+  --= u: A usize equal to 0
+  let default* = fn -> u:usize = initWithSize(0)
+}
+
+-- This also works when adding to an overload:
+
+--= Initialize to a number bigger or smaller than 500
+--= bigger: Whether the number should be bigger than 500
+init += pure fn bigger: bool -> u:usize = if bigger { 800 } else { 400 }
+
+
+
+-- Essentially, I plan to make all comments work as such:
+---- Parser finds a comment and attaches it to the next node it parses
+---- OR: Parser finds a doc comment and adds it as a new node
+---- Interpreter keeps a record of the last doc comment inside the current block
+---- When it encounters a bind, it attempts to match the last doc comment to that bind
+

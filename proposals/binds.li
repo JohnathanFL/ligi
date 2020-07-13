@@ -1,0 +1,38 @@
+-- This is to document the exact workings of bind specs
+
+-- In Ligi, `let` and `cvar` are really just sugars over top `var`
+
+-- `let` is simply sugar for adding `const` to a type:
+{
+  var old: usize = 1
+  let a = old
+  var b: const usize = old
+  assert a.@type == b.@type
+}
+-- Similarly, `cvar` is simply sugar for adding `comptime` to a type:
+{
+  cvar a = 1
+  var b: comptime usize = 1
+  assert a.@type == b.@type
+
+  
+  -- Note that in the above, `1` already has a type of `comptime usize` by default, so
+  -- technically `var` is actually stripping away the `comptime` by default,
+  -- if you're being pedantic.
+}
+
+-- `let` will also add back a const if it's not there when you specify it
+-- Same with `comptime` and `cvar`
+{
+  let a: usize = 1
+  assert a.@type == const usize
+}
+
+-- Thus, essentially:
+  -- All binds are just sugars for adding/removing type modifiers
+  -- `var`
+    -- Strips off the outermost `const`s and `comptime`s by default
+  -- `let`
+    -- Ensures the variable is `const`
+  -- `cvar`
+    -- Ensures the variable is `comptime`

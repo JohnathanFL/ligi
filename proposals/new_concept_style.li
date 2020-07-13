@@ -1,0 +1,49 @@
+-- This is to document the likely new concept style
+-- To be clear off the bat, Ligi has *no* dynamic dispatch.
+-- Types should be resolved at compiletime
+
+-- I was thinking about the concepts, when I realized the current way has no way to specify
+-- struct vs enum, let alone anything else
+
+-- The new idea: `concept` is an operator that can apply to:
+  -- blocks, in which case you can only specify statics/methods/properties
+  -- another type, in which case it uses that as the template
+
+-- This also frees up internal code, as you now just have an evaluator for structs/enums, then
+-- something that goes through and parses the results of those
+
+
+-- For example: A stack logically should be a struct:
+-- Also: Exploring the possibility of endorsing the IName style for concepts
+
+-- Thus: Let IStack be based on the type T and be the concept of a struct which...
+let IStack = pure fn T:type -> Stack = concept struct {
+  -- @This would just be assumed to refer to the final type
+  let push: fn self: @This, val: T -> void
+  let pop: fn self: @This -> top:usize
+}
+-- Note that `concept` still doesn't read the actual values of anything in the target, nor does
+-- it care about its fields' ordering. It only cares about the types involved
+
+-- You could also then have the concept of a `Result` type:
+let IResult = pure fn R:type -> Res = concept enum {
+  enum Ok: R
+}
+
+-- Thus, the following both match IResult(u32):
+let Result1 = enum { enum Ok: u32, OutOfMem }
+let Result2 = enum { enum Ok: u32, OutOfBounds, NoBuffer }
+
+
+-- Note that there's no need for a `concept fn` or similar.
+-- You can simply leave an argument as undef for that
+-- So both of the following branches are correct:
+let my_func: (fn a, b -> c) = if true {
+  pure fn a: u32, b: u32 -> c: u32 = a + b
+} else {
+  pure fn a: bool, b: f32 -> c: f32 = if a { b } else { 1.0 }
+}
+
+
+
+-- TODO: Some way of using `test` blocks to enforce semantics would be nice

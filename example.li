@@ -1,0 +1,56 @@
+printf("At the beginning")
+defer printf("At the end")
+
+let add = pure fn a: usize, b: usize-> c = a + b
+let say_hi = fn => printf("Hey")
+
+if true { printf("if") }
+elif false { printf("elif") }
+else { printf("else") }
+finally { printf("if or elif") }
+
+if true => printf("if")
+elif false => printf("elif")
+else => printf("else")
+finally => printf("if or elif")
+
+if x -> val => printf(val)
+
+
+when x
+  is #Me => printf("WasMe")
+  is #Not => printf("WasNot")
+  else => printf("WasNeither")
+  finally {
+    printf("Either Me or Not")
+  }
+
+for 0..20 -> i, j => printf("{} was {}", (i, j))
+while true => printf("Infinite loop!")
+loop -> i => printf("Inf looped for the {}th time", i)
+
+let Vec3 = struct {
+  field x: f32, y: f32, z: f32
+}
+
+let v = [
+  .x = 10,
+  .y = 20,
+  .z = 30
+]
+
+let w = [
+  .(x, y, z) = tup,
+  .w: f32 = 10
+]
+
+let \if = true
+
+
+#label {
+  printf("In block")
+  break
+  break #label
+  break : value
+  break #label : value
+}

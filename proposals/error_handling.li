@@ -1,0 +1,79 @@
+-- Ligi doesn't have direct error handling in the language like Zig does.
+-- Instead, it follows Rust's expample with unions of Result vs Error
+-- In fact, Ligi makes composing error sets even easier than Rust
+-- because types can be arbitrarily added together
+
+-- Using the enum shorthand from enum_shorthand.li
+
+
+-- Simple function to emulate Rust's Result type
+let Result = pure fn R: type, E: type -> t = E + enum {
+  enum Ok: R
+
+  -- For emulating the ?type .val property
+  let val = property { let get = pure fn self: @This -> v:R = self.Ok }
+}
+
+let MemoryError = enum (OutOfMemory)
+
+let ArrayList = pure fn T: type -> list = struct {
+  let ArrayListError = enum (OutOfBounds)
+  field data: slice T
+
+  let get = fn self: @This, index: usize -> item: Result(T, ArrayListError + MemoryError) =
+    if self.data.len <= index { #OutOfBounds }
+    else { #Ok(self.data[index]) }
+}
+
+let storage = [
+  "Hello",
+  "world",
+  "and",
+  "goodnight",
+  "moon"
+]
+let list = [:ArrayList(str): .data = storage]
+for 0..5 -> i {
+  printf("{}", list.get(i).Ok)
+}
+
+assert list.get(1) == #Ok
+assert list.get(1).Ok == "world"
+assert list.get(1).val == "world"
+assert list.get(1) == #Ok("world")
+
+assert list.get(10) == #OutOfBounds
+
+-- Thus, the following C++-styled try...except code
+\\ try {
+\\   auto val = list.get(1);
+\\   std::cout << "Got " << val << std::endl;
+\\ } except(std::out_of_range err) {
+\\   std::cout << "Error: Was out of bounds!\n";
+\\ }
+-- is written in Ligi as
+when list.get(1)
+  is #Ok -> val { printf("got {}\n", val) }
+  is #OutOfBounds { printf("Error: Was out of bounds\n") }
+
+
+-- TODO: This is still a little rough when handling throwing errors back up the stack.
+-- How could we make it a little more sugary?
+---- How about providing built in functions to translate between enums by name?
+---- Then, you could do something like return innerError.as(OuterErrorT) and not have to worry
+
+
+
+-- New error handling (still WIP): Gettin a little Ziggy
+-- New error handling will provide the !T type, which acts like a mix between ?T and enums:
+let ArrayList = pure fn T -> t = struct {
+  field
+    all: []T,
+    items: []
+
+  let get = fn self: @This, i: usize -> el: !ref T = when i
+    -- !T is always either #Ok(T) or #Err(anyenum)
+    is <= self.items.len => #Ok(self.items[i].addr)
+    else => #Err(#OutOfBounds)
+}
+

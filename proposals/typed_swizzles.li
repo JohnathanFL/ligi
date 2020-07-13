@@ -1,0 +1,19 @@
+-- This is to allow the :type: spec in a swizzle
+
+
+-- What we can already do:
+let Vec3 = f64 * 3 + struct {}
+let Vec2 = f64 * 2 + struct {}
+
+let v3 = (:Vec3: 40, 41, 42)
+
+-- New functionality:
+var v2 = v3.(:Vec2: 0, 1)
+-- In other words, you can specify the type that results from a swizzle
+
+-- This could also be useful like:
+let (a, b) = v2.(:bool, usize:
+  bool_returning_func(),
+  usize_returning_func()
+)
+-- Thus, you can cast things at the swizzle-site

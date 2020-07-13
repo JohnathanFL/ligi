@@ -1,0 +1,24 @@
+-- This is to document possible ways of doing inline assembly
+
+
+-- Sol #1: The asm macro function:
+@asm(##{
+  mov eax, 0
+  add eax, 1
+  -- Blah blah
+})
+-- Thus, you write the assembly using valid ligi tokens, and the function parses that
+-- into its own mini AST,
+
+-- Sol #2: Make it a compiler extension that adds an `asm` keyword
+-- I say extension because I think this sort of thing would be perfect for an example extension:
+---- It's not often required
+---- It's relatively simple to make (add a new keyword, register as operator)
+---- 
+-- `asm`'s subtree would then contain 3AF statements in Ligi that translate directly to ASM
+asm {
+  eax = 0
+  eax = eax + 1
+  -- It could also be made to handle moving results in a single operation
+  ebx = eax + 1
+}

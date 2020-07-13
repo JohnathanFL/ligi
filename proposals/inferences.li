@@ -1,0 +1,18 @@
+-- This is to try and track where I expect to allow type inference
+
+
+
+-- Tuple sizes:
+let (x, y, z): (f32, f32, f32)
+-- can be written as
+let (x, y, z): 3 * f32
+-- or inferred as
+let (x, y, z): _ * f32
+-- this is useful for enums with many of the same type
+let Meal = enum {
+  enum (
+    Breakfast,
+    Lunch,
+    Supper
+  ): _ * f32 -- Makes all of them f32s
+}

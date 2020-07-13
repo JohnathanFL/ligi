@@ -1,0 +1,42 @@
+-- Potential feature: `using`.
+
+
+-- Currently, in Ligi code the following pattern will be very common:
+let x = init()
+defer x.deinit()
+-- This is somewhat verbose, but I also don't want to add destructors.
+-- This brings us to a `using` operator.
+
+
+-- This would go hand in hand with/include:
+---- Making bind statements into expressions.
+---- Adding a new @dispose member.
+
+
+-- `using` would be an operator that works a bit like C#'s using.
+-- Essentially, it would be a sugar over doing the following:
+
+let ResType = struct {
+  let init* = fn -> self:@This = undef -- Doesn't matter here
+  let deinit* = fn self: @This -> void = {}
+  alias @dispose = deinit
+}
+
+let x = ResType.init()
+defer x.deinit() -- Or .@dispose
+
+-- Allowing you to write:
+using let x = ResType.init()
+-- Assuming that x's type has designated an @dispose method which looks like `fn self:@This->void`
+
+-- Thus, `using` would be a unary operator that acts on bind blocks and auto-inserts a
+-- `defer x.@dispose()` call for each bind in that bind block
+
+
+-- In a nutshell, a using is just a way to cut down the pattern of
+-- "let resource = init(); defer resource.deinit()"
+-- down to a single line "using let resource = init()"
+
+-- This won't work for things that need more complex deinits, but it can at least help some of the
+-- verbosity
+

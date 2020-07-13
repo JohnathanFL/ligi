@@ -1,0 +1,31 @@
+-- This is to document attempts at infinite (endless) ranges
+
+-- In Rust/Zig, you can slice until the end of something like:
+let ar = [0, 1, 2, 3, 4, 5]
+let sl = ar[2..] --= [2, 3, 4, 5]
+-- However, since .. and ..= are binary ops in Ligi, we don't currently have it.
+-- Even if we added it, since Ligi doesn't need semicolons, we're left with a problem
+-- because it's harder to tell the difference between
+let r = 0..;
+10
+-- and
+let r = 0..
+10
+
+-- Thus, I have 3 proposals for syntax in this case:
+
+-- #1: null-ended ranges:
+let r = 10..null -- starts at 10, never ends (or at most ends at usize.max)
+-- This syntax is ugly
+-- This doesn't introduce any new syntax, as `null` is already in the language
+
+-- #2: Wildcard ranges:
+let r = 10..*
+-- This syntax should be pretty intuitive to anyone who's ever used wildcards
+-- The problem is that this brings in a postfix operator that's in the middle of binary precedences
+
+-- #3: `end` keyword:
+let r = 10..end
+-- This would introduce the `end` reserved variable. It's clearer than ..*, as ..* isn't
+-- actually infinite (as no fixed-size number in computer science can be)
+-- This would also be clearer in the case of slicing an array, as you now specify "until the end"

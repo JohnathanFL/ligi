@@ -1,0 +1,33 @@
+-- This is to officially document the new error handling style
+
+-- Essentially, we're taking a fusion of Zig and Rust
+
+-- First: The `!` operator is shorthand for enum { enum Ok: T, Err: anyenum }
+let get = fn i: usize, ar: slice u8 -> el: !u8
+  = when i
+    is < ar.len => ar[i]
+    else => #OutOfBounds
+
+-- Unfortunately, this isn't always enough.
+-- Sometimes, you need to be able to return extra data with the error.
+-- We'll handle this by adding the above to another enum
+
+let ParseResult = pure fn T: type -> R =
+  !T -- !T automatically gives it an `enum Ok: T`, and some other goodies for error handling
+  + enum {
+  enum MissingSemicolon: (usize, usize) -- Where was it?
+  enum OutdatedSyntax: (anyenum, (usize, usize)) -- Which OutdatedSyntax and where?
+}
+
+let parse = fn input: str -> r: ParseResult(Expr) -- ...
+
+-- This would tie in with the `macro` proposal. The `!T` would automatically provide a
+-- `try` macro inside it that either yields the #Ok or returns the error
+
+let root: Expr = "print('hello, world')"::parse().try()
+
+-- Essentially, I'm just against a prefix `try` because it ends up being annoying if you need to
+-- use the result in that same expression, as in
+-- const pos = (try self.match(.Assert)).pos; // (Zig code)
+-- This style frees things up a little:
+let pos = self.match(#Assert).try()

@@ -1,0 +1,47 @@
+-- This is a proposal to merge `labels and #tags
+
+
+-- Right now, we use backticks (`) to specify labels.
+-- Additionally, we use the pound-sign to specify tags (enum literals)
+
+
+-- This proposal would merge the two:
+
+let x = #val { -- A tag followed by a block is now labelling that block
+  break #val : 10 -- explained below
+}
+
+-- Thus, we'd now think of things as
+#l(expr) -- Labeled expression
+#l[ .field1 = 1 ] -- Labeled compound
+#l {stmt} -- Labeled block
+
+-- We'll also now call #words labels, rather than tags
+
+-- As part of this, we'll merge #labels into the lexer.
+-- Other uses, such as the eventual #{} macros will have to be parsed differently
+
+-- In order to have this change work, we'd have to rework break statements, as they are
+-- currently of one of the following forms:
+break val -- #1
+break val, `label -- #2
+break `label, val -- #3, same meaning as #2
+break `label -- #4
+-- This is made possible by the fact that labels are used nowhere else.
+-- However, this change would make them all completely ambiguous. Consider
+break #tag
+break #tag, #label
+break #label, #tag
+break #label
+-- There's no way to tell what's what. Thus, I propose moving to the form
+-- `break [label] [: value]`, as so:
+break #label -- break from a specific label
+break #label : #value -- Break from a specific label with a value
+break : #value -- Break from the innermost *loop* with a value
+
+-- Note that the `:` is required if you wish to break with any value. Thus, this new form is
+-- unambiguous.
+
+
+-- This will also free up the backticks, so we could use them for stropping if we wished.
+-- However, I'm more inclined to keep the current expansion system ($"...").

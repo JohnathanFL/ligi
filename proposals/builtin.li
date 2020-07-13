@@ -1,0 +1,46 @@
+-- This is to explore what (if anything) should be moved to a `builtin` module,
+-- similar to how Zig handles it.
+
+-- A builtin module would be used to store datatypes that can't be provided by actual libraries,
+-- but which don't need to be direct, reserved words.
+
+
+
+-- Essentially: I think I may be getting to dependant on @ everywhere, when I could put things
+-- into a dedicated module. For example:
+
+-- You'd import it just like any other module:
+let builtin = @import("builtin")
+-- (This may actually be something worth making a direct @variable, rather than an import)
+
+
+-- @overloads could be moved into the `builtin`:
+builtin.overloads[#Add] += pure fn a:A, b:B -> c:A = -- ...
+
+
+-- @for could be handled as just another overload
+-- Similarly, we could move the #Break and such into here
+
+-- Example for a fibbonacci iterator
+let Fib = struct {
+  field n: usize
+  field accum: usize
+
+  let exec = fn self: ref Fib, do -> void = {
+    self.n -= 1
+    
+    
+    if self.n == 0 {}
+  }
+}
+builtin.overloads[#For] += pure fn self: Fib, do -> void = {
+  
+}
+
+
+
+
+-- Similarly, all of the typeinfo stuff could be types from .builtin:
+use builtin.(TypeInfo, StructInfo, EnumInfo, FuncInfo);
+-- I'd still want to keep the .@type, as to me that's much more ergonomic than doing
+-- @type(...) or (especially) builtin.type_of(...)

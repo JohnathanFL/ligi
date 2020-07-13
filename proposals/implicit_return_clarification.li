@@ -1,0 +1,40 @@
+-- This is to subtly change the way expressions yield values
+
+
+-- Currently, Ligi would follow these semantics:
+let x = {
+  10 -- This is a non-void expression, so it's considered the value of the block
+  20 -- This is after it, so it's actually an error
+}
+assert x == 10 -- if the 20 wasn't there, as the above is a type error at the moment
+
+
+-- We should make it work like
+let x = {
+  10
+  20 -- This is the *last* expression, so it is the value
+  -- If we wanted a void value for the block, we'd have to consume the above (`_ = 20`)
+}
+
+
+-- Technically, this doesn't look like much of a change, as a stmt after a yield was already an
+-- error. However this removes the "implicit block yields" like
+let x = {
+  if y => 10 -- Before this would make x === 10 if y, but no longer
+  20
+}
+-- Now, you'd have to do either
+let x = {
+  if y => 10
+  else => 20
+}
+-- or
+let x = `val {
+  if y => break `val : 10 -- Not an *implicit* expr yield, so it's fine
+  20
+}
+
+-- + It's now completely clear what expression is the value of a block
+-- - You can no longer do "implicit block yields" like the above `if`
+-- + We can take this opportunity to firm up semantics. The only non-void in a block should
+--   be the final expression (the value of the block)

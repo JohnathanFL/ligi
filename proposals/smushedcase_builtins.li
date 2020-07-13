@@ -1,0 +1,15 @@
+-- This is to propose a new convention for the builtins
+
+-- Right now, builtin @ functions tend to still be camelCase,
+-- despite the official style guide now recommending snake_case for functions.
+
+-- This would take the third route: smushedcase for @builtin functions,
+-- camelCase for @builtIn variables
+
+-- I think it's still important to distinguish variables vs functions, but
+-- I also think that language-builtin things should have ownership of all smushedcase
+
+
+-- Examples:
+let theType = @typeof(1)
+let r = MyEnum.@valueof(#Foo)

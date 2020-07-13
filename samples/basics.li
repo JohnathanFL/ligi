@@ -1,0 +1,230 @@
+-- This sample is just a collection of random mini-samples that don't really
+-- warrant their own files
+
+-- IsEven. It should be its own package, but we'll include it here :)
+let is_even = pure fn x -> isEven = x mod 2 == 0
+
+-- Ensure that `A < x < B` (A=10, B=30)
+-- `_` is used in a range to mean "type.max" or "type.min", where `type` is the type of
+-- the other side of the range. Thus, in this case it's "usize.min" and "usize.max"
+assert x in (_..10, 31.._) 
+
+-- Fizzbuzz
+-- ..= is inclusive range [n,m], .. is [n,m)
+for 0..=100 -> i => when (i mod 3, i mod 5)
+  is (0, 0) => printf("FizzBuzz\n")
+  is (0, _) => printf("Fizz\n")
+  is (_, 0) => printf("Buzz\n")
+  else => printf("{}\n", i)
+
+-- Multi-range loop (http://rosettacode.org/wiki/Loops/with_multiple_ranges)
+-- Normally, `for (range, range, range)` would iterate over (x, y, z) (zipped iter)
+-- We can make a function to merge them. This function would be included in the standard library,
+-- if as a builtin.
+let merge = pure fn ranges -> mergedRange = {
+  -- Assigning to a hitherto unspecified type translates to having assigned to it
+  -- in name:type form. This is just a sugar to make things more readable
+  mergedRange.@type = ranges.@type + struct {
+    -- `do` is passed by the compiler and is the body of the for loop
+    @overloads[#For] += fn self, do => 
+      for self.@tup -> range =>
+        for range -> v => do(v)
+  }
+  mergedRange = [.ranges = ranges]
+}
+let pow = pure fn x, y -> res = { -- For completeness' sake
+  res = x
+  for 1..y => res *= x
+}
+-- Good god this is an ugly thing to write in any language
+let x = 5, y = -5, z = -2
+var sum = 0, prod = 1
+let range = (
+  (-3..=3::pow(3)).step(3), -- .step on a range to modify its step (obv)
+  (-7..=7).step(x),
+  555..=550-y,
+  (22..=-28).step(-3),
+  1927..=1939,
+  (x..=y).step(z),
+  (11::pow(x)..=11::pow(x) + 1)
+)
+for range::merge() -> j =>
+  if @abs(prod) < 2::pow(27) & j != 0 => prod = prod * j
+
+printf(" sum= {}", sum)
+printf("prod= {}", prod)
+
+
+-- Fibonacci
+let fib = pure fn n -> f = when n
+  is > 2 => fib(n - 1) + fib(n - 2)
+  else => 1
+
+
+-- Make and initialize a struct
+let Food = struct {
+  field name: str
+  field calories: usize
+}
+let turkey = [.name = "Turkey", .calories = 1000]
+
+
+-- Store an arbitrary enum
+let t = #Taggy
+assert t.@type == anyenum -- Objects have a special property called @type to get their type
+assert t == #Taggy
+-- Note that the tag (the part after #) can be any ligi word, including reserved words
+-- If you want to restrict anyenum to a particular subset of values, you need a full enum
+
+
+-- Make an enum
+-- `enum` at the start of a statement is a bind specifier. `enum` in an expression is a unary op
+-- Long form:
+let Meal = enum {
+  -- Could also combine these into one `enum Breakfast, Lunch, Supper` line
+  enum Breakfast
+  enum Lunch
+  enum Supper
+}
+-- Shortest form:
+let Meal = enum (Breakfast, Lunch, Supper)
+-- The above can assign values, but cannot set types for algebraic data types
+
+let m = Meal.Breakfast
+-- or
+let m: Meal = #Breakfast
+
+-- Make an algebraic data type:
+let Health = enum {
+  enum Dead
+  enum Alive: usize
+}
+let h: Health = #Alive(100)
+assert
+  h != #Dead
+  and h == #Alive -- Comparison against an anyenum (#Word) checks only the tag
+  and h == #Alive(100) -- Comparison against a full enum literal (#Word(vals)) checks tag and vals
+  and h == #Alive(_) -- Comparison against a sink (`_`) is always true, so this just checks the tag
+  and h != #Alive(99)
+  and h.Health == 99 -- Can also access it like a field. This would fail if h was #Dead
+
+-- An even better version of the above, using ranged enums:
+let Health = enum {
+  @tagType = usize -- similar to enum class Health : unsigned {} in C++
+  alias val = @This.rawTag -- .tag stores the anyenum of the enum, .rawTag stores the tag value
+  enum Dead = 0
+  enum Alive = 1..=100
+}
+var h = (:Health: 1)
+assert h == #Alive and h == (:Health: 1)
+h.val -= 1
+assert h == #Dead
+-- Thus, you can have a sort of "named range", as well as an algebraic data type that stores
+-- its state and its inner value in one field
+
+-- Mutually recursive
+-- Functions:
+-- (these funcs aren't supposed to make sense)
+let foo: (fn n: usize -> nn: usize), bar: (fn u: usize -> b: bool)
+foo = pure fn n -> nn = if bar(n) => n * 10 else => foo(n + 1)
+bar = pure fn u -> b = if u > 100 => true else => foo(u + 20) > 100
+-- Structs:
+-- You can also do the above and below in "one" statement using an init block
+-- This is the preferred way, as it clearly delimits the "recursive zone"
+let (Stmt: type, Expr: type) = {
+  Stmt = enum {
+    enum
+      Expr: Expr,
+      Assert: Expr
+  }
+  Expr = enum {
+    enum
+      Bin: (*Expr, anyenum, *Expr),
+      Una: (anyenum, *Expr),
+      Word: str,
+      Block: slice Stmt
+  }
+}
+
+-- Largest element
+let ar = [12, 5, 123, 64, 1235, 654]
+let largest: ref const usize = {
+  -- You can assign to a location from within its initializer.
+  largest = ar[0].addr
+  for ar -> el => if el > largest => largest = el.addr
+}
+assert largest == 1235
+assert largest.addr == ar[4].addr
+
+-- Reverse an array in place
+var ar = [12, 5, 123, 64, 1235, 654]
+for ar[0..ar.len/2] -> el, i => (el, ar.rev[i]) = (ar.rev[i], el)
+-- .rev is a special property defined on arrays/slices that indexes in reverse.
+
+-- Rotate an array in place n slots
+var arr = [12, 5, 123, 64, 1235, 654]
+-- The naive solution: Rotate n times in a row
+let rotate = fn ar: ref _, n => when n
+  is 0 {}
+  is 1 => for (ar[0..ar.len], ar[1..ar.len]) -> (x, y) => (x, y) = (y, x)
+  else => for 0..n => rotate(ar.addr, 1)
+-- The optimized solution:
+let rotate = fn ar: ref _, n =>
+  for ar -> el, i {
+    alias el2 = ar[(i + n) mod ar.len] -- aliases are lazily evaluated each time they're used
+    (el, el2) = (el2, el)
+  }
+
+
+-- Sort an array: Simple bubble sort (in place)
+let bubble_sort = fn items: slice _ =>
+  for items -> x, i =>
+    for items[i..items.len] -> y =>
+      if y < x => (x, y) = (y, x)
+-- Unit test
+test "bubble_sort" {
+  var ar     = [1, 6, 2, 3, 7, 1]
+  let sorted = [1, 1, 2, 3, 6, 7]
+  ar::bubble_sort()
+  -- Don't ya love zipped iteration
+  for (ar, sorted) -> (x, y) => assert x == y
+}
+
+-- List Interface
+-- Ligi uses concepts to define "interfaces". By convention, we follow the `I` naming scheme.
+-- Ligi follows Nim's concept of a "concept" definition, for the most part
+-- Ligi just checks to see if the concept's block can pass type checking. Additionally,
+-- comptime code (like asserts) are evaluated.
+let IList = fn T: comptime type -> L = concept {
+  -- @This is defined inside here, just as with struct and enum, and is the type
+  -- we're checking against the idea of a List
+  var list: @This -- Only checks type checking, so we don't need to give a value
+  var el: T, optEl: ?T
+  
+  list.push(el)
+  optEl = list.pop()
+  list[0] = el -- check for both indexing and indexing as `ref T`
+  -- A type which satisfies a concept is at least as good as it. Thus >= is `implements`
+  assert list.insert(0, el).@type >= builtin.IResult(void)
+}
+
+
+-- Overloaded functions
+let describe = overload (
+  fn b: bool => printf("It's a bool"),
+  fn i: isize => printf("It's an int")
+)
+describe(true) --= It's a bool
+describe(-1) --= It's an int
+
+
+-- Overloading operators
+let Vec2 = struct {
+  field x: f32, y: f32
+  @overloads[#Add] += pure fn lhs, rhs -> res = [ .x = lhs.x + rhs.x, .y = lhs.y + rhs.y ]
+}
+let (v1, v2): (Vec2, Vec2) =  ([.x = 1, .y = 2], [.x = 2, .y = 1])
+assert (v1 + v2) == [.x = 3, .y = 3]
+-- Of course, the above is better accomplished by just using a tuple (f32,f32) and letting the
+-- builtin overloads handle it
+

@@ -1,0 +1,4 @@
+-- Add 'str' type :)
+-- 'slice comptime u8' is a bit of a mouthful. :)
+
+-- In compiler :) let str = slice comptime u8

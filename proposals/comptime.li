@@ -1,0 +1,35 @@
+-- This sample relates to the concept of a comptime type, not neccesarily the comptime op :)
+
+-- Technically, 'comptime' shall bind to the value itself, not the type :)
+-- All values can become comptime known at any time, and for any length of time:
+
+let s: slice const u8 = "Hello" 
+-- 's' is currently comptime-known, and will stay that way forever because it cannot be rebound
+
+var t: slice const u8 = "Hello"
+-- 't' is currently 'comptime', despite not being constant or explicitly marked comptime. :)
+t = "world" -- Still comptime known. That's because the value we assigned to it is comptime :)
+
+let foo = fn x: slice const u8 => {}
+foo("Hello")
+-- 'x' is not comptime known here, because it crossed a function boundary. :)
+-- (This could change if the compiler is doing more aggressive inline optimizations) :)
+
+let bar = fn x: comptime slice const u8 => {}
+bar("Hello")
+-- 'x' is comptime known here, as we explicitly annotated it as such :)
+
+-- comptime can also annotate a function itself
+-- A comptime func is executed once for each of its callsites, unless it's also
+-- marked `pure`.
+
+-- Here's a theoretical example of a function that runs at compiletime to load a file
+-- (from the build directory) into memory for usage.
+-- Of course, Ligi will provide a builtin for that, but it's an example of what's possible
+
+let get_some_resource = comptime fn -> s:str = {
+  -- Using an imaginary stdlib
+  let file = std.io.File.open("samples/comptime.li")
+  s = file.read_all(std.comp.allocator)
+}
+

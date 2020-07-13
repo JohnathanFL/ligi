@@ -1,0 +1,11 @@
+-- Feature proposal: `as` operator
+
+-- Would work as a binary operator just above unary operators
+let a = 10 as u8 -- Works
+let a = -10 as u8 -- Doesn't work, it parses the -10 first
+let a = -10 as i8 -- Works
+
+
+-- Note that I plan on always keeping the `as` functions
+_ = @as(i32, 10)
+_ = 10.as(i32)

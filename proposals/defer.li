@@ -1,0 +1,43 @@
+-- Ligi has neither constructors nor destructors.
+-- Instead, Ligi follows Zig's philosophy on manually managed resources.
+-- Given that, it also follows its path with regards to defer
+
+
+let foo = fn -> void {
+  var resource = someAllocatingFunc()
+  -- When initializing a resource that does something beyond the stack, you should pair it
+  -- with a `defer xxx.destructor_func()` call.A
+  -- In the future, I'd like to have the language recognize non-stack resources and auto-track them
+  -- Nothing that actually imposes restrictions, just a builtin way of checking resource lifetimes
+  defer resource.deinit()
+
+  if someFunc() {
+    -- deinit is called here
+    return;
+  } else {
+    -- but not here
+    printf("Oi")
+  }
+  -- but is called here
+}
+
+-- Thus the above is the same as saying the following
+let bar = fn -> void {
+  var resource = someAllocatingFunc()
+
+  if someFunc() {
+    resource.deinit()
+    return;
+  } else {
+    printf("Oi")
+  }
+
+  resource.deinit()
+}
+
+-- `deinit` is simply a way of simplifying resource management. Think of it as an inbetween for
+-- C++/Rust/etc's RAII and C's manual management.
+-- You still have to manually specify what scopes things should live for, but you don't need to
+-- check every possible branch manually.
+
+-- Since Ligi doesn't follow Zig on error sets, we unfortunately don't have errdefer.

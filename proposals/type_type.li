@@ -1,0 +1,58 @@
+-- This is to go further in depth on how the `type` type works
+
+
+
+-- I'm currently planning on handling it like this:
+---- `builtin.Type` is the complete structure representing a type
+---- `type` is a 'compiled' form of a `builtin.Type`
+
+-- Thus, you can pass around a `type`, but can't manipulate it
+
+-- Similarly, you can create a type by manipulating a `builtin.Type`, but can't instantiate
+-- it unless its description is both comptime-known and immutable
+
+-- Thus you're perfectly free to manipulate/pass around/build a `builtin.Type` at runtime,
+-- but you can't directly instantiate it if you made it at runtime.
+-- This will play in nicely with the whole idea of allowing Ligi code to JIT more Ligi code,
+-- as the compiler can now essentially just be a wrapper for the JIT library that saves its
+-- results to a file.
+
+
+-- In builtin
+
+let AccessLevel = enum (Private, ReadOnly, Private)
+
+let TypeID = usize + struct {} -- Distinct usize
+
+let Field = (str, AccessLevel, TypeID)
+let EnumTag = (str, TypeID, usize)
+
+-- Using the enum_fields.li proposal
+let Type = enum { -- Yes, I see the irony of defining type with a type.
+  -- These two will just redirect inside the other enums
+  field
+    typeID: TypeID,
+    typeName: str,
+    statics: slice (str, AccessLevel, TypeID)
+    
+  enum
+    intType: (bool, usize), -- Signed, NumBits
+    floatType: enum(F32, F64),
+    structType: struct {
+      field fields: slice Field,
+    },
+    enumType: struct {
+      field
+        enums: slice EnumTag,
+        fields: slice Field
+    },
+    ptrType: TypeID,
+    refType: TypeID,
+    -- No such thing as sliceType because it's translated into a struct
+    -- with a len and a ptr
+    arrayType: (usize, TypeID),
+    fnType: struct {
+      field args: slice TypeID, ret: TypeID
+      field isPure: bool
+    }
+}

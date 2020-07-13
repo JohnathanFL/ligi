@@ -1,0 +1,36 @@
+-- This is to document ways of adding a possible annotation system
+
+
+-- Option-agnostic stuff:
+-- Annotations will use enum literals
+  -- They already provide a way of specifying an arbitrary name with arbitrary arguments
+-- You'd be able to access the annotations under the `@` property of anything:
+assert make_type.@[#CName] == "type"
+
+
+-- Option 1: The stack pushers
+  -- Requires no syntax changes
+  -- Doesn't allow for annotations on individual binds in a bind group(e.g let x, y, z)
+  -- My current favorite
+
+
+-- Under this setup, we'd just have a special @() function (literally just `@`)
+@(#CName("type")) -- Could mean "use this name for C linkage"
+let make_type = pure extern fn -> void = {}
+
+-- Each invocation of @() would push another annotation to a stack
+-- When something new is bound, the current stack is removed and associated with that bind
+
+-- Note that the annotations would apply for *all* binds in a group.
+-- Thus, you could do something like this when binding a C library:
+@(#CallConv(#C))
+let
+  c_func1: extern fn a: c_uint, b: *c_void -> _:void,
+  printf: extern fn a: *u8, args: varargs -> _:void
+
+
+-- Option 2: Allow enum literals inside binds: (Not likely)
+  -- Requires changes to the bind parser
+  -- Allows annotations on a per-bind basis inside bind blocks
+  -- Disallows any kind of enum-bind-unpacking stuff in the future
+-- let #CName("type") make_type = pure fn -> void = {}

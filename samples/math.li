@@ -1,0 +1,102 @@
+-- This is for samples about random mathematical constructs
+
+
+-- Quaternion: (Translating from the C++ example on RosettaCode)
+-- We'll implement it as a compound tuple (tuple with `.` passthrough disabled and member functions
+-- and properties allowed)
+-- Tuples (primitive and compound) have all operators defined for 1:N and N:N, so we can ignore
+-- implementing things like Quat {+,-,/,*} Scalar and Quat {+,-} Quat. They're already implemented
+-- as lhs OP scalar === (lhs.0 OP scalar, lhs.1 OP scalar, ...)
+-- and lhs OP rhs === (lhs.0 OP rhs.0, ...). We just need to override the ones that have different
+-- behavior, like Quat*Quat and Quat/Quat.
+-- (T*4) can also just be written (T,T,T,T)
+let Quaternion = fn T: comptime type -> Q = (T * 4) + struct {
+  -- Normally we'd have to either unpack or use .0, .1, and so on.
+  -- This just makes some nice alternative names.
+  alias (w, x, y, z) = @This.(0, 1, 2, 3)
+
+  pub let lenSqr = property pure fn (w, x, y, z:T): @This -> l:T = w*w + x*x + y*y + z*z
+  pub let len = property pure fn self: @This -> l: T = @sqrt(self.lenSqr)
+  
+  @overloads[#BitNot] += pure fn (w, x, y, z): @This -> conjugate = (:@This: w, -x, -y, -z)
+  @overloads[#Mul] += pure fn (w1, x1, y1, z1): @This, (w2, x2, y2, z2): @This -> r = (
+    :@This:
+    w1*w2 - x1*x2 - y1*y2 - z1*z2,
+    w1*x2 + x1*w2 + y1*z2 - z1*y2,
+    w1*y2 + y1*w2 + z1*x2 - x1*z2,
+    w1*z2 + z1*w2 + x1*y2 - y1*x2
+  )
+  @overloads[#Div] += pure fn lhs: @This, rhs: @This -> r = {
+    alias ((w1, x1, y1, z1), (w2, x2, y2, z2)) = (lhs, rhs).(w, x, y, z)
+    return (
+      :@This:
+      (w1*w2 + x1*x2 + y1*y2 + z1*z2) / rhs.lenSqr,
+      (x1*w2 - w1*x2 + y1*z2 - z1*y2) / rhs.lenSqr,
+      (y1*w2 - w1*y2 + z1*x2 - x1*z2) / rhs.lenSqr,
+      (z1*w2 - w1*z2 + x1*y2 - y1*x2) / rhs.lenSqr,
+    )
+  }
+  -- OpAssgs (e.g +=, -=, etc) have default implementations derived from the base operators,
+  -- so we already have stuff like
+  let builtin_add_assg = pure fn lhs: ref @This, rhs => lhs = lhs + rhs
+  -- builtin, so we don't need to define our own #DivAssg and so on.
+}
+-- So a full(ish), generic quaternion class in ~30 lines of code.
+
+let Vector = fn _N: comptime usize, _T: comptime type -> V = (T * N) + struct {
+  pub let T = _T, N = _N -- Save them in the type
+  assert T.@type.@info.isNumeric
+  assert N >= 2
+  alias (w, x, y, z) = when N
+    is > 4 => @compileError("Can't use w/x/y/z for Vectors of N over 4")
+    is 4 => @This.(0, 1, 2, 3)
+    is 3 => (@compileError("No w in Vec3"), @This.0, @This.1, @This.2)
+    is 2 => (@compileError("No w in Vec2"), @This.0, @This.1, @compileError("No z in Vec2"))
+
+  pub let lenSqr = property pure fn self: @This -> l:T = {
+    l = 0
+    -- @tup variable is special and won't trigger swizzle-passthroughs
+    inline for self.@tup -> x => l += x * x
+  }
+  -- We really don't actually need to specify the type for self
+  pub let len = property pure fn self -> l = @sqrt(self.lenSqr)
+  -- Note we don't specify types at all here.
+  -- Thus, this could very well be Vec(3, f64).dot(Vec(3,i32)), etc
+  pub let dot = inline pure fn lhs, rhs -> r = {
+    r.@type = @typeOf(lhs.0 + rhs.0)
+    assert lhs.N == rhs.N
+    inline for (lhs.@tup, rhs.@tup) -> (x, y), i => r += x * y
+  }
+}
+
+-- An NxM matrix of Ts
+let Matrix = fn _N: comptime usize, _M: comptime usize, T: comptime type
+  -> Mat = array((N,M), T) + struct {
+    assert T.@type.@info.isNumeric
+
+    pub let N = _N, M = _M
+
+    pub let IDENTITY: @This = {
+      for IDENTITY -> row, i =>
+        for row -> col, j =>
+          if i == j => col = 1
+    }
+
+    @overloads[#Add] += pure fn lhs: @This, rhs: @This -> res: @This = {
+      inline for (lhs, rhs) -> (lRow, rRow), i =>
+        inline for (lRow, rRow) -> (lCol, rCol), j => res[i][j] = lCol + rCol
+    }
+  
+    -- (nxm) * (mxp) == (nxp)
+    @overloads[#Mul] += pure fn a: @This, b -> c = {
+      assert a.M == b.N
+      c.@type = Matrix(a.N, b.M, @typeof(a[0,0] * b[0,0]))
+      
+      let (n, m, p) = (a.N, a.M, b.M)
+      for c -> row => for row -> col => col = 0 -- Zero here, rather than in loop
+      
+      inline for 0..n -> i =>
+        inline for 0..p -> j =>
+          inline for 0..m -> k => c[i,j] += a[i,k] * b[k,j]
+    }
+  }

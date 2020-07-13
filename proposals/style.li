@@ -1,0 +1,249 @@
+-- This is to provide an official (visual) style guide
+-- This will attempt to stay away from idiom specification
+-- Note that unless otherwise stated, none of these are enforced by the compiler.
+-- Some of these may be specified as a compiletime variable in root, such as:
+@indentSpaces = 2
+-- These are simply to provide common guidelines
+
+-- Tabs/Spaces
+{
+  -- 2 spaces for indentation
+    -- This may be modified 
+  -- No tabs. They're inconsistent and any real editor can insert spaces just as easily.
+}
+
+-- Cases
+{
+  -- UpperCamelCase types (exception: language primitives)
+  let MyVec2 = struct { field x: f32, y: f32 }
+  
+  -- camelCase variables and fields
+  let varName = 10
+  -- Note that properties are included as "variables and fields" here.
+
+  -- Slightly subjective:
+  -- UpperCamelCase enumerations if they're used more as values
+  let Meal = enum (Breakfast, Lunch, Supper, MidnightSnack)
+  -- May degrade back to camelCase if they're used more as union members
+  let Node = enum {
+    enum collider: Collider
+    enum camera: Camera
+  }
+  -- This helps with situations like the above, where you have potential collisions with UpperCamel
+
+  -- snake_case functions
+  let recalculate_weights = fn -> void = {}
+
+  -- Exception to the above:
+  -- snakey_camelCase functions
+  varName.set_propName(100)
+  -- Properties are to be preferred, but this can be nice e.g in swizzles
+  varName.(
+    set_prop1(100),
+    set_prop2(300),
+    
+  )
+
+  -- UPPER_SNAKE_CONSTANTS
+  let PI = 3.14159
+}
+
+-- Braces
+-- Braces ALWAYS bind to their antecedent: (i.e braces are "same line")
+{ -- New block braces have no antecedent, and so just start at indent level
+
+  -- The block here is an expression. The expression starts after the =. Thus { is on the same line
+  -- This makes blocks a special case of expressions in functions (see later)
+  let foo = fn -> void = {
+  }
+
+  -- { always binds to the same line as the control structure
+  if true {
+    -- It's NEVER on the next line.
+  }
+  while true {
+    
+  }
+  until false {
+    
+  }
+  -- and so on...
+
+  -- { always binds to the same line as an operator modifying it:
+  let ty = struct {
+    
+  }
+  let myNum = 1 + {
+    40 + 10
+  }
+  -- and so on...
+
+  -- Always pad the inside of braces that are singlelined:
+  let x = if true { 1 } else { 2 }
+
+
+  -- Even though the following is perfectly valid, don't do it:
+  let x = {10 * 20} + 40
+  -- Other than control structures, which require them, only use {} for multiple expressions
+  -- Instead, use ()
+  let x = (10 * 20) + 40
+}
+
+-- Singleline/multiline
+{
+  -- Simple structs/enums may be on the same line:
+  let Vec2 = struct { field x: f32, y: f32, z: f32 }
+  let Meal = enum { enum Breakfast: u32, Lunch: u32, Supper: u32 }
+  -- A struct/enum with any default values/explicit tags must be multiline
+  -- 
+  let Meal = enum {
+    enum Break
+  }
+
+  -- Simple functions (i.e those with a single expression) may be singlelined
+  let square = pure fn x -> xSquared = x * x
+  -- Those with 2+ may not:
+  let printLn = fn msg -> void = {
+    printf(msg)
+    printf("\n")
+  }
+  -- As a general rule, if you need {} (other than control structures and types), multiline.
+
+  -- If you need to multiline a function's return, the -> should be at the start of the
+  -- normal indent for the function body *on the same line as the return value*
+  let really_long_func_name = pure fn x: slice const str, y: slice const u8
+    -> newSlice: slice const u8 = {
+      -- ...
+    }
+  -- Jury's out on whether the function body should actually get another level of indentation.
+
+  -- Control structures follow the same rule as functions
+  let x = if true { 1 } else { 2 }
+  let y = if true {
+    let z = user_input()
+    z + 120
+  } else { 20 + 50 } -- Note you can mix/match this
+
+  -- Compound literals can also be singlelined if they're simple:
+  let ar = [0, 1, 2, 3, 4]
+  let ar = [:array usize: 0, 1, 2, 3, 4]
+  let v = [:Vec2: .x = 10, .y = 20]
+  -- But if they're more complex, multiline them
+  let v4 = [
+    .x = 10,
+    .y = 20,
+    .z = 30,
+    .w = 40
+  ]
+  -- If a compound literal is multiline and has a type specified, the type is aligned as such:
+  let quat = [
+    :Quat: -- Not bound to the [, but on its own line and indented
+    .x = 10,
+    .y = 20,
+    .z = 30,
+    .w = 40
+  ]
+
+  -- Enforced by the compiler: Indexing ( [] ) must always have the `[` on the same line as its target:
+  let ar0 = ar[0]
+  -- Compare to this:
+  let ar0 = ar
+  [0]
+  -- The above is actually 2 statements: `bind ar to ar0` and `make an array containing 0`
+  -- This restriction is in place to remove the need for semicolons.
+}
+
+-- Naming Conventions
+{
+  -- In general: Try to name things so the code flows like a manuscript (you can read it out loud)
+  
+  -- Don't use hungarian notation. It's ugly and a poor substitute for good tooling.
+  -- Use verbs where possible for function names
+    -- No specification is yet made regarding when to use get_ and set_ in function names
+  -- Use nouns/adjectives/adverbs where possible for variables
+    -- Exception: Use styles like `isOn` or `wasCapital` for naming booleans
+    -- No special style is yet specified for optional values
+  -- Nouns for structs
+  -- Nouns/Adjectives/Adverbs for enums
+  
+  -- This is somewhat in idiom-land, but we'll include it here because it touches on naming.
+  -- The current recommendation is to use properties only for relatively light calculations,
+  -- and use explicit functions for anything heavy.
+  -- Thus, do:
+  let MyVec2 = struct {
+    field x: f32, y: f32
+    let vecLength = property {
+      let get* = pure fn self -> len = @sqrt(self.x * self.x + self.y * self.y)
+    }
+  }
+  -- and:
+  let Database = struct {
+    -- imagine we had some heavy network/whatever stuff here instead of `10`
+    let get_num_customers = fn self -> n = 10
+  }
+
+  -- Of course what's heavy is up to the programmer's discretion. Just don't be a dumdum, eh?
+  -- The general idea is "camelCase is light, snake_case may be heavy"
+
+
+  -- Try to name arrays/tuples in plural:
+  let numbers = [0, 1, 2, 3]
+  let components = (1, 2, 3)
+  -- Of course this can be ignored too:
+  let extensionList = ["VK_EXT_BLAH"]
+}
+
+-- Swizzling
+{
+  -- In this section, we'll call swizzling with the intent of getting a value "swizzling" and
+  -- swizzling without the intent for a value "method chaining"
+  
+  -- Short swizzles may be a single line
+  let (x, y, z) = myVec.(x, y, z)
+  -- Longer swizzles should be multilined
+  let (foo, bar, baz) = something.(
+    x1.x2.x3.x4().x5,
+    -- You get the drift
+  )
+
+
+  
+  -- If you'd write it out as a multiline method chain in another language, multiline it in Ligi
+  something.(
+    foo(),
+    bar(),
+    etc()
+  )
+  -- Related but not entirely an aesthetic style guideline: Never make functions that return *self.
+  -- Ligi's .(func(), func2()) syntax is specifically designed to make functions chaining-agnostic.
+  -- Functions that return self (by value) are fine if self has been mutated in some way. This also
+  -- firms up that .(func1(), func2()) is always operating on the *same* thing, while
+  -- foo.func1().func2() is probably operating on different types/values with each call.
+
+  
+  -- In general, swizzles and method chaining should not be mixed:
+  something.(
+    op1(),
+    op2(),
+    op3()
+  )
+  let (x, y) = something.(x, y)
+
+  -- ...not
+  let (x, y) = something.(
+    op1(),
+    op2(),
+    op3(),
+    x, y -- Hard to tell that these are returns and the other aren't
+  )
+}
+
+
+-- Type creation
+{
+  -- Prefer enum (...) style unless you have reason to use the longer form, such as:
+    -- A need for a different tag type
+    -- A need for different tag values
+    -- A need to store things inside (i.e a union)
+  let Meal = enum (Breakfast, Lunch, Supper)
+}

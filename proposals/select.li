@@ -1,0 +1,38 @@
+-- This is to describe how LINQ-like things could be made in Ligi
+-- using its type-creation facilities
+
+-- Essentially, using the expansion ($) operator, you could specify names for things
+
+let DataItem = struct {
+  field name: str
+  field age: u32
+}
+let data = [ [.name = "John", .age = 20], [.name = "Zargothrax", .age = 1992] ] -- and so on...
+-- Using the zipped iterators idea
+let eql = pure fn s1: str, s2: str -> equal = for (s1, s2) -> (c1, c2){
+  if c1 != c2 { break false }
+} finally { if s1.len == s2.len { true }}
+
+-- This could be an expression that creates an iterator over data that finds items with name="John"
+-- and returns an anon struct with all the same stuff as DataItem + .creator:bool
+let iter = std.from(data)
+  .where(fn item -> keep = eql(item.name, "John"))
+  .map(fn item -> new = [.name = item.name, .age = item.age, .creator = true])
+
+
+-- It could be implemented like this:
+let Base = pure fn Data: type -> t = struct {
+  field items: Data
+  let 
+  let map = fn self: @This, mapper: (fn item -> res) -> newMe = {
+    -- Because you can assign to the @type field of something undef
+    -- I haven't firmed this one up yet, but I assume that @retType is a func's return type
+    newMe.@type = Base + struct {
+      
+    }
+  }
+}
+
+let DefaultBaseIter = pure fn T:type -> res = struct {
+  @for = fn 
+}

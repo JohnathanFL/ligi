@@ -1,0 +1,7 @@
+-- This is to solidify what I've been thinking for a while w.r.t main functions
+
+
+-- Essentially, I'll be removing the need for a "main" function altogether.
+-- Things at the toplevel context are treated as the main function.
+-- Thus, all variables in toplevels are essentially extracted into globals
+-- and have their initializers run when their modules are imported

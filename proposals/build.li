@@ -1,0 +1,103 @@
+-- This is to specify how buildfiles and imports would work
+-- I'd like to preface this with a reminder of the fact that I still have much to learn
+-- about software development in general, much less build systems. I'm no expert.
+
+-- We won't focus on the specifics of the interface for now, just the general flow.
+-- This will be heavily based on Arch's PKGBUILD style and Zig/Cargo's build systems.
+
+-- Additionally, I'm currently planning Ligi with the idea that Ligi will be able to
+-- run in both JIT and compiled contexts, and be able to load more Ligi code to JIT
+-- (if it's compiled into that executable), which would then allow a dogfooding Ligi
+-- compiler to simply JIT this file to do its stuff
+
+-- To build a project, we use the `li` executable in a folder with a `build.li`
+---- `li prepare`: Only needed for some projects. Does any file generation needed.
+---- `li build`: Build the actual project
+---- `li test`: Run any tests in the project
+---- `li run <args>`: Run the project
+---- `li ver`: Get the project version
+---- `li clean`: Remove all build files, including `prepare`-d files
+
+-- An example buildfile:
+
+let builtin = @modules[#Builtin] -- We'll get to this in a bit
+
+-- Could also be just the tuple, rather than a property.
+-- Ligi's builder will just be doing a `.pkgver` anway
+let pkgver: property (usize, usize, usize) -- Major, minor, patch
+
+-- Prepare the build environment
+
+-- Any modules required to run the prepare/install functions
+let makeDepends = []
+
+
+-- Note that this one is *not* pure.
+-- This could include pulling down files that get parsed by comptime functions and so on.
+-- This function is never implicitly invoked, and requires a `li prepare` invocation.
+---- This ensures that builds are more reproducible, as those files don't change between
+---- invocations of `li build`
+---- This function is only allowed to do file IO in a special `prepared` folder.
+let prepare = fn -> void = {}
+-- Install the built artifacts
+let install = fn -> void = {}
+
+-- `li prepare` and `li install` are the only explicitly scriptable build commands. There's no
+-- way to define further commands like `li foo`. You will, however, be able to give args to prepare
+
+-- Link dependencies are added by adding the depends array
+-- This essentially becomes the @modules builtin.
+-- For now, we'll assume a PKGBUILD `source=` style thing.
+-- The values are, in order:
+---- What we'll call this module within our project (an anyenum, must be unique)
+---- How we'll link to it
+------ One of #Static, #Dynamic, #Present
+-------- #Present would be for tools and the like. You don't link it, but it needs to be *present*
+-------- in order to run/use the app/lib. More configurability could be had though the prepare func
+---- How we get it
+------ #Git would take the repo URL and one of:
+-------- #Hash: A commit hash to clone
+-------- #Tag: A tag to clone
+---------- builtin.ligi_ver_str is assumed to be a string that matches the compiler's version,
+---------- that way all modules being compiled share a std
+------ #CLib would use the defined 
+let depends = [
+  (#Std, #Static, #Git("https://github.com/Ligi/std", #Tag(builtin.ligi_ver_str))),
+  (#CStd, #Static, #CLib("c"))
+]
+-- As you can see, I don't plan on std itself actually being any sort of "globally assumed"
+-- thing. You could just as easily import any other module and call it #Std, or even call
+-- the stdlib #CrayonFood if you wanted to. The only universal stuff is @builtins and the
+-- #Builtin module itself.
+-- Thus you can use your own stdlib or even full no-std just by not adding a line
+-- to your 
+
+-- Our project's file. It is assumed that all modules have only one root.
+let root = "src/main.li"
+-- What this module creates.
+-- It is assumed that every build.li (and thus every module) produces only one thing.
+let output = #Executable("bob")
+
+-- Any options we need to give the compiler
+let opts = [
+  #CIncludePath("/usr/include"), -- Add a .h search path
+  #CLinkPath("/usr/lib") -- Add a .so/.a search path
+]
+
+
+
+-- Note that there's no need to add an explicit "test" build step/command.
+-- The compiler will simply take the root specified and run all tests
+-- found in it recursively.
+
+
+-- Then, src/main.li could look like this:
+
+
+let std = @modules[#Std], cstd = @modules[#CStd]
+-- The @modules builtin includes all modules added in bc.modules, using the same
+-- enum literal to refer to each (which is why #Std/etc must be unique)
+
+let main = fn args: slice str -> usize = {
+  -- ...
+}

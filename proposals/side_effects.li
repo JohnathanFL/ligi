@@ -1,0 +1,51 @@
+-- This is to explore the idea of adding a side-effect system to Ligi
+-- It would tie in with the `pure` operator by simply saying "no side-effects here"
+-- The counter-proposal would be simply keeping `pure` and making that the only effect-tracker
+
+-- Essentially, we'd have a way of annotating a function with the "side-effects" they produce
+
+-- Problem: `fn` statements currently have no clear place to place the side-effect annotations
+
+-- Global things:
+---- We'd be using anyenums to represent the side effects themselves
+------ + No new syntax/annotations to make a "side-effect type"
+---- Any function not annotated with side-effects is assumed to have all side-effects
+
+
+-- Sol #1: Use the @() annotation notation
+@(#Effects(#StdIO))
+-- Or
+@(#Affects(#StdIO))
+-- Depending on if we want it to be treated as a verb or a noun
+-- (it affects these vs. it has these effects)
+let printer = fn -> void = printf("Hello, world!")
+-- - Slightly verbose
+-- + No new syntax required, just the normal stack-annotations
+-- ~ How do we annotate function types?
+
+-- Sol #2: Change the `fn` statement: (Multiple options here)
+
+-- Sol #2.1: `~ side_effects` syntax:
+let printer = fn ~ #StdIO -> void = printf("Hello, world")
+-- + Because `~` in its normal usage is unary, this has no ambiguity
+-- - It looks kinda weird
+
+-- Sol #2.2: Side-effect "arguments":
+-- Essentially, "side-effects" are treated like arguments, to be passed around
+-- This would fit with the idea that a pure function has no side-effects, and so cannot
+-- "pass" those side effects into the more liberal function
+-- The side-effects would have to be placed after all other args
+let printer = fn a, b, #StdIO -> void = printf("{} says hello, {}", a, b)
+-- + Doesn't require all that big of a syntax change, but it's....
+-- - Slightly more parsing complexity than the others
+-- - Kinda odd looking
+
+-- Sol #2.3: The "extra return" setup:
+-- Basically #2.1 with nicer looking syntax
+let printer = fn a, b => (#StdIO) -> void = printf("{} says hello, {}", a, b)
+-- - Makes it harder to use => for other things later, if we do that
+
+-- Sol #3: `fntype + (tuple of side_effects)`
+let printer: fn -> void + (#StdIO) = fn -> void = printf("Hello, world!")
+-- + Absolutely no new syntax
+-- - Lots of extra typing

@@ -1,0 +1,25 @@
+-- Right now, we have stuff like
+
+when x + y + z
+  is 10 {}
+  else {}
+
+-- But what if we wanted to use the value of the is expression inside?
+-- We'd have to do
+let expr = x + y + z
+when expr
+  is 10 {} -- use expr somewhere
+  else {}
+-- Or repeat the expression, which, although repeatable for pure things like `+`,
+-- may not be for function calls.
+
+
+-- This proposes allowing the store-in (`->`) operator on a when to capture its expression
+when x + y + z -> expr
+  is 10 {} -- use expr somewhere
+  else {}
+
+-- This could also tie in with proposals/using_for.li, and also allow
+when using x + y + z -> expr
+  is 10 {} else {}
+-- To allow it to be cleaned up automatically

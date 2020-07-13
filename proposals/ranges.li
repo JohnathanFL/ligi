@@ -1,0 +1,29 @@
+-- This is to try and firm up the Range semantics
+
+
+-- Draft of the structure
+-- This would be what get called by `..` and `..=`
+
+let Range = pure fn T:comptime type -> R = struct {
+  field a: T, b: T
+  field cond: enum ( #LtEq, #Lt ) -- a..=b or a..b ?
+
+  pub let init = pure fn a: T, b: T, cond -> self: @This = {
+    if a <= b => self.(a, b) = (a, b)
+    else => self.(a, b) = (b, a)
+    self.cond = cond
+  }
+  @overloads[#In] += pure fn x: T, self: @This -> isIn: bool = when self.cond
+    is #LtEq => x >= self.a and x <= self.b
+    is #Lt => x >= self.a and x < self.b
+
+  @overloads[#For] += fn self: @This, do => {
+    var i = self.a
+    while i in self {
+      do(i)
+      i += 1
+    }
+  }
+}
+
+

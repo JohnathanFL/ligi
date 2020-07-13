@@ -1,0 +1,40 @@
+-- This is a more radical proposal.
+-- With the addition of ranged enums, I've realized I can now represent
+-- ?*T's ability to be stored without overhead in an enum
+-- Thus, we could "remove" optionals.
+-- By that, I do not mean removing the ? operator.
+-- I mean that `?T` will be a sugar for `builtin.Opt(T)` (or something like that).
+-- We'd just no longer have a special type for representing optionals over enums
+
+-- Packed to ensure it has the exact same size as the pointer
+let OptPtr = pure fn T: comptime type -> O = packed enum {
+  @tagType = *T
+
+  -- I'm thinking the compiler would just make an exception to the pointer arithmetic ban to
+  -- allow it for enums
+  -- Otherwise, we'll need to think of another way around this little snag
+  enum None = 0.as(*T)
+  enum Some = 1.as(*T)..usize.max.as(*T)
+
+  alias val = @This.Some
+  -- We'd additionally have to add some way to capture the .val
+  -- Since we're removing the only other capturable thing (optionals), why
+  -- not just make what gets captured configurable with an @?
+  alias @val = @This.val
+  
+  let has = property pure fn self -> hasIt = self == #Some
+  -- To go with the @val, @has would be used to check for the ability to capture, and would
+  -- be the enum that is considered "active" for the purposes of capturing
+  alias @has = #Some
+
+}
+
+let null = #None -- the anyenum, not a concrete enum
+
+let x = 10
+let xPtr: OptPtr(usize) = #Some(x.addr)
+assert xPtr != #None and xPtr != null
+-- Using the @has and @val
+if xPtr -> ptr => assert ptr.deref == 10
+-- Also works since while works on the same 
+while xPtr -> ptr => break

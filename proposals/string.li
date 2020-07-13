@@ -1,0 +1,34 @@
+-- This is to explore the idea of adding a dedicated string type to Ligi
+
+
+-- Currently, we have `str`, which is an alias for `slice const u8`
+-- However, this doesn't allow for easy string comparisons
+
+
+
+-- Proposal: Turn the `str` type into a full object
+-- This means it's no longer a pointing type (which is what a slice is, really),
+-- which frees us to implement a proper equality check, among other things
+
+-- Note that this proposal can (and likely will) be implemented in userspace (std)
+
+let string = "Hello"
+assert string.@type == str
+-- .bytes type would hold the actual slice
+assert string.bytes.@type == slice const u8 
+-- Thus we can overload == for it
+assert string == "Hello"
+-- A str would also have the concept of whether or not it owns its data, thus giving us CoW (kinda)
+
+
+
+
+-- Let's just try writing the class
+
+let str = enum {
+  enum Owned: struct {
+    field string: slice u8 -- The "size"
+    field storage: slice u8 -- The "capacity"
+  }
+  enum Borrowed: 
+}

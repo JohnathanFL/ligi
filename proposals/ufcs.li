@@ -1,0 +1,107 @@
+-- This is about adding UFCS (universal function call syntax) to Ligi
+
+
+-- There will be two parts in this proposal, which may be added together or separately:
+---- 0: Searching local namespaces to resolve functions
+------ Current plan: The `::` (pipeline) operator
+---- 1: Calling functions without parentheses (i.e as unary or binary ops)
+------ Not currently planned.
+
+
+-- Part 0:
+---- This would allow things like:
+let add = pure fn a, b -> c = a + b
+assert 1.add(2) == 1 + 2
+-- Note that existing methods/properties would have precedence:
+let val = pure fn a:?usize = b:bool = a.has
+let v: ?usize = 10
+assert v.val == 10 -- Not a bool
+
+-- New way for Part 0:
+-- Since `.` syntax makes it harder to differentiate between builtin methods and freestanding
+-- functions, I propose adding the `::` operator, which would act as a function applier:
+-- Inspiration from that C preprocessor dude in /r/ProgrammingLanguages on a UFCS thread
+assert 1::add(2) == 3
+let pow = fn x, y -> p = when y
+  is 0 { 1 }
+  is 1 { x }
+  else { x * x::pow(y - 1) }
+assert 2::pow(2) == pow(2, 2)
+
+-- The `::` operator would work below unary operators, at the same level as the `.` operator:
+assert foo::module.func(arg) == module(foo).func(arg)
+-- Thus, you must qualify function names if truly needed with parens:
+assert foo::(module.func)(arg) == module.func(foo, arg)
+-- This is an intentional ugliness. If you want the function, you should just `use` it directly.
+
+-- This new operator would also make formatting a little prettier:
+"Hello, world"::printf() 
+"Hello, {}."::printf("John")
+
+-- Exact specification on how pipelines will work:
+-- Each access can be seen as a "call" to the `.` operator, with the set of arguments
+-- being the path. Each Call ( `()` and `[]` ) is then another argument in the list
+-- The pipeline works similarly, and translates each `::` delimited expression into one
+-- argument to the "call"
+-- In each expression, it passes the current accumulation to the first Call it finds
+-- in the access. So
+1::b.c().d()
+-- translates as
+1::b.c(1).d()
+-- not
+1::b.c().d(1)
+-- To override this, use parens
+1::(b.c()).d()
+
+-- If a pipeline can't find a Call by the time it reaches the end of the access, as in
+"Hello world"::printf
+-- it will add a call to the end. Thus the above translates as
+"Hello world"::printf()
+-- and then as
+printf("Hello world")
+
+
+
+-- Part 1:
+---- This would allow things like this:
+let neg = pure fn a -> b = -a
+assert (neg 1) == -1
+
+-- Would NOT allow things like this:
+let add = pure fn a, b -> c = a + b
+assert (4 add 6) == (4 + 6)
+-- As allowing that would make it be parsed as `4(add)(6)`
+
+-- This would make the type functions slightly more ergonomic:
+let rc: Rc usize -- As it's now implicitly parsed as `Rc(usize)`
+let arList: ArrayList usize
+
+
+-- Major problem with Part 1: Ligi already returns values, and `symbol` on its own is a value.
+-- Thus, we end up in Nim's scenario where you need to use () on solitary functions, like so:
+let say_hi = fn -> void = printf("Hello, world!\n")
+say_hi -- Returns a value of type `fn -> void`
+say_hi() -- Calls say_hi and yields a value of type `void`
+-- However the following is still fine as it has an argument:
+let echo = fn msg: comptime str -> void = printf(msg)
+echo "Hello, world!"
+
+-- We could additionally allow multiple arguments (if comma separated)
+printf "Hello, {}", "Johnathan"
+-- This would still require parentheses around multiple invocations to remove ambiguity about
+-- which function an argument binds to.
+printf "1+2={}", add 1, 2    -- BAD - Parsed as printf("", add, 1, 2)
+printf "1+2={}", (add 1, 2)  -- GOOD
+printf("1+2={}", add 1, 2)   -- BAD - Parsed as printf("", add, 1, 2)
+printf("1+2={}", (add 1, 2)) -- GOOD
+printf("1+2={}", 1 add 2)    -- BAD - Parsed as printf("", 1(add(2)))
+-- However I believe the tradeoff may be worth it for the expressive power
+-- (see the `below` template in Ligi's compiler's source code)
+
+
+-- Thus, in summary, Part 1 would:
+---- Essentially allow defining new unary operators
+---- NOT allow defining new unary operators (because of ambiguity)
+
+
+-- Currently: The plan does NOT include Part 1

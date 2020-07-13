@@ -1,0 +1,84 @@
+-- This is to explore possibilities for a match/switch statement in Ligi
+
+-- If I do any of these, I'll be swapping -> and =>
+  -- See the hybrid one
+
+-- The examples will be doing FizzBuzz
+
+-- Note that these rely on being able to have `== _` always be true
+
+let num = 15
+
+-- C#-ish style (case as a binary operator-style structure)
+(num % 3, num % 5) case
+  of (0, 0) => printf("FizzBuzz"),
+  of (0, _) => printf("Fizz"),
+  of (_, 0) => printf("Buzz"),
+  of _ => printf(num)
+-- Pros
+  -- Preserves the fact that {} always denote a block of statements
+-- Cons
+  -- doesn't allow nesting without further braces
+
+
+-- Rust style
+var res = match (num % 3, num % 5) {
+  (0, 0) -- ...the exact same as rust. You get the idea
+}
+
+
+-- Kinda hybrid
+-- Using single_capture as the same capture as a `loop`
+-- when <-- 'when' expr when_cond {',' when_cond} [ 'else' [single_capture]]
+-- when_cond <-- 'is' [bin_op] expr [single_capture]
+when (num % 3, num % 5)
+  is (0, 0) -> printf("FizzBuzz"),
+  is (0, _) -> printf("Fizz"),
+  is (_, 0) -> printf("Buzz"),
+  else => printf(num)
+
+-- Pros:
+  -- *Very* readable ("when 10 is x then x*10...when 10 is greater than 100... else it's a val and
+    -- we do val*10 ")
+  -- `when` matches `is` well and `is` matches adding binary ops well
+-- Cons:
+  -- It may be better to swap `->` and `=>` if we go this route. Then -> is pure implication and
+    -- => is assignment(capture), as the `=` in it would imply
+  -- Still requires braces for nesting
+
+-- Braced hybrid - Current frontrunner
+-- when <- 'when' expr when_is {when_is} [else block]
+-- when_is <- 'is' [bin_op] [single_capture] block
+-- Like the last hybrid, `is` without a bin_op implies `is == `
+when (num % 3, num % 5)
+  is (0, 0) { printf("FizzBuzz") }
+  is (0, _) { printf("Fizz") }
+  is (_, 0) { printf("Buzz") }
+  else -> capture { printf(num) }
+
+-- Pros:
+  -- Requires no commas
+  -- Braces clearly delimit what's part of the outer when (for nesting)
+  -- Can still do 'is bin_op' style easily
+  -- Matches other control structures better
+-- Cons:
+  -- Lots of braces, though this is how I have all other control structures
+  -- Removes the ability to use `is` elsewhere
+
+-- Possible additional feature: Allowing swizzling with `when`:
+let Vec3 = struct {
+  field x: f32, y: f32, z: f32
+}
+let v = [:Vec3: .x = 0, .y = 0, .z = 0]
+when v
+  is .x == 10 {}
+  is .z == 10 {}
+-- My problem with this style is that it doesn't read as well
+---- "when v is field x equals 10". Wut?
+-- Another possibility: when/has:
+when v
+  has x == 10 {}
+  has z == 10 {}
+-- It would essentially be the same as the other `is .x` (i.e the access interpreter starts out
+-- in v's scope without a .)
+-- My problem with this one is that `has` seems like a word that'd be nice for users' use
