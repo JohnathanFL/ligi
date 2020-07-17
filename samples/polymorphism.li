@@ -1,0 +1,24 @@
+-- Ligi does not have "polymorphism", as such, built into the language
+
+-- You can "inherit" from another type with type addition:
+let MyVec2 = struct { field x: f32, y: f32 }
+let MyVec3 = MyVec2 + struct { field z: f32 }
+-- But this doesn't allow any kind of dynamic dispatch
+
+
+-- If you want polymorphism for its dynamic dispatch, just make an enum and redirect methods/props
+let Shape = enum {
+  enum
+    Square: struct {
+      field l: f32
+      let area = property pure fn self -> a = l*l
+    },
+    Circle: struct {
+      field r: f32
+      let area = property pure fn self -> a = f32.PI * r*r
+    }
+
+  let area = property pure fn self -> a = when self
+    is #Square -> sq => sq.area
+    is #Circle -> ci => ci.area
+}

@@ -42,3 +42,16 @@ let say_hi = fn -> printf = ("Saluton!")
 
 -- This new change allows us to get rid of `void`'s special semantics and keep it
 -- as another pre-defined variable.
+
+-- Update as of 07/16/20: We now have a new void style:
+let say_hi = fn => printf("Saluton!")
+-- This canonicalizes `=>` as *the* "then" or "do" punctuation
+
+-- Additionally, I'm going to be changing function types from old notation
+let say_hi_type = fn -> _:void
+-- to a new "function" unary op
+let say_hi_type = function ((), void)
+-- you would specify arguments with other values in the tuple
+let add_type = function ((i32, i32), i32)
+-- you can also use `undef` to specify a malleable/generic arg/ret
+-- Possible alternative: naming "function" "func" for less typing
