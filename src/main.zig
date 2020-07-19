@@ -4,7 +4,8 @@ const testing = std.testing;
 const ast = @import("ast.zig");
 const Parser = @import("Parser.zig");
 const Pretty = @import("Pretty.zig");
-const eval = @import("evaluation.zig");
+const types = @import("types.zig");
+const Evaluator = @import("Evaluator.zig");
 
 test "lexer tests" {
     _ = @import("lexing.zig");
@@ -53,7 +54,7 @@ pub fn main() !void {
             }
             var block = try Parser.parse(input.items, &arena.allocator);
             Pretty.print(block, 0);
-            var c: eval.Context = undefined;
+            var evaluator = Evaluator.init(&arena.allocator);
         }
     } else { // REPL
         std.debug.warn("REPL\n", .{});
@@ -64,7 +65,6 @@ pub fn main() !void {
             try stdin.readUntilDelimiterArrayList(&input, '\n', MAX_INT);
             var block = try Parser.parse(input.items, &arena.allocator);
             Pretty.print(block, 0);
-            var c: eval.Context = undefined;
         }
     }
 }

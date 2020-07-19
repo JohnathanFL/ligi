@@ -4,6 +4,7 @@
 
 const std = @import("std");
 const str = []const u8;
+const types = @import("types.zig");
 const ArrayList = std.ArrayList;
 const StrHashMap = std.StringHashMap;
 
@@ -60,7 +61,7 @@ pub const Op = enum {
     Index,
 
     Access,
-    Pipeline,
+    Pipeline, // Only exists in pre-eval tree
 };
 
 pub const BindOp = enum {
@@ -71,19 +72,10 @@ pub const BindOp = enum {
     Enum,
     Alias,
 };
-pub const BindLevel = enum {
-    Pub,
-    Priv,
-};
-
+pub const BindLevel = enum { Pub, Priv };
 pub const BindLoc = union(enum) {
-    Tuple: struct {
-        locs: ArrayList(BindLoc),
-        ty: ?*Expr,
-    },
-    Named: struct {
-        name: str, ty: ?*Expr
-    },
+    Tuple: struct { locs: ArrayList(BindLoc), ty: ?*Expr },
+    Named: struct { name: str, ty: ?*Expr },
 };
 
 pub const LocInit = struct { loc: BindLoc, init: ?*Expr };
@@ -102,7 +94,7 @@ pub const Tuple = struct { as: ?*Expr, vals: ExprList };
 pub const Struct = struct { as: ?*Expr, fields: FieldList };
 pub const Array = struct { as: ?*Expr, vals: ExprList };
 pub const Bind = struct {
-    using: bool,
+    using: bool, // implicit defer
     level: BindLevel,
     op: BindOp,
     locs: ArrayList(LocInit),
@@ -146,30 +138,44 @@ pub const Loop = struct {
 // By convention, everything else is stored by value (in ArrayLists, if need be)
 // TODO: Refactor the inner structs out into proper named structs
 pub const Expr = union(enum) {
+    // Specials
+    NOP: void,
     /// TODO: The `$` operator. Takes the value an "expands" it into the AST
     Expansion: *Expr,
-    // Must be an access
-    Use: *Expr,
 
-    NOP: void,
+    // Values
     Word: str,
-    Continue: ?str,
-    Str: str,
-    Block: Block,
     EnumLit: EnumLit,
     Tuple: Tuple,
     Struct: Struct,
     Array: Array,
+    Str: str,
+
+    // Statements
+    Continue: ?str,
+    Block: Block,
     Bind: Bind,
     Break: Break,
     Return: ?*Expr,
     Assert: Assert,
-    /// TODO: Why not rework the Block to have a list of deferred statements?
-    Defer: *Expr,
-    Call: Call,
-    Func: Func,
-    Macro: Macro,
+
+    // Control flow
+    Call: Call, // includes operators AND ()/[]
     If: If,
     When: When,
     Loop: Loop,
+
+    ////
+    // Only in post-eval tree
+    ////
+    Type: types.TypeID,
+    FuncID: usize, // compiled form
+
+    ////
+    // Only in pre-eval tree
+    ////
+    Macro: Macro,
+    Func: Func, // uncompiled form
+    Defer: *Expr,
+    Use: *Expr, // Expr must be an Access
 };
