@@ -19,6 +19,12 @@ be surprised if you see a lot of `:)` in the code. :)
 - Heavy focus on making syntax sugary but readable. Things should be close to an English sentence
   in readability.
 
+## Principoj de Ligi
+* Code should flow in both reading *and* writing.
+  * Code should read like a novel, where each page foreshadows the next.
+* Big honkin' errors are better than tricksy little bugs.
+* Make it easy to do the right thing.
+  * If you want to shoot yourself in the foot, who am I to stop you?
 
 ## Small taste
 ```
@@ -55,12 +61,17 @@ assert c.(x, y) == (5, 7)
 
 -- 2D Vector (alternative distinct-tuple version)
 -- Adding a tuple-type to a struct makes it a "compound tuple". (i.e "distinct from normal")
-let Vec2 = (f32, f32) + struct {}
+let Vec2 = (f32, f32) + struct {
+  -- A property can have getters, setters, and more
+  -- `property` with only one argument is just a getter
+  pub let len = property pure fn (x, y): @This -> length = @sqrt(x*x + y*y)
+}
 -- Tuples can have a :type: specifier at the beginning just like arrays and structs
 let a = (:Vec2: 1, 2), b = (:Vec2: 4, 5)
 -- All tuples have arithmetic operators defined for 1:n and n:n, so we
 -- don't need to explicitly make them here.
 let c = a + b
+assert c.len == @sqrt(5*5 + 7*7)
 
 -- Pipelines (pseudo-UFCS)
 -- Void functions can leave off result locations with => instead
