@@ -193,7 +193,7 @@ pub fn parseStmt(self: *Parser) Error!*ast.Expr {
             _ = try self.match(.Break);
             const lab = if (self.tryMatch(.Label)) |label| label.str else null;
             const val = if (self.tryMatch(.Colon)) |_| try self.parseExpr() else null;
-            return self.newExpr(.{ .Break = .{ .label = lab, .val = val } });
+            return self.newExpr(.{ .Break = .{ .from = lab, .with = val } });
         },
         .Return => {
             _ = try self.match(.Return);

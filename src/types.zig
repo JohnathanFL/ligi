@@ -20,36 +20,78 @@ pub const TypeType = enum {
     AnyFunc,
     Func,
     Ast,
+    Property,
 
     Ref,
     Ptr,
+    Type,
 
     Tuple,
 
+    Ext,
     Struct,
     Enum,
+    Array,
+    Slice,
 };
 
 pub const FloatType = enum { F32, F64 };
 
+pub const Static = union(enum) {
+    Func: FuncID,
+    Var: union(enum) {
+        Var: TypeID,
+        Property: Property,
+    },
+};
+
+pub const Property = struct {
+    get: ?FuncID,
+    set: ?FuncID,
+    /// The below are only tentative for now, but you get the idea. Properties
+    /// will be for more than just get/set. e.g you could have array.rev to index/iter in reverse
+    iter: ?FuncID,
+    iter_mut: ?FuncID,
+};
+
 /// This is the structure that will be directly exposed as @typeinfo
 /// Must be trivially copyable and immutable
-/// Statics are stored in another list (indexed by TypeID), as anything can have them
+/// Statics are stored in another list (indexed by TypeID), as anything can have them. See the Static type
 pub const TypeInfo = union(TypeType) {
     Undef,
     Sink,
     Void,
     Bool,
-    AnyEnum: void,
+    Type,
+    AnyEnum,
+    AnyFunc,
+    Ast: void,
+    Ptr,
+    Ref: TypeID,
+    Slice: TypeID,
     Int: struct { signed: bool, bits: usize },
-    USize,
-    ISize: void,
     Float: FloatType,
     Func: FuncType,
     Tuple: []const TypeID,
+    Array: struct { size: usize, ty: TypeID },
+    /// For example, the builtin str type is `slice const u8 + struct {...}`
+    /// There, the inner is `slice const u8`, and the
+    /// Any type arithmetic where one side is a primitive (including tuples) is an Ext.
+    /// Any type arithmetic where one side adds no fields is an Ext.
+    /// Exts may also not add new fields, only new statics.
+    /// Exts may coerce into their base.
+    Ext: TypeInfo,
     Struct: struct {
-        fields: []const struct { public: bool, name: str, ty: TypeID, def: *ast.Expr },
-        states: []const struct { name: str, cond: *ast.Expr },
+        /// Was this a primitive type before?
+        /// If from!=null, then
+        from: ?TypeID,
+        fields: []const struct {
+            public: bool,
+            name: str,
+            ty: TypeID,
+            // Evaluated each time @This is instantiated without specifying this field.
+            def: *ast.Expr,
+        },
         pack: bool,
         external: bool,
     },
@@ -110,36 +152,78 @@ const FuncTypeMap = std.HashMap(
     TypeInfo.FuncType.hash,
     TypeInfo.FuncType.eql,
 );
+const NUM_INTS = 1024;
+const U1_ID = 1;
+const I1_ID = 1025;
+pub fn int_id(bits: usize) TypeID {
+    return I1_ID + bits - 1;
+}
+pub fn uint_id(bits: usize) TypeID {
+    return U1_ID + bits - 1;
+}
+// const USIZE_ID = 2049;
+// const ISIZE_ID = 2050;
+
+pub const SINK_ID = 2051;
+pub const BOOL_ID = 2052;
+pub const F32_ID = 2053;
+pub const F64_ID = 2054;
+pub const ANYENUM_ID = 2055;
+pub const ANYFUNC_ID = 2056;
+pub const AST_ID = 2057;
+pub const VOID_ID = 2058;
+pub const TYPE_ID = 2059;
 
 pub const TypeDB = struct {
     pub const Self = @This();
+    pub const TypeMap = std.AutoHashMap(TypeID, TypeID);
+    pub const SizeToTypeMap = std.AutoHashMap(usize, TypeID);
+    pub const StaticMap = std.AutoHashMap(TypeID, std.StringHashMap(Static));
     alloc: *std.mem.Allocator,
     // mapped to (id - MAX_PRIM)
     types: std.ArrayList(TypeInfo),
+    // Note this does not let us look up a type by name.
+    // That must be done in context.
     names: std.AutoHashMap(TypeID, str),
+    // inner -> count -> array(count, inner)
+    arrays: std.AutoHashMap(TypeID, SizeToTypeMap),
+    // Maps slice, const, comptime, etc to their type maps
+    // arrays handled separately because they're op(size,type), not op(type)
+    op_types: std.AutoHashMap(ast.Op, TypeMap),
     // The key is the same value that's in the TypeInfo
     tuples: TypeSetMap,
     // The arg slice in the TypeInfo is a subslice of [0..-1] of this key
     funcs: FuncTypeMap,
+    // id -> name -> static{var,prop,func}
+    statics: StaticMap,
+
     next_id: TypeID = MAX_PRIM,
 
-    pub fn init(alloc: *std.mem.Allocator) @This() {
+    pub fn init(alloc: *std.mem.Allocator) Self {
         return .{
             .alloc = alloc,
             .types = std.ArrayList(TypeInfo).init(alloc),
+            .names = std.AutoHashMap(TypeID, str).init(alloc),
+            .arrays = std.AutoHashMap(TypeID, SizeToTypeMap).init(alloc),
             .tuples = TypeSetMap.init(alloc),
             .funcs = FuncTypeMap.init(alloc),
-            .names = std.AutoHashMap(TypeID, str).init(alloc),
+            .op_types = std.AutoHashMap(ast.Op, TypeMap).init(alloc),
+            .statics = StaticMap.init(alloc),
         };
     }
 
     pub fn tupID(self: *Self, ty: TypeSet) TypeID {
         if (self.tuples.getValue(ty)) |id| return id;
 
-        const id = self.next_id;
-        self.next_id += 1;
+        const id = self.nextID();
         const set = self.alloc.dupe(TypeID, ty);
         self.tuples.put(ty, id);
+        return id;
+    }
+
+    fn nextID(self: *Self) TypeID {
+        const id = self.next_id;
+        self.next_id += 1;
         return id;
     }
 
@@ -148,43 +232,68 @@ pub const TypeDB = struct {
     pub fn funcID(self: *Self, ty: TypeInfo.FuncType) TypeID {
         if (self.funcs.getValue(ty)) |id| return id;
 
-        const id = self.next_id;
-        self.next_id += 1;
+        const id = self.nextID();
         const set = self.alloc.dupe(TypeID, set) catch unreachable;
         self.funcs.put(set, id);
         return id;
     }
 
+    pub fn opID(self: *Self, op: ast.Op, inner: TypeID) TypeID {
+        // Note that HashMap does not alloc memory until you use it, so it's safe to
+        // pass a "new" HashMap each time we call this.
+        const map = self.op_types.getOrPutValue(op, TypeMap.init(self.alloc)) catch unreachable;
+        const slot = map.value.getOrPut(inner) catch unreachable;
+        if (!slot.found_existing) slot.kv.value = self.nextID();
+        return slot.kv.value;
+    }
+
+    pub fn arrayID(self: *Self, inner: TypeID, size: usize) TypeID {
+        if (self.arrays.getValue(inner)) |ars| {
+            if (ars.getValue(size)) |id| return id;
+
+            const id = self.nextID();
+            ars.putNoClobber(size, id) catch unreachable;
+            return id;
+        } else {
+            const id = self.nextID();
+            var map = SizeToTypeMap.init(self.alloc);
+            map.putNoClobber(size, id) catch unreachable;
+            self.arrays.putNoClobber(inner, map) catch unreachable;
+        }
+    }
+
+    pub fn sliceID(self: *Self, inner: TypeID) TypeID {
+        return self.opID(.Slice, inner);
+    }
+    // TODO: This currently allows "const const const foo" to be distinct from "const foo",
+    // even though they are logically equivalent
+    pub fn constID(self: *Self, inner: TypeID) TypeID {
+        return self.opID(.Const, inner);
+    }
+    // TODO: See TODO on constID
+    pub fn comptimeID(self: *Self, inner: TypeID) TypeID {
+        return self.opID(.Comptime, inner);
+    }
+
     // This is to be considered the sole source of truth. Nothing outside this function
     // should rely on the exact values of the IDs (at least not hardcoded)
+    // Exception: #Undef can be assumed to be 0
     pub fn getTypeInfo(self: @This(), id: TypeID) TypeInfo {
-        const num_ints = 1024;
-        const u1_id = 1;
-        const i1_id = 1025;
-        const usize_id = 2049;
-        const isize_id = 2050;
-
-        const sink_id = 2051;
-        const bool_id = 2052;
-        const f32_id = 2053;
-        const f64_id = 2054;
-        const anyenum_id = 2055;
-        const anyfunc_id = 2056;
-        const ast_id = 2057;
-
         return switch (id) {
-            0 => .{ .Void = .{} },
-            u1_id...(u1_id + num_ints) => .{ .Int = .{ .signed = false, .bits = id - u1_id + 1 } },
-            i1_id...(i1_id + num_ints) => .{ .Int = .{ .signed = true, .bits = id - i1_id + 1 } },
-            usize_id => .{ .Int = .{ .signed = false, .bits = null } },
-            isize_id => .{ .Int = .{ .signed = false, .bits = null } },
-            sink_id => .{ .Sink = .{} },
-            bool_id => .{ .Bool = .{} },
-            f32_id => .{ .Float = .F32 },
-            f64_id => .{ .Float = .F64 },
-            anyenum_id => .{ .AnyEnum = .{} },
-            anyfunc_id => .{ .AnyFunc = .{} },
-            ast_id => .{ .Ast = .{} },
+            0 => .{ .Undef = .{} },
+            U1_ID...(U1_ID + NUM_INTS) => .{ .Int = .{ .signed = false, .bits = id - U1_ID + 1 } },
+            I1_ID...(I1_ID + NUM_INTS) => .{ .Int = .{ .signed = true, .bits = id - I1_ID + 1 } },
+            // USIZE_ID => .{ .Int = .{ .signed = false, .bits = null } },
+            // ISIZE_ID => .{ .Int = .{ .signed = false, .bits = null } },
+            SINK_ID => .{ .Sink = .{} },
+            BOOL_ID => .{ .Bool = .{} },
+            F32_ID => .{ .Float = .F32 },
+            F64_ID => .{ .Float = .F64 },
+            ANYENUM_ID => .{ .AnyEnum = .{} },
+            ANYFUNC_ID => .{ .AnyFunc = .{} },
+            AST_ID => .{ .Ast = .{} },
+            VOID_ID => .{ .Void = .{} },
+            TYPE_ID => .{ .Type = .{} },
 
             else => info: {
                 if (id < MAX_PRIM) @panic("UNKNOWN PRIMITIVE TYPE");

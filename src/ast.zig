@@ -99,9 +99,10 @@ pub const Bind = struct {
     op: BindOp,
     locs: ArrayList(LocInit),
 };
-pub const Break = struct { label: ?str, val: ?*Expr };
+pub const Break = struct { from: ?str, with: ?*Expr };
 pub const Assert = struct { expr: *Expr, msg: ?str };
 // This includes `.`, `::`, `()`, and `[]`
+// The first argument of `()` and `[]` are the object we are calling/indexing
 pub const Call = struct { op: Op, args: ExprList };
 pub const Func = struct {
     args: ArrayList(BindLoc),
@@ -170,6 +171,9 @@ pub const Expr = union(enum) {
     ////
     Type: types.TypeID,
     FuncID: usize, // compiled form
+    Bool: bool,
+    Int: isize,
+    Float: f64,
 
     ////
     // Only in pre-eval tree

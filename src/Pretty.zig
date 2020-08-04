@@ -176,8 +176,8 @@ fn pretty(self: *@This(), node: *ast.Expr) void {
         },
         .Break => |b| {
             self.write("Break");
-            if (b.label) |lab| self.fmt(" {}", .{lab});
-            if (b.val) |val| {
+            if (b.from) |lab| self.fmt(" {}", .{lab});
+            if (b.with) |val| {
                 self.pretty(val);
             }
         },
