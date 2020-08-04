@@ -1,0 +1,20 @@
+-- This is to specify the usage of the <=> operator ("spaceship")
+
+-- The spaceship returns a type that looks like:
+let Cmp = enum {
+  -- Stored
+  enum Eq, Lt, Gt
+
+  -- Calculated, taking advantage of enums based on functions ("states")
+  enum
+    Neq = pure fn self -> neq = self != #Eq,
+    LtEq = pure fn self -> le = self in (#Lt, #Eq),
+    GtEq = pure fn self -> ge = self in (#Gt, #Eq)
+}
+
+-- If the <, <=, ==, !=, >, or >= operators are not explicitly overloaded
+-- for that type, then their default implementations will fall back on <=>
+
+-- It shall be considered best practice to only overload <=>, unless there are
+-- optimizations that can be made for the other paths, such as for string equality,
+-- where you can short circuit on the length.

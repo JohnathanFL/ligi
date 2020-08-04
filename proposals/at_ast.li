@@ -1,0 +1,37 @@
+-- This is to specify functions that create AST nodes
+-- Using the #{} "quoting" syntax
+
+-- if:
+-- Note `x` does not yet exist
+-- array( tuple( cond, capture, then ) ), finally
+let myIf = @if([(#{x == 10}, null, #{printf("x was 10")})], null)
+let x = 10
+$myIf --=== if x == 10 => printf("x was 10")
+
+-- for:
+-- range, capture, do, finally
+let myFor = @for(
+  #{0..100},
+  (#i, #cnt),
+  #{ printf("i={}, cnt={}", (i, cnt)) },
+  #{printf("Hit finally")},
+)
+$myFor --=== for 0..100 -> i, cnt {printf("i={}, cnt={}", (i,cnt))}finally => printf("hit finally")
+
+
+-- Perhaps most importantly: Accessing/calling
+let myCall = @access(
+  #{printf},
+  [ -- an array of AST accesses
+    -- @call is only valid when it gets placed into an access list
+    @call(
+      #Call, -- name of the operator. In this case, `()`
+      ( -- A tuple of all args
+        "Hello, world!"
+      )
+    )
+  ]
+)
+$myCall -- prints "Hello, world!"
+
+-- The others would all be done similarly

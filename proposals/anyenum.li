@@ -35,9 +35,9 @@ assert m.rawTag == 2
 -- In a nutshell:
 ---- When the compiler encounters a new anyenum value, it assigns it a new tag
 ---- anyenum tags are tracked in a DB that persists across compilations and should be in VCS
------- This is purely for being able to store anyenum values in a DB/etc across runs of the prog
+------ This is purely for being able to store anyenum values in a DB/etc across versions 
 ---- The compiler auto-generates lookup tables to go enum<->anyenum for the .tag property
------- This allows translating between enums based on names (e.g Tag <=> Op)
+------ This allows translating between enums based on names (e.g Tag.Not <=> Op.Not)
 
 -- This will become the new *preferred* way of doing error handling:
 let Result = pure fn T: type -> res = enum {
@@ -55,7 +55,5 @@ let Result = pure fn T: type -> res = enum {
 -- Also planned is that enums will by default use their `anyenum` values instead of 0/1/2/3/4/etc
 -- You would still be able to change it to another tag type if needed.
 
--- Issues:
 
----- Related to error handling:
 

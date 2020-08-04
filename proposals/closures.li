@@ -1,0 +1,9 @@
+-- This is an idea (very much WIP) for handling closures
+-- Essentially, it'd work something like this:
+
+
+let IClosure = pure fn tys -> c = concept {
+  var closure: @This
+  var args: tys
+  @
+}

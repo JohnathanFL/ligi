@@ -18,6 +18,14 @@ let Meal = enum (Breakfast, Lunch, Supper, Snack)
 -- shorter when only the tags are needed.
 
 
+-- Update 07/19/20: I'm changing the above enum shorthand to use anyenums instead. Thus, the new
+-- shorthand for the above is
+let Meal = enum ( #Breakfast, #Lunch, #Supper, #Snack )
+-- Thus, you could now also do:
+let (t1, t2, t3, t4) = (#Breakfast, #Lunch, #Supper, #Snack)
+let ExMeal = enum(t1, t2, t3, t4)
+let em = ExMeal.Breakfast
+
 
 -- Making structs like this is a little verbose:
 let x = 10, y = 20, z = 30

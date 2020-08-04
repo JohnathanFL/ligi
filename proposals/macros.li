@@ -49,3 +49,51 @@ $fullBlock
 -- Note that the above does **not** allow for declarations being available in other macros
 -- This may or may not be changed later
 
+
+
+-- Possible addition: Macro-passing syntax
+-- Would just be re-purposing {} as another call operator (same line, same as () and [])
+let mac = macro ast => -- some operations
+mac {
+  some
+  code
+  This code is *not* parsed, only tokenized.
+  The macro can choose to parse it with a call to Ligis compiler or similar.
+}
+-- This syntax will actually append to any existing call. Hence, you can do
+let mac = macro opt, ast => -- some ops
+mac(blah) {
+  some tokens passed as "ast"
+}
+-- This extends to multiple `{}` calls
+let mac = macro opt, ast1, ast2 => -- ...
+mac(blah) { doSomething() } { andAgain() }
+-- The only restriction is that the opening `{` must be on the same line as the last token,
+-- as with `(` and `[`
+
+-- This sort of thing would actually fit pretty well with ".find" and similar method shorthands:
+let el = list.find { == 10 } -- find such that it is == 10.
+-- you could also use it to implement other languages in Ligi:
+C {
+  -- rather than "extern C" style stuff. The C language is token-compatible (except for comments
+  -- and the `--` operator) with Ligi, and we could always extend the lexer to parse
+  -- non-standard operators
+  void sayHi() {
+    printf("Hello, world!");
+  }
+}
+-- you could even use it to implement C++-styled `class` macros
+class { MyClass : BaseClass } {
+  MyClass() {
+    
+  }
+  ~MyClass() {
+    
+  }
+  -- and so on
+}
+
+
+-- Problem with the above syntax: old-styled control structures:
+if x { printf("Then") }
+-- If we go with this syntax, we'll need to change to requiring => for all control structures

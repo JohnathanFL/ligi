@@ -1,0 +1,21 @@
+-- This is a proposal for something similar to Nim generators
+
+-- The basic way it would work:
+-- `gn` follows a standard `fn` definition, but may not have a `=>` body, only `-> loc:type=`
+-- (`gn` may be replaced with `generator` or similar)
+let even_numbers = gn -> num:usize = {
+  num = 0
+  while num < usize.max => {
+    yield num
+    num += 2
+  }
+}
+
+-- These would simply be a sugar over the current style:
+let even_numbers = fn do => {
+  var num = 0
+  while num < usize.max => {
+    do(num)
+    num += 2
+  }
+}

@@ -2,3 +2,53 @@
 -- 'slice comptime u8' is a bit of a mouthful. :)
 
 -- In compiler :) let str = slice comptime u8
+
+-- Update 07/19/20: I've decided to make `str` a proper builtin struct (not primitive though),
+-- and I plan for the stdlib to contain a "String" implementation that builds on `str`.
+-- `str` will itself be immutable, with an `mstr` providing a mutable version
+
+-- It'd be something like this:
+let CommonString = struct {
+  -- Note that below, we don't actually specify types (other than returns)
+  -- so, technically, anything with a .len and #For can work.
+  -- If you made a bitset with .len, #For, and #Index, you could add on these funcs
+  -- with a few characters of code, for example.
+  -- This set of methods simply specifies a set of common algorithms
+  
+  pub let eql = fn lhs, rhs -> eq:bool = {
+    if lhs.len != rhs.len => return false
+    for (lhs, rhs) -> (a, b) => if a != b => return false
+    
+    return true
+  }
+  @overloads[#Eq] += eql
+
+  -- #Eq falls back on `<=>` by default. We've overidden that, so now we'll
+  -- override `<=>` to get <, <=, >, and >= in one fell swoop
+  pub let cmp = fn lhs, rhs -> cp:(lhs[0] <=> rhs[0]).@type = {
+    for (lhs, rhs) -> (a, b) => when a
+      is < b => return #Lt
+      is > b => return #Gt
+    -- eq all the way to the end. Just compare lengths (as is tradition)
+    return lhs.len <=> rhs.len
+  }
+  @overloads[#Cmp] += cmp
+
+  pub let find = fn self, substr -> index:?usize = {
+    if substr.len == 0 => return null -- no other possibility, really
+    for self -> c, i => if c == substr[0] => if self[i..i + substr.len] == substr => return i
+    return null
+  }
+  @overloads[#In] += fn substr, self -> isIt = self.find(substr) != null
+}
+
+-- Since it's `slice const u8` PLUS the struct, we already get slicing and such for free.
+-- We're just adding on a bunch of common operations to an existing type.
+-- The above is one of the major motivations for building Ligi. Not relying on inheritance or
+-- convoluted template systems, but still able to de-duplicate a bunch of annoying code.
+let str = slice const u8 + CommonString
+let mstr = slice u8 + CommonString
+
+let s = "Hello, world!", s2 = "Hello, world!"
+assert s.@type == str -- string literals are now `str`
+assert s == s2 -- character-equality, not address (as slices would have)

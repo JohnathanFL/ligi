@@ -1,0 +1,40 @@
+-- This is to try and specify a set of methods for arrays and slices
+-- These will likely all be builtin methods (`.name()`) of slices/arrays
+
+-- Assumptions in this code:
+-- All arrays/slices will contain .Element (type contained inside)
+-- All functions shall have a .Return (type returned)
+-- Allocators shall have a new(T, len = 1, initial = undef) method
+
+let map = overload [:comptime anyfunc:
+  fn ar: array _, mapper: (fn el:ar.Element -> res:_) -> newAr: array(ar.len, mapper.Return) = {
+    for (ar, newAr) -> (el, res) => res = mapper(el)
+  },
+  fn sl: slice _, alloc, mapper: (fn el:sl.Element -> res:_) -> newSl: slice mapper.Return = {
+    newSl = alloc.alloc(mapper.Return, sl.len)
+    for (sl, newSl) -> (el, res) => res = mapper(el)
+  }
+]
+
+test #"map" {
+  
+}
+
+
+-- Works on either array or slice
+let reduce = fn collection, initial, reducer -> res = {
+    let
+      El = collection.Element,
+      Res = reducer.Return,
+      IndexedReducer = (fn el: El, i:usize, accum:ref Res -> _:void),
+      UnindexedReducer = (fn el: El, accum:ref Res -> _:void)
+    
+    res = initial
+    
+    when reducer.@type
+      is IndexedReducer =>
+        for collection -> el, i => reducer(el, i, res.addr)
+      is UnindexedReducer =>
+        for collection -> el, i => reducer(el, res.addr)
+      else => @error("Reducer must be either fn(el,index,ref accum) or fn(el,ref accum)")
+}

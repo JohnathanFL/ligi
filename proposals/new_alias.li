@@ -1,0 +1,23 @@
+-- Now that we have macros in Ligi, `alias` can possibly
+-- be updated. The current style is somewhat odd when it comes to aliasing
+-- enums and the like.
+
+
+-- The new style would be something like this, using `?T`'s impl as an example.
+-- This example relies on the "no_bools" proposal
+-- This example relies on the "at_ast" proposal for @access
+
+-- We'd consider a `property` macro to not require `()` to invoke it, similar to a
+-- `property fn` being used as a getter.
+-- In short, it's like Nim's {.dirty.} for templates
+let Alias = macro what:untyped =>
+  -- I'm requiring that we use the at_ast stuff here, because otherwise self.what
+  -- is ambiguous against an actual thing on self named `what`.
+  property macro self:untyped => @access(self, [what])
+
+let Opt = pure fn T: comptime type -> o = enum {
+  enum Some: T, None: void
+  -- Read as "let @true be an alias for our .Some"
+  let @true = alias Some -- property macro self => self.Some
+  let @false = alias None
+}

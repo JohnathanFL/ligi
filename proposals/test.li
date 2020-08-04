@@ -10,3 +10,11 @@ test "adder" {
   -- A failed assert is the only way to fail a test.
   assert adder(4, 6) == 10
 }
+
+
+-- Update 07/26/20: New style. Since we now have `foo{}` macro call syntax,
+-- we can't use `test str {}` as easily.
+-- We'll change it to `test block`, where block can be labelled:
+let #adder {
+  assert adder(4, 6) == 10
+}

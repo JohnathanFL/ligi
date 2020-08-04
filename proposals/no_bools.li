@@ -1,0 +1,54 @@
+-- Note that this one is not yet set in stone.
+
+-- This is an odd proposal. Essentially, we'd eliminate the `bool` as a primitive,
+-- and instead make it into an alias for `enum (#true, #false)`, and make `true`
+-- and `false` aliases for `#true` and `#false`.
+
+-- This would mean that Ligi only has integers and floats as primitive types.
+-- All others would technically just be compositions of those.
+
+
+let bool = enum {
+  @tagType = u1
+
+  enum
+    true = 1,
+    false = 0
+  -- @true and @false enums are what the compiler checks against
+  alias @true = true, @false = false
+ 
+  -- I'm considering allowing enum types to be called to translate raw tag to
+  @overloads[#Not] += pure fn self -> newSelf = @This(~self.tag)
+
+  -- This *should* provide short circuiting and lazy eval for rhs, at least if I'm thinking my
+  -- own crazy macro logic through correctly. This is also why I didn't just treat it like an int,
+  -- as that may not be short circuited (undecided as of yet).
+  
+  -- Neither of these are pure because I plan to allow `optVal or return false` styled stuff, and
+  -- I'm not sure that should be allowed in a "pure" macro.
+  
+  -- Gotta use bool. in here because a macro is directly replaced at the call location
+  @overloads[#Or] += macro lhs, rhs =>
+    -- The compiler treats #true as the true value for ifs.
+    if lhs => bool.true
+    elif rhs => bool.true
+    else => false
+  @overloads[#And] += macro lhs, rhs =>
+    if not lhs => bool.false
+    elif not rhs => bool.false
+    else => bool.true
+}
+-- and the requisite helping of syntactic sugar
+use bool.(true, false)
+
+-- To facilitate capturing values (e.g `if x -> y => ...`), the compiler would consider
+-- the inner value of `@true` to be what gets captured. Thus, the optional enum `?T` simply
+-- needs an alias inside it to allow capturing:
+let Opt = pure fn T: comptime type -> o = enum {
+  enum Some: T, None: void
+  alias @true = @This.Some, @false = @This.None
+}
+-- This also opens the door for capturing a false value. This could be used e.g in error handling,
+-- where an error can be considered "false" and an all-clear is "true"
+
+-- This also allows us to designate values as "truthy" and "falsey"

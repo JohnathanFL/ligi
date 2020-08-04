@@ -119,3 +119,16 @@ my_func += pure fn a, b, c, d -> void = printf("Womp womp")
 
 -- This feature can be used e.g to constrain overloads for Add/For/etc to make sure they're
 -- pure/taking functions/etc
+
+
+-- Update 07/17/20: I plan to replace the "overloaded" type with just a `comptime array function`
+-- This will go hand-in-hand with introducing the `anyfunc` type and `func` unary op.
+-- Thus, you could also technically do:
+let add = comptime [ -- `comptime` just to be safe
+  pure fn a, b => @compileError("No others matched"), -- Default is always #0
+  pure fn a: i32, b: i32 -> c: i32 = a + b,
+  pure fn a: u32, b: u32 -> c: u32 = a + b, -- checked in reverse order
+]
+-- The `overload {}` syntax is just a way to specify things (like what's default) more exactly
+-- However, this will do away with the constraint abilitity, unless we reserve #1 for it like
+-- defaults have #0
