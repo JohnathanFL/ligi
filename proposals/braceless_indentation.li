@@ -1,0 +1,57 @@
+-- This is to explore the idea of making Ligi a braceless, indentation-dependant language
+-- It's mainly just going to be example code with notes here and there
+-- I also plan on exploring this in the NimV2 compiler (the current branch)
+
+-- (I swear I get closer to Nim every day. I may just have to fork Nim instead one of these days)
+
+-- The code that triggered the idea:
+let index_of = fn haystack, needle -> index:usize =
+  for haystack -> el, i -- could omit `=>` when indenting a block(?)
+    if el == needle => break:i -- braceless removes the need for {} here
+  else -> val 
+    printf("We found it at {}, captured as {}!", (i, val))
+    val
+  finally => @panic("We didn't find it!") -- could also do a `null` here, if we had an optional return
+
+
+-- Q: Should we require `=>` or just go straight for a newline?
+-- - We can't really use `:`, as that will conflict with the `-> capt:type` syntax. I rather like that
+--   syntax, and the alternative `for x in y` would conflict with the `in` operator, so we can't do
+--   that either.
+-- - Just having a newline (as in `if x\nval\nelse\nval2`) seems like it could conflict with the ability to
+--   put binary operators on the next line
+-- A: Given the above two, I may require `=>` in the same way Python requires `:`, at least for some things.
+
+-- I might keep `#label{}` around:
+let x = #lab {
+  break #lab:1
+}
+#lab {
+  printf("Hi")
+}
+-- Alternatively, I could just do
+let x = #lab
+  break #lab:1
+#lab
+  printf("Hi")
+-- Alternatively, I could add `block`, like so: (would also allow for unlabeled blocks for scope)
+let x = block #lab
+  break #lab : 1
+block
+  printf("Hi")
+
+
+let x = block #lab => -- alternate #1: require `=>`, instead of just going for a newline
+  break #lab : 1
+
+-- Alternatively:
+let x = #lab block
+  break #lab : 1
+-- because then we could also allow
+let x = #lab block -> val
+  val = 1
+-- though that's redundant in most cases (like the above), as you can just assign straight to `x`
+
+  
+-- I may also want to repurpose {} for something else.
+-- One idea is to keep {} for macro blocks.

@@ -2,6 +2,16 @@ import strutils
 import tables
 import strformat
 
+
+template alias(what: untyped, asWhat: untyped): untyped =
+  template what():untyped {.dirty.} = asWhat
+template dowhile(cond: untyped, body: untyped): untyped =
+  body
+  while cond: body
+# TODO
+template err(msg: string) =
+  quit msg
+
 const WordChars: set[char] = {'a'..'z', 'A'..'Z', '0'..'9', '_', '@'}
 
 
@@ -21,6 +31,8 @@ type Tag* = enum
   Struct, Ref, Slice, Array, Const, Comptime,
   Opt, Pure, Inline, Overload, Property, Concept,
   BitNot, Not,
+  # Special unary:
+  Expand,
   # Accesses
   Access, Pipe,
   # Binds
@@ -31,6 +43,8 @@ type Tag* = enum
   # Punctuation
   Colon, Comma, StoreIn, Then, LParen, RParen, LBracket, RBracket,
   LBrace, RBrace, Semicolon,
+
+  Indent, Dedent,
 
   EOF,
 
@@ -81,7 +95,7 @@ const Keywords = toTable {
   "xor": Xor,
 }
 # Must keep these sorted by len
-const Sigils = toTable {
+const Sigils = toOrderedTable {
   "=>": Then,
   "->": StoreIn,
   "~": BitNot,
@@ -118,9 +132,11 @@ const Sigils = toTable {
   "}": RBrace,
   ",": Comma,
   ";": Semicolon,
+  "$": Expand,
 }
 
-type Pos* = tuple[line: int, col: int]
+# Level is the indentation of that line, even though we also do INDENT/DEDENT tokens
+type Pos* = tuple[line: int, level: int, col: int]
 
 # TODO: A "StringStash" styled object
 
@@ -138,20 +154,26 @@ proc `$`*(t: Token): string =
     of Str: fmt "\"{t.str}\""
     of Char: fmt"'{t.chr}'"
     else: repr(t.tag)
+# proc `$`*(t: Token): string = repr(t.tag)
 
 type Lexer* = object
   pos*: Pos
+  lastPos*: Pos
+  curLevel*: int
   data*: iterator(): char
   next*: array[3, char]
 
-proc cur*(self: Lexer): char = self.next[0]
-proc nextIs*(self: Lexer, what: string): bool =
+proc cur(self: Lexer): char = self.next[0]
+proc nextIs(self: Lexer, what: string): bool =
   assert what.len <= 3, "Only 3 char lookahead"
   for i, c in what:
     if c != self.next[i]: return false
   return true
+proc nextIs(self: Lexer, charset: static[set[char]]): bool = self.cur in charset
+proc nextIs(self: Lexer, c: char): bool = self.cur == c
+template nextIs(x: untyped): bool = self.nextIs(x)
 
-proc advance*(self: var Lexer): char =
+proc advance(self: var Lexer): char =
   ## Returns the character we just passed
   result = self.cur
   self.next[0] = self.next[1]
@@ -166,95 +188,111 @@ proc advance*(self: var Lexer): char =
       self.pos.col = 0
     else:
       self.pos.col += 1
-  #echo fmt"Advanced by {result}"
+  # echo fmt"Advanced over {result}"
+proc consume*(self: var Lexer, n = 1) =
+  for i in 1..n: discard advance self
+template consume(n: int) =
+  self.consume n
+template match(what: string) =
+  if not nextIs what: err "Expected `" & what & "`"
+  else: consume what.len
 
-template consume*(self: var Lexer, n = 1) =
-  for i in 1..n: discard self.advance()
+proc consumeWord(self: var Lexer): string =
+  result = ""
+  if self.cur notin WordChars: err "Expected a word char"
+  while self.cur in WordChars:
+    result &= self.advance
 
-template skip(self: var Lexer) =
-  ## comments will be handled in scan() as they could also be a `-` token
-  var clean = false
-  while not clean:
-    clean = true
+
+proc skip(self: var Lexer) =
+  var dirty = true
+  while dirty:
+    dirty = false
     while self.cur.isSpaceAscii:
-      clean = false
-      discard self.advance()
-    while self.nextIs "--":
-      clean = false
-      while self.cur != '\n': self.consume
+      consume 1
+      dirty = true
+    if nextIs "--":
+      dirty = true
+      while not nextIs "\n": consume 1
+
+proc scanMLStr(self: var Lexer): Token =
+  result = Token(tag: Str, str: "")
+  var multiline = false
+  while nextIs "\\\\":
+    consume 2
+    if not nextIs " ": err "A \\\\ string literal must always have a space after the last \\"
+    consume 1
+
+    if multiline: result.str &= "\\n"
+    multiline = true
+
+    while not nextIs '\n': result.str &= self.advance
+    self.skip
+
+proc scanStr(self: var Lexer): Token =
+  result = Token(tag: Str, str: "")
+  match "\""
+  while not nextIs "\"":
+    if nextIs "\n": err "A \"\" string literal may not have a newline in it!"
+    elif nextIs "\\": result.str &= self.advance
+    result.str &= self.advance
+  match "\""
 
 
-# Ironic. In the course of implementing a language with `alias`, I resorted to implementing `alias`
-template alias(what: untyped, asWhat: untyped): untyped =
-  template what(): untyped {.dirty.} = asWhat
+proc scanWord(self: var Lexer, checkKeyword: static[bool] = true): Token =
+  result = Token(tag: Word, str: self.consumeWord)
+  if checkKeyword:
+    for word, tag in Keywords:
+      if word == result.str:
+        return Token(tag: tag)
+
 
 proc scan*(self: var Lexer): tuple[pos: Pos, tok: Token] =
-  # If you didn't already have diabetes... you're about to
   alias pos: result.pos
-  alias tok: result.tok
-  alias cur: self.cur
-  template nextIs(str: string): bool = self.nextIs str
-  template tag(t: Tag): untyped = result.tok = Token(tag: t)
-  template tag(t: Tag, s: string): untyped = result.tok = Token(tag: t, str: s)
-  template tag(t: Tag, c: char): untyped = result.tok = Token(tag: t, chr: c)
-  template consume(n = 1): untyped {.dirty.} = self.consume(n)
-  template expect(s: static[string]): untyped =
-    if not nextIs s:
-      quit "Expected `{" & s & "}`, but got `{$cur}`"
-    consume s.len
-  template consumeWord(startingWith: sink string = ""): string =
-    var s = startingWith
-    while self.cur in WordChars: s &= self.advance
-    s
-
+  alias token: result.tok
+  template tok(t: Tag) =
+    token = Token(tag:t)
+    self.lastPos = pos
+    return
+  template tok(t: Tag, s: string) =
+    token = Token(tag: t, str: s)
+    self.lastPos = pos
+    return
 
   self.skip
   pos = self.pos
-  if nextIs "\0": tag EOF
-  elif cur in WordChars:
-    var str = consumeWord()
-    if str in Keywords: tag Keywords[str]
-    else:
-      tag Word, str
-  elif nextIs "\\\\": # line string lit. TODO
-    var str = ""
-    var multiline = false
-    while nextIs "\\\\":
-      consume 2
-      if multiline: str &= '\n'
-      multiline = true
-      while self.cur != '\n': str &= self.advance()
-      self.skip # Skip both whitespace and comments, allowing for interlacing comments in strings
-    tag Str, str
-  elif nextIs "\\": # Stropped keyword
-    consume
-    if self.cur notin WordChars: quit "Expected a word to strop"
-    tag Word, consumeWord()
+  if pos.line > self.lastPos.line:
+    self.pos.level = self.pos.col
+    pos = self.pos
+    if pos.level > self.lastPos.level:
+      self.curLevel += 1
+      tok Indent
+    elif pos.level < self.lastPos.level:
+      self.curLevel -= 1
+      tok Dedent
+
+  # Handle multiple dedents happening at once
+  # TODO: Verify this more thoroughly
+  if self.curLevel > pos.level:
+    self.curLevel -= 1
+    tok Dedent
+
+  if nextIs "\0": tok EOF
+  elif nextIs WordChars: token = self.scanWord
+  elif nextIs "\\\\": token = self.scanMLStr
+  elif nextIs "\"": token = self.scanStr
   elif nextIs "#":
-    consume
-    if self.cur notin WordChars: quit "Expected a word for a tag"
-    tag Label, consumeWord()
-  elif nextIs "\"":
-    consume
-    var str = ""
-    while self.cur != '"':
-      if self.cur == '\n':
-        quit "No multiline quoted multiline string lits. Use \\\\ literals for that."
-      if self.cur == '\0':
-        quit "Unclosed quoted string literal at EOF"
-      if self.cur == '\\':
-        consume
-      str &= self.advance
-    expect "\""
-    tag Str, str
-  elif nextIs "'":
-    consume
-    var chr: char
-    chr = self.advance
-    if chr == '\\': chr = self.advance
-    if self.advance != '\'': quit "expected a closing `'`"
+    consume 1
+    if nextIs WordChars: tok Label, self.consumeWord
+    elif nextIs "\"": tok Label, self.scanStr().str
+    else: err "Expected either a word or a string literal"
+  elif nextIs "\\":
+    consume 1
+    if not nextIs WordChars: err "A single \\ must be followed by a word to strop"
+    token = self.scanWord(checkKeyword=false)
   else:
-    for sigil, theTag in Sigils.pairs:
+    for sigil, tag in Sigils:
       if nextIs sigil:
         consume sigil.len
-        tag theTag
+        tok tag
+  self.lastPos = pos

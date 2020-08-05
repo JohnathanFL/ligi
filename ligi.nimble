@@ -8,7 +8,7 @@ srcDir        = "src"
 installExt    = @["nim"]
 bin           = @["ligi"]
 
-backend       = "cpp"
+backend       = "c"
 
 # Dependencies
 

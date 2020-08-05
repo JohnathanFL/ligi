@@ -1,7 +1,7 @@
 import system
 import os
 
-import ligipkg/[lexing]
+import ligipkg/[lexing, ast]
 
 when isMainModule:
   var exText = readFile "example.li"
@@ -11,11 +11,11 @@ when isMainModule:
       yield exText[i]
       inc i
   var lexer = Lexer(
-    pos: (1, 0),
+    pos: (1, 0, 0),
     data: iter
   )
   lexer.consume 3 # Kick the next buffer
   var cur = lexer.scan
   while cur.tok.tag != EOF:
-    echo cur
+    echo cur.tok
     cur = lexer.scan
