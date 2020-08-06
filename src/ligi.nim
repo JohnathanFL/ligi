@@ -1,7 +1,7 @@
 import system
 import os
 
-import ligipkg/[lexing, ast]
+import compiler/[lexing, ast]
 
 when isMainModule:
   var exText = readFile "example.li"

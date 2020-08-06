@@ -16,14 +16,16 @@ type BindSpec = enum
   # What a load of bs
   bsLet, bsVar, bsCVar,
   bsEnum, bsField
-type BinOp* = enum
+type BinOp* = enum # Incomplete
   opAdd, opSub, opMul, opDiv, Pipeline
-type UnaOp* = enum
+type UnaOp* = enum # Incomplete
   # Mathematical
   opNeg, opNot, opBitNot,
   # Type creation
   opStruct, opArray, opSlice, opEnum, opComptime, opConst
-  opPtr, opRef
+  opPtr, opRef,
+  # Special
+  opBlock
 type CallKind* = enum
   Call, Index
 

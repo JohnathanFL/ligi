@@ -160,6 +160,7 @@ type Lexer* = object
   pos*: Pos
   lastPos*: Pos
   curLevel*: int
+  suspendedBlocking*: bool
   data*: iterator(): char
   next*: array[3, char]
 
@@ -261,21 +262,22 @@ proc scan*(self: var Lexer): tuple[pos: Pos, tok: Token] =
 
   self.skip
   pos = self.pos
-  if pos.line > self.lastPos.line:
-    self.pos.level = self.pos.col
-    pos = self.pos
-    if pos.level > self.lastPos.level:
-      self.curLevel += 1
-      tok Indent
-    elif pos.level < self.lastPos.level:
+  if not self.suspendedBlocking:
+    if pos.line > self.lastPos.line:
+      self.pos.level = self.pos.col
+      pos = self.pos
+      if pos.level > self.lastPos.level:
+        self.curLevel += 1
+        tok Indent
+      elif pos.level < self.lastPos.level:
+        self.curLevel -= 1
+        tok Dedent
+
+    # Handle multiple dedents happening at once
+    # TODO: Verify this more thoroughly
+    if self.curLevel > pos.level:
       self.curLevel -= 1
       tok Dedent
-
-  # Handle multiple dedents happening at once
-  # TODO: Verify this more thoroughly
-  if self.curLevel > pos.level:
-    self.curLevel -= 1
-    tok Dedent
 
   if nextIs "\0": tok EOF
   elif nextIs WordChars: token = self.scanWord
