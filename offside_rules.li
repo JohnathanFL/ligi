@@ -106,7 +106,17 @@ foo::
   ::bar()
   ::baz()
   ::bar()
- 
+
+-- I'm now actually in favor of allowing things like
+foo.
+  bar
+  baz
+  baf
+foo::
+  bar
+  baz
+  baf
+-- where a newline serves as an implicit `.` or `::`
 
 -- In summary, the following may come immediately before blocks:
 -- - Unary operators

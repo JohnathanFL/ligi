@@ -18,11 +18,11 @@ type
     path*: seq[AccessOp]
   AccessOp* = ref object of RootObj
   AccessSwizzle* = ref object of AccessOp
-    accesses*: seq[AccessOp]
+    paths*: seq[AccessOp]
   AccessValue* = ref object of AccessOp
     name*: string
   CallKind* = enum
-    Call, Index
+    ckCall, ckIndex
   AccessCall* = ref object of AccessOp # Either () or []
     kind*: CallKind
     args*: seq[Expr]

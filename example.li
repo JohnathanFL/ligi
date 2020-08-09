@@ -1,11 +1,33 @@
 x
 not x
 
+noarg()
+onearg(x)
+2arg(
+  1,
+  2
+)
+2argtrailingcomma(
+  1,
+  2,
+)
+
 x + y * y + z/z *b
 
 if x -> y
   printf
-elif y
-  printy
-else
-  dont
+elif y => printy
+else => dont
+
+
+x.y.z
+x.
+  y
+  z
+
+vec.(x, y, z)
+vec.(
+  x,
+  y,
+  z
+)

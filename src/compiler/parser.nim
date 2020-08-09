@@ -1,6 +1,7 @@
 import ast
 import lexing
 import lexast
+import pretty
 
 
 import options
@@ -8,6 +9,8 @@ import strformat
 import tables
 import sets
 import sequtils
+import json
+
 
 
 # Everything in Ligi is either blocking or non-blocking (indentation stuff).
@@ -17,6 +20,7 @@ import sequtils
 # we skip preserveBlocking/withBlocking/etc
 
 # I try to keep a record of the syntax for each proc. Some conventions for those:
+# - I mostly ignore whitespace in these. The comments are for the big picture
 # - I use a mixture of EBNF, regexes, and custom syntax
 # - Actual words refer to something else
 # - Things in quotes refer to the literal text
@@ -44,8 +48,8 @@ type Parser = ref object
 
 template newlined() : bool {.dirty.} = self.blocking and self.newlined
 template samelined(): bool {.dirty.} = not newlined 
-template indented() : bool {.dirty.} = self.ourLevel < self.curLevel
-template dedented() : bool {.dirty.} = self.ourLevel > self.curLevel
+template indented() : bool {.dirty.} = self.blocking and self.ourLevel < self.curLevel
+template dedented() : bool {.dirty.} = self.blocking and self.ourLevel > self.curLevel
 
 template moveline() {.dirty.} = self.newlined = false
 template movedent() {.dirty.} = self.ourLevel = self.curLevel
@@ -58,6 +62,8 @@ proc advance(self: Parser): Token =
   if lastPos.line != self.pos.line:
     self.newlined = true
     self.curLevel = self.pos.col
+  if self.cur.tag == tEOF:
+    self.curLevel = 0
 
 proc nextIs(self: Parser, t: Tag): bool =
   if newlined: return false
@@ -80,24 +86,28 @@ template take(t: untyped): Token =
   self.advance()
 template match(t: untyped) = discard take t
 
-# All parse* functions should use one of these three for their level preservation
-template withBlocking(body: untyped, b = true): untyped =
-  let oldBlocking = self.blocking
+# All parse* functions should use one of these for their level preservation
+
+template preserveBlocking(body: untyped): untyped =
+  # Deceptively named. This actually preserves level
   let oldLevel = self.ourLevel
+  body
+  self.ourLevel = oldLevel
+template setBlocking(b:bool, body: untyped): untyped = preserveBlocking:
+  let oldBlocking = self.blocking
   self.blocking = b
   body
   self.blocking = oldBlocking
-  self.ourLevel = oldLevel
-template withoutBlocking(body: untyped): untyped =
-  withBlocking(body, false)
-template preserveBlocking(body: untyped): untyped =
-  let oldLevel = self.ourLevel
-  body
-  self.ourLevel = oldLevel
+template withBlocking(body: untyped): untyped = setBlocking(true, body)
+template withoutBlocking(body: untyped): untyped = setBlocking(false, body)
 
 proc parseStmt(self: Parser): Stmt
 proc parseExpr(self: Parser, allowBlock: bool): Expr
 
+
+####
+# Below are small helper parsers
+####
 
 proc parseStmtSeq(self: Parser): seq[Stmt] = withBlocking:
   while not (indented or dedented) and not nextIs tEOF:
@@ -143,6 +153,12 @@ proc parseThenOrBlock(self: Parser): Expr = withBlocking:
     result = self.parseExpr(allowBlock=false)
   elif indented:
     result = self.parseBlock()
+  else: err fmt"Unexpected {self.cur}"
+
+
+####
+# Here begins the actual AST parsing
+####
 
 # 'return' [block | expr]
 proc parseReturn(self: Parser): Return = preserveBlocking:
@@ -158,10 +174,80 @@ proc parseBreak(self: Parser): Break = preserveBlocking:
   if nextIs tLabel: result.label = tLabel.take.str
   if tryMatch tColon: result.val = self.parseExpr(allowBlock=true)
 
-proc parseAccess(self: Parser): Expr = preserveBlocking:
-  let s = take {tWord}
-  result = Word(word: s.str)
+proc parseAccessPath(self: Parser, path: var seq[AccessOp], startImplicitAccess=false)
 
+# After the `.` has been matched
+proc parseAccess(self: Parser, path: var seq[AccessOp], implicitAccess: bool) = preserveBlocking:
+  setBlocking(not implicitAccess):
+    # Just a plain word
+    if nextIs tWord:
+      path.add AccessValue(name: tWord.take.str)
+    # Swizzled
+    elif tryMatch tLParen:
+      withoutBlocking:
+        let op = AccessSwizzle(paths: @[])
+        while not nextIs tRParen:
+          var s: seq[AccessOp]
+          echo fmt"Pos is {self.pos}"
+          self.parseAccessPath(s, startImplicitAccess=true)
+          echo fmt"s is {pretty jsonifyAll s}"
+          op.paths.add s
+          if not tryMatch tComma: break
+        match tRParen
+        path.add op
+    # Sugared `x.y.z` as
+    # x.
+    #   y
+    #   z
+    elif not implicitAccess and indented:
+      movedent
+      while not dedented:
+        # echo fmt"{self.cur} {self.ourLevel} {self.curLevel}"
+        moveline
+        self.parseAccessPath(path, startImplicitAccess=true)
+    else:
+      err fmt"Expected a word, indent, or swizzle after the access! Found {self.cur}"
+
+# {access | call | index}
+proc parseAccessPath(self: Parser, path: var seq[AccessOp], startImplicitAccess=false) = preserveBlocking:
+  var implicitAccess = startImplicitAccess
+  echo fmt"Got into parseAccessPath. Next is {self.cur}, implicit is {implicitAccess}"
+  while implicitAccess or nextIs {tLParen, tLBracket, tAccess}:
+    if tryMatch tLParen:
+      let call = AccessCall(kind: ckCall, args: @[])
+      withoutBlocking:
+        while not nextIs tRParen:
+          call.args.add self.parseExpr(allowBlock=false)
+          if not tryMatch tComma: break
+        moveline # Set our line to the tRParen's line
+        match tRParen
+      path.add call
+    elif tryMatch tLBracket:
+      let index = AccessCall(kind: ckIndex, args: @[])
+      withoutBlocking:
+        while not nextIs tRBracket:
+          index.args.add self.parseExpr(allowBlock=false)
+          if not tryMatch tComma: break
+        match tRBracket
+      path.add index
+    # One of a word, tuple, or a block with an accessPath per line
+    elif implicitAccess or tryMatch tAccess: self.parseAccess(path, implicitAccess)
+    else:
+      err fmt"Unexpected {self.cur}"
+    implicitAccess = false
+
+
+# (tuple|compund|word|str) [accessPath]
+proc parseAccessible(self: Parser): Expr = preserveBlocking:
+  if nextIs tWord: result = Word(word: tWord.take.str)
+  elif nextIs tStr: result = String(str: tStr.take.str)
+  else:
+    echo fmt"Dedented is {dedented}"
+    err fmt"Expected a tuple, compound, word, or string, got {self.cur.tag}"
+  self.parseAccessPath result.path
+
+
+# ['else' [capt]] ['finally' [capt]]
 template parseElseFinally() = withBlocking:
   if tryMatch tElse:
     parseCapts result.defCapt
@@ -170,11 +256,13 @@ template parseElseFinally() = withBlocking:
     parseCapts result.finCapt
     result.final = self.parseThenOrBlock
 
+# expr [capt] thenOrBlock
 proc parseIfArm(self: Parser): IfArm =
   result.cond = self.parseExpr(allowBlock=false)
   parseCapts result.capt
-  echo "capt is " & repr result.capt
   result.val = self.parseThenOrBlock
+  moveline
+# if ifArm {'elif' ifArm} [elseFinally]
 proc parseIf(self: Parser): If = withBlocking:
   new result
   match tIf
@@ -207,7 +295,7 @@ proc parseAtom(self: Parser): Expr = preserveBlocking:
     if nextIs tReturn: self.parseReturn()
     elif nextIs tBreak: self.parseBreak()
     elif nextIs {tIf, tWhen, tWhile, tFor, tLoop}: self.parseControlStructure()
-    else: self.parseAccess()
+    else: self.parseAccessible()
 
 proc parseUnary(self: Parser, allowBlock=false): Expr = preserveBlocking:
   result =
@@ -231,9 +319,7 @@ proc parseStmt(self: Parser): Stmt = withBlocking:
 proc parseExpr(self: Parser, allowBlock: bool): Expr = preserveBlocking:
   #echo fmt"Indent is {indented} and allowBlock is {allowBlock}"
   if allowBlock and indented:
-    movedent
-    moveline
-    result = Block(label:"", stmts: self.parseStmtSeq())
+    result = self.parseBlock()
   elif indented:
     err "Didn't expect indentation here"
   else:
