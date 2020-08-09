@@ -147,21 +147,19 @@ type ControlStructure* = ref object of Expr
 
 type Selection* = ref object of ControlStructure
 type
-  IfArm* = tuple [
-    cond: Expr,
-    capt: BindLoc, #?
-    val: Expr
-  ]
+  IfArm* = object
+    cond*: Expr
+    capt*: BindLoc #?
+    val*: Expr
   If* = ref object of Selection
     arms*: seq[IfArm]
 
 type
-  WhenArm* = tuple [
-    op: BinOp, # Defaults to opEq
-    rhs: Expr,
-    capt: BindLoc, #?
-    val: Stmt
-  ]
+  WhenArm* = object
+    op*: BinOp # Defaults to opEq
+    rhs*: Expr
+    capt*: BindLoc #?
+    val*: Stmt
   When* = ref object of Selection
     lhs*: Expr
     lhsCapt*: BindLoc #?

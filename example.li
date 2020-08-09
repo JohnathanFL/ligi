@@ -1,5 +1,11 @@
 x
-1
+not x
 
-return
-  1
+x + y * y + z/z *b
+
+if x -> y
+  printf
+elif y
+  printy
+else
+  dont

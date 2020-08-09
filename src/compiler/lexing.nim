@@ -156,7 +156,6 @@ proc `$`*(t: Token): string =
 
 type Lexer* = object
   pos*: Pos
-  lastPos*: Pos
   curLevel*: int
   data*: iterator(): char
   next*: array[3, char]
@@ -250,11 +249,9 @@ proc scan*(self: var Lexer): tuple[pos: Pos, tok: Token] =
   alias token: result.tok
   template tok(t: Tag) =
     token = Token(tag:t)
-    self.lastPos = pos
     return
   template tok(t: Tag, s: string) =
     token = Token(tag: t, str: s)
-    self.lastPos = pos
     return
 
   self.skip
@@ -278,7 +275,6 @@ proc scan*(self: var Lexer): tuple[pos: Pos, tok: Token] =
       if nextIs sigil:
         consume sigil.len
         tok tag
-  self.lastPos = pos
 
 
 proc lex*(data: iterator(): char {.closure.}): Lexer =
