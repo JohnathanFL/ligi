@@ -1,5 +1,7 @@
 import options
 
+import lexing
+
 # By convention, I:
 # - mark nullable references with #?
 # - use `ty` for the type of an expression
@@ -7,51 +9,89 @@ import options
 # - use `default` for `else`
 # - use `final` for `finally`
 
+
 # Only yields void
 type Stmt* = ref object of RootObj
 # May yield any type
-type Expr* = ref object of Stmt
+type
+  Expr* = ref object of Stmt
+    path*: seq[AccessOp]
+  AccessOp* = ref object of RootObj
+  AccessSwizzle* = ref object of AccessOp
+    accesses*: seq[AccessOp]
+  AccessValue* = ref object of AccessOp
+    name*: string
+  CallKind* = enum
+    Call, Index
+  AccessCall* = ref object of AccessOp # Either () or []
+    kind*: CallKind
+    args*: seq[Expr]
 
-type BindSpec = enum
+
+type BindSpec* = enum
   # What a load of bs
-  bsLet, bsVar, bsCVar,
-  bsEnum, bsField
+  bsLet = tLet, bsVar = tVar, bsCVar = tCVar, bsField = tField
+  bsEnum = tEnum, 
 type BinOp* = enum # Incomplete
-  opAdd, opSub, opMul, opDiv, Pipeline
+  opEq=tEq,
+  opNotEq=tNotEq,
+  opSpaceship=tSpaceship
+  opGt=tGt,
+  opLt=tLt,
+  opGtEq=tGtEq,
+  opLtEq=tLtEq
+  opIn=tIn,
+  opNotIn=tNotIn,
+  opAdd=tAdd,
+  opSub=tSub,
+  opMul=tMul,
+  opDiv=tDiv,
+  opMod=tMod,
 type UnaOp* = enum # Incomplete
-  # Mathematical
-  opNeg, opNot, opBitNot,
-  # Type creation
-  opStruct, opArray, opSlice, opEnum, opComptime, opConst
-  opPtr, opRef,
-  # Special
-  opBlock
-type CallKind* = enum
-  Call, Index
+  opNeg = tSub,
+  opPtr = tMul,
+  opBitNot = tBitNot,
+  opNot = tNot,
+  opStruct = tStruct,
+  opRef = tRef,
+  opSlice = tSlice,
+  opArray = tArray,
+  opConst = tConst
+  opComptime = tComptime,
+  opOpt = tOpt,
+  opPure = tPure,
+  opInline = tInline,
+  opOverload = tOverload,
+  opProperty = tProperty,
+  opConcept = tConcept,
+  opBlock = tBlock,
+  opEnum = tEnum,
 
 
-type AccessOp* = ref object of RootObj
-type AccessSwizzle* = ref object of AccessOp
-  accesses*: seq[AccessOp]
-type AccessValue* = ref object of AccessOp
-  name*: string
-type AccessCall* = ref object of AccessOp # Either () or []
-  kind*: CallKind
-  args*: seq[Expr]
-
+type
+  BindLoc* = ref object of RootObj
+    ty*: Expr #? (this means you can do `let (x, y: usize): (isize, usize)`)
+  BindName* = ref object of BindLoc
+    name*: string
+  BindTuple* = ref object of BindLoc
+    locs*: seq[BindLoc]
+type Bind* = object
+  loc*: BindLoc
+  init*: Expr #?
 
 type Assert* = ref object of Stmt
   val*: Expr
   msg*: string
-type Break* = ref object of Stmt
+type Break* = ref object of Expr
   label*: string #?=""
   val*: Expr
-type Return* = ref object of Stmt
+type Defer* = ref object of Stmt
+  stmt*: Stmt
+type Return* = ref object of Expr
   val*: Expr
-type Bind* = ref object of Stmt
+type BindGroup* = ref object of Stmt
   spec*: BindSpec
-  ty*: Expr #?
-  init*: Expr #?
+  binds*: seq[Bind]
 type Assg* = ref object of Stmt
   augment*: Option[BinOp] # +=, -=, etc
   to*: Expr
@@ -65,60 +105,78 @@ type Unary* = ref object of Expr
   op*: UnaOp
   val*: Expr
 
-type Atom* = ref object of Expr # Can be accessed
-  access*: seq[AccessOp]
-type Word* = ref object of Atom
+
+type Word* = ref object of Expr
   word*: string
-type String* = ref object of Atom
+type String* = ref object of Expr
   str*: string
-type Block* = ref object of Atom
-  label*: string # An empty label is the same as no label. Thus #""{} is the same as {}
+type Block* = ref object of Expr
+  label*: string #?=""
   stmts*: seq[Stmt]
-type Compound* = ref object of Atom
+type Compound* = ref object of Expr
   ty*: Expr
 type Tuple* = ref object of Compound
   vals*: seq[Expr]
-type Array* = ref object of Tuple # An array is a tuple that holds only one type
-type Struct* = ref object of Compound
-  fields*: seq[Bind] # Bind.spec is always bsVar. The other #? rules still apply
+type ArrayLit* = ref object of Tuple # An array is a tuple that holds only one type
+type StructLit* = ref object of Compound
+  fields*: seq[Bind]
+type EnumLit* = ref object of Expr
+  label*: string
+  inner*: Compound
 
 
+type Macro* = ref object of Expr
+  args*: seq[BindLoc]
+  body*: Stmt
+type Fn* = ref object of Expr
+  args*: seq[BindLoc]
+  ret*: Bind
+
+type Pipeline* = ref object of Expr
+  parts*: seq[Expr]
+
+type ControlStructure* = ref object of Expr
+  label*: string #?=""
+
+  default*: Expr #?
+  defCapt*: BindLoc #?
+
+  final*: Expr #?
+  finCapt*: BindLoc #?
+
+
+type Selection* = ref object of ControlStructure
 type
   IfArm* = tuple [
     cond: Expr,
-    capt: Bind, #?
+    capt: BindLoc, #?
     val: Expr
   ]
-  If* = ref object of Expr
+  If* = ref object of Selection
     arms*: seq[IfArm]
-    default*: Stmt #?
-    final*: Stmt #?
 
 type
   WhenArm* = tuple [
     op: BinOp, # Defaults to opEq
     rhs: Expr,
-    capt: Bind, #?
+    capt: BindLoc, #?
     val: Stmt
   ]
-  When* = ref object of Expr
+  When* = ref object of Selection
     lhs*: Expr
+    lhsCapt*: BindLoc #?
     arms*: seq[WhenArm]
-    default*: Stmt #?
-    final*: Stmt#?
 
 
-type Loop* = ref object of Expr
-  label*: string #?=""
-  default*: Expr #?
-  final*: Expr #?
-  counter*: Bind #?, can assume !nil if capt is !nil
+type Loop* = ref object of ControlStructure
+  counter*: BindLoc #?, can assume !nil if capt is !nil
+  body*: Stmt
 type For* = ref object of Loop
-  range*: Expr
-  capt*: Bind #?
+  expr*: Expr
+  capt*: BindLoc #?
 type While* = ref object of Loop
-  cond*: Expr
-  capt*: Bind #?
+  expr*: Expr
+  capt*: BindLoc #?
 
 
 

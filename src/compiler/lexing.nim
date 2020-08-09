@@ -5,9 +5,6 @@ import strformat
 
 template alias(what: untyped, asWhat: untyped): untyped =
   template what():untyped {.dirty.} = asWhat
-template dowhile(cond: untyped, body: untyped): untyped =
-  body
-  while cond: body
 # TODO
 template err(msg: string) =
   quit msg
@@ -17,142 +14,143 @@ const WordChars: set[char] = {'a'..'z', 'A'..'Z', '0'..'9', '_', '@'}
 
 type Tag* = enum
   # Values
-  Word, Label, Str, Char,
-  # Assignments
-  Assg, AddAssg, SubAssg, MulAssg, DivAssg,
-  # Binaries
-  Eq, NotEq, Gt, Lt, GtEq, LtEq, Spaceship,
-  Or, Xor, And,
-  In, NotIn,
-  OpenRange, ClosedRange,
-  Add, Sub, Mul, Div, Mod,
-  BitOr, BitAnd, BitXor,
+  tWord, tLabel, tStr, tChar,
+  #Assignments
+  tAssg, tAddAssg, tSubAssg, tMulAssg, tDivAssg,
+  #Binaries
+  tEq, tNotEq, tSpaceship, tGt, tLt, tGtEq, tLtEq,
+  tOr, tXor, tAnd,
+  tIn, tNotIn,
+  tOpenRange, tClosedRange,
+  tAdd, tSub, tMul, tDiv, tMod,
+  tBitOr, tBitAnd, tBitXor,
   #Unaries
-  Struct, Ref, Slice, Array, Const, Comptime,
-  Opt, Pure, Inline, Overload, Property, Concept,
-  BitNot, Not,
+  tBitNot, tNot,
+
+  tStruct, tRef, tSlice, tArray, tConst, tComptime,
+  tOpt, tPure, tInline, tOverload, tProperty, tConcept,
+
+  tBlock,
   # Special unary:
-  Expand,
+  tExpand,
   # Accesses
-  Access, Pipe,
+  tAccess, tPipe,
   # Binds
-  Using, Let, Var, CVar, Field, Enum, Alias, Pub,
+  tUsing, tLet, tVar, tCVar, tField, tEnum, tAlias, tPub,
   # Keywords
-  Use, Assert, Break, Return, Defer, If, ElIf, Else, When,
-  Is, While, Loop, For, Finally, Fn, Macro, Continue,
+  tUse, tAssert, tBreak, tReturn, tDefer, tIf, tElIf, tElse, tWhen,
+  tIs, tWhile, tLoop, tFor, tFinally, tFn, tMacro, tContinue,
   # Punctuation
-  Colon, Comma, StoreIn, Then, LParen, RParen, LBracket, RBracket,
-  LBrace, RBrace, Semicolon,
+  tColon, tComma, tStoreIn, tThen, tLParen, tRParen, tLBracket, tRBracket,
+  tLBrace, tRBrace, tSemicolon,
 
-  Indent, Dedent,
-
-  EOF,
+  tEOF,
 
 const Keywords = toTable {
-  "alias": Alias,
-  "and": And,
-  "array": Array,
-  "assert": Assert,
-  "break": Break,
-  "comptime": Comptime,
-  "concept": Concept,
-  "const": Const,
-  "continue": Continue,
-  "cvar": CVar,
-  "defer": Defer,
-  "elif": ElIf,
-  "else": Else,
-  "enum": Enum,
-  "field": Field,
-  "finally": Finally,
-  "finally": Finally,
-  "fn": Fn,
-  "for": For,
-  "if": If,
-  "in": In,
-  "inline": Inline,
-  "is": Is,
-  "let": Let,
-  "loop": Loop,
-  "macro": Macro,
-  "mod": Mod,
-  "notin": NotIn,
-  "not": Not,
-  "or": Or,
-  "overload": Overload,
-  "property": Property,
-  "pub": Pub,
-  "pure": Pure,
-  "ref": Ref,
-  "return": Return,
-  "slice": Slice,
-  "struct": Struct,
-  "use": Use,
-  "using": Using,
-  "var": Var,
-  "when": When,
-  "while": While,
-  "xor": Xor,
+  "alias": tAlias,
+  "and": tAnd,
+  "array": tArray,
+  "assert": tAssert,
+  "break": tBreak,
+  "comptime": tComptime,
+  "concept": tConcept,
+  "const": tConst,
+  "continue": tContinue,
+  "cvar": tCVar,
+  "defer": tDefer,
+  "elif": tElIf,
+  "else": tElse,
+  "enum": tEnum,
+  "field": tField,
+  "finally": tFinally,
+  "finally": tFinally,
+  "fn": tFn,
+  "for": tFor,
+  "if": tIf,
+  "in": tIn,
+  "inline": tInline,
+  "is": tIs,
+  "let": tLet,
+  "loop": tLoop,
+  "macro": tMacro,
+  "mod": tMod,
+  "notin": tNotIn,
+  "not": tNot,
+  "or": tOr,
+  "overload": tOverload,
+  "property": tProperty,
+  "pub": tPub,
+  "pure": tPure,
+  "ref": tRef,
+  "return": tReturn,
+  "slice": tSlice,
+  "struct": tStruct,
+  "use": tUse,
+  "using": tUsing,
+  "var": tVar,
+  "when": tWhen,
+  "while": tWhile,
+  "xor": tXor,
 }
 # Must keep these sorted by len
 const Sigils = toOrderedTable {
-  "=>": Then,
-  "->": StoreIn,
-  "~": BitNot,
-  "?": Opt,
-  "+=": AddAssg,
-  "+": Add,
-  "-=": SubAssg,
-  "-": Sub,
-  "*=": MulAssg,
-  "*": Mul,
-  "/=": DivAssg,
-  "/": Div,
-  "..=": ClosedRange,
-  "..": OpenRange,
-  ".": Access,
-  "::": Pipe,
-  ":": Colon,
-  "<=>": Spaceship,
-  "<=": LtEq,
-  "<": Lt,
-  ">=": GtEq,
-  ">": Gt,
-  "==": Eq,
-  "=": Assg,
-  "!=": NotEq,
-  "|": BitOr,
-  "&": BitAnd,
-  "^": BitXor,
-  "(": LParen,
-  ")": RParen,
-  "[": LBracket,
-  "]": RBracket,
-  "{": LBrace,
-  "}": RBrace,
-  ",": Comma,
-  ";": Semicolon,
-  "$": Expand,
+  "=>": tThen,
+  "->": tStoreIn,
+  "~": tBitNot,
+  "?": tOpt,
+  "+=": tAddAssg,
+  "+": tAdd,
+  "-=": tSubAssg,
+  "-": tSub,
+  "*=": tMulAssg,
+  "*": tMul,
+  "/=": tDivAssg,
+  "/": tDiv,
+  "..=": tClosedRange,
+  "..": tOpenRange,
+  ".": tAccess,
+  "::": tPipe,
+  ":": tColon,
+  "<=>": tSpaceship,
+  "<=": tLtEq,
+  "<": tLt,
+  ">=": tGtEq,
+  ">": tGt,
+  "==": tEq,
+  "=": tAssg,
+  "!=": tNotEq,
+  "|": tBitOr,
+  "&": tBitAnd,
+  "^": tBitXor,
+  "(": tLParen,
+  ")": tRParen,
+  "[": tLBracket,
+  "]": tRBracket,
+  "{": tLBrace,
+  "}": tRBrace,
+  ",": tComma,
+  ";": tSemicolon,
+  "$": tExpand,
 }
 
 # Level is the indentation of that line, even though we also do INDENT/DEDENT tokens
-type Pos* = tuple[line: int, level: int, col: int]
+type Pos* = tuple[line: int, col: int]
 
 # TODO: A "StringStash" styled object
 
 type Token* = object
   case tag*: Tag
-    of Word, Label, Str:
+    of tWord, tLabel, tStr:
       str*: string
-    of Char:
+    of tChar:
       chr*: char
     else: discard
 
 proc `$`*(t: Token): string =
   result = case t.tag:
-    of Word: fmt"""$"{t.str}""""
-    of Str: fmt "\"{t.str}\""
-    of Char: fmt"'{t.chr}'"
+    of tWord: fmt"""$"{t.str}""""
+    of tStr: fmt "\"{t.str}\""
+    of tChar: fmt"'{t.chr}'"
     else: repr(t.tag)
 # proc `$`*(t: Token): string = repr(t.tag)
 
@@ -160,7 +158,6 @@ type Lexer* = object
   pos*: Pos
   lastPos*: Pos
   curLevel*: int
-  suspendedBlocking*: bool
   data*: iterator(): char
   next*: array[3, char]
 
@@ -217,7 +214,7 @@ proc skip(self: var Lexer) =
       while not nextIs "\n": consume 1
 
 proc scanMLStr(self: var Lexer): Token =
-  result = Token(tag: Str, str: "")
+  result = Token(tag: tStr, str: "")
   var multiline = false
   while nextIs "\\\\":
     consume 2
@@ -231,7 +228,7 @@ proc scanMLStr(self: var Lexer): Token =
     self.skip
 
 proc scanStr(self: var Lexer): Token =
-  result = Token(tag: Str, str: "")
+  result = Token(tag: tStr, str: "")
   match "\""
   while not nextIs "\"":
     if nextIs "\n": err "A \"\" string literal may not have a newline in it!"
@@ -241,7 +238,7 @@ proc scanStr(self: var Lexer): Token =
 
 
 proc scanWord(self: var Lexer, checkKeyword: static[bool] = true): Token =
-  result = Token(tag: Word, str: self.consumeWord)
+  result = Token(tag: tWord, str: self.consumeWord)
   if checkKeyword:
     for word, tag in Keywords:
       if word == result.str:
@@ -262,31 +259,15 @@ proc scan*(self: var Lexer): tuple[pos: Pos, tok: Token] =
 
   self.skip
   pos = self.pos
-  if not self.suspendedBlocking:
-    if pos.line > self.lastPos.line:
-      self.pos.level = self.pos.col
-      pos = self.pos
-      if pos.level > self.lastPos.level:
-        self.curLevel += 1
-        tok Indent
-      elif pos.level < self.lastPos.level:
-        self.curLevel -= 1
-        tok Dedent
 
-    # Handle multiple dedents happening at once
-    # TODO: Verify this more thoroughly
-    if self.curLevel > pos.level:
-      self.curLevel -= 1
-      tok Dedent
-
-  if nextIs "\0": tok EOF
+  if nextIs "\0": tok tEOF
   elif nextIs WordChars: token = self.scanWord
   elif nextIs "\\\\": token = self.scanMLStr
   elif nextIs "\"": token = self.scanStr
   elif nextIs "#":
     consume 1
-    if nextIs WordChars: tok Label, self.consumeWord
-    elif nextIs "\"": tok Label, self.scanStr().str
+    if nextIs WordChars: tok tLabel, self.consumeWord
+    elif nextIs "\"": tok tLabel, self.scanStr().str
     else: err "Expected either a word or a string literal"
   elif nextIs "\\":
     consume 1
@@ -298,3 +279,16 @@ proc scan*(self: var Lexer): tuple[pos: Pos, tok: Token] =
         consume sigil.len
         tok tag
   self.lastPos = pos
+
+
+proc lex*(data: iterator(): char {.closure.}): Lexer =
+  result = Lexer(
+    pos: (1, 0),
+    data: data,
+  )
+  result.consume 3 # Kick the next buffer.
+
+proc lex*(data: string): Lexer =
+  iterator iter(): char {.closure.} =
+    for c in data: yield c
+  return iter.lex
