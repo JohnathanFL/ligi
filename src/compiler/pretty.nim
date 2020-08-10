@@ -150,3 +150,18 @@ pretty BindGroup: %*{
   "spec": %*self.spec,
   "binds": jsonifyAll self.binds
 }
+pretty Tuple: %*{
+  "compound": "tuple",
+  "ty": doJsonify self.ty,
+  "vals": jsonifyAll self.vals,
+}
+pretty ArrayLit: %*{
+  "compound": "array",
+  "ty": doJsonify self.ty,
+  "vals": jsonifyAll self.vals,
+}
+pretty StructLit: %*{
+  "compound": "struct",
+  "ty": doJsonify self.ty,
+  "fields": jsonifyAll self.fields,
+}

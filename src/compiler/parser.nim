@@ -244,11 +244,54 @@ proc parseAccessPath(self: Parser, path: var seq[AccessOp], startImplicitAccess=
       err fmt"Unexpected {self.cur}"
     implicitAccess = false
 
+proc parseArrayLit(self: Parser): ArrayLit = withoutBlocking:
+  new result
+  while not nextIs tRBracket:
+    result.vals.add self.parseExpr(allowBlock=false)
+    if not tryMatch tComma: break
+
+
+proc parseStructLit(self: Parser): StructLit = withoutBlocking:
+  new result
+  while tryMatch tAccess:
+    var b = Bind()
+    b.loc = self.parseBindLoc()
+    var wasIndented = false
+    if tryMatch tAssg: withBlocking:
+      wasIndented = indented
+      b.init = self.parseExpr(allowBlock=true)
+    result.fields.add b
+    # Allow indentation to serve as a comma if we parsed an indented block
+    if not (wasIndented or tryMatch tComma): break
+
+proc parseCompound(self: Parser): Compound = withoutBlocking:
+  match tLBracket
+  let ty = self.parseTypeDesc(trailing=true)
+  # []
+  if tryMatch tRBracket: result = Compound()
+  # [.name = blah]
+  elif nextIs tAccess: result = self.parseStructLit()
+  # [val, val]
+  else:  result = self.parseArrayLit()
+  result.ty = ty
+  match tRBracket
+
+proc parseTuple(self: Parser): Tuple = withoutBlocking:
+  result = Tuple(ty:nil, vals: @[])
+  match tLParen
+  result.ty = self.parseTypeDesc(trailing=true)
+  while not nextIs tRParen:
+    result.vals.add self.parseExpr(allowBlock=false)
+    if not tryMatch tComma: break
+  match tRParen
+
 
 # (tuple|compund|word|str) [accessPath]
 proc parseAccessible(self: Parser): Expr = preserveBlocking:
   if nextIs tWord: result = Word(word: tWord.take.str)
   elif nextIs tStr: result = String(str: tStr.take.str)
+  elif nextIs tLParen: result = self.parseTuple()
+  elif nextIs tLBracket: result = self.parseCompound()
   else:
     echo fmt"Dedented is {dedented}"
     err fmt"Expected a tuple, compound, word, or string, got {self.cur.tag}"
@@ -341,7 +384,7 @@ proc parseControlStructure(self: Parser): ControlStructure = preserveBlocking:
 # return and break are included here so you can do things like
 # let x = optional or return false
 # (since they're divergent, they're fine type-wise)
-# return | break | controlStructure | access
+# return | break | fn | macro | controlStructure | access
 proc parseAtom(self: Parser): Expr = preserveBlocking:
   result =
     if nextIs tReturn: self.parseReturn()

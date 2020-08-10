@@ -91,3 +91,17 @@ else
   broke
 finally
   didntBreak
+
+
+(:Vec3: x, y, z)
+[1, 2, 3]
+[.x, .y]
+-- These 2 are functionally equivalent
+[.x = 1, .y = 2,]
+[
+  .x =
+    1
+  -- Note that the dedent from the assignment block served as a comma
+  .y =
+    2
+]
