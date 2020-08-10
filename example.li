@@ -71,3 +71,23 @@ when x+50 -> val
   finally
     printf("Was either 10 or 20")
 
+loop -> c
+  break
+else
+  broke
+finally
+  didntBreak
+
+for x -> val
+  break
+else
+  broke
+finally
+  didntBreak
+  
+while true
+  break
+else
+  broke
+finally
+  didntBreak

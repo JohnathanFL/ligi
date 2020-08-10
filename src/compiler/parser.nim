@@ -307,9 +307,27 @@ proc parseWhen(self: Parser): When = withBlocking: setdent:
 
 
 
-proc parseLoop(self: Parser): Loop = withBlocking: return
-proc parseFor(self: Parser): For = withBlocking: return
-proc parseWhile(self: Parser): While = withBlocking: return
+proc parseLoop(self: Parser): Loop = withBlocking: setdent:
+  new result
+  match tLoop
+  parseCapts result.counter
+  result.body = self.parseThenOrBlock()
+  parseElseFinally()
+
+# for/while have the exact same syntax, so why not?
+template parseCondLoop() =
+  result.expr = self.parseExpr(allowBlock=false)
+  parseCapts result.capt, result.counter
+  result.body = self.parseThenOrBlock()
+  parseElseFinally()
+proc parseFor(self: Parser): For = withBlocking: setdent:
+  new result
+  match tFor
+  parseCondLoop()
+proc parseWhile(self: Parser): While = withBlocking: setdent:
+  new result
+  match tWhile
+  parseCondLoop()
 
 proc parseControlStructure(self: Parser): ControlStructure = preserveBlocking:
   result =

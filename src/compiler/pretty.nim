@@ -81,6 +81,10 @@ pretty Word: %*{
 pretty Return: %*{
   "return": doJsonify self.val,
 }
+pretty Break: %*{
+  "label": %*self.label,
+  "val": doJsonify self.val,
+}
 pretty Block: %*{
   "label": self.label,
   "stmts": jsonifyAll self.stmts
@@ -98,6 +102,35 @@ pretty When: %*{
   "lhsCapt": doJsonify self.lhsCapt,
   "lhs": jsonify self.lhs,
   "arms": jsonifyAll self.arms,
+  "elseCapt": doJsonify self.defCapt,
+  "else": doJsonify self.default,
+  "finallyCapt": doJsonify self.finCapt,
+  "finally": doJsonify self.final
+}
+pretty Loop: %*{
+  "loop": "infinite",
+  "counter": doJsonify self.counter,
+  "body": jsonify self.body,
+  "elseCapt": doJsonify self.defCapt,
+  "else": doJsonify self.default,
+  "finallyCapt": doJsonify self.finCapt,
+  "finally": doJsonify self.final
+}
+pretty For: %*{
+  "loop": "for",
+  "range": doJsonify self.expr,
+  "counter": doJsonify self.counter,
+  "body": jsonify self.body,
+  "elseCapt": doJsonify self.defCapt,
+  "else": doJsonify self.default,
+  "finallyCapt": doJsonify self.finCapt,
+  "finally": doJsonify self.final
+}
+pretty While: %*{
+  "loop": "while",
+  "cond": doJsonify self.expr,
+  "counter": doJsonify self.counter,
+  "body": jsonify self.body,
   "elseCapt": doJsonify self.defCapt,
   "else": doJsonify self.default,
   "finallyCapt": doJsonify self.finCapt,
