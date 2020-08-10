@@ -46,12 +46,14 @@ type Parser = ref object
   ourLevel: int # The col of the first token of this sequence
   newlined: bool
 
+
+# Commands for working with indentation
 template newlined() : bool {.dirty.} = self.blocking and self.newlined
 template samelined(): bool {.dirty.} = not newlined 
-template indented() : bool {.dirty.} = self.blocking and self.ourLevel < self.curLevel
-template dedented() : bool {.dirty.} = self.blocking and self.ourLevel > self.curLevel
-
+template indented() : bool {.dirty.} = self.blocking and self.curLevel > self.ourLevel
+template dedented() : bool {.dirty.} = self.blocking and self.curLevel < self.ourLevel
 template moveline() {.dirty.} = self.newlined = false
+# Move to the current line's indent
 template movedent() {.dirty.} = self.ourLevel = self.curLevel
 
 proc advance(self: Parser): Token =
@@ -100,6 +102,12 @@ template setBlocking(b:bool, body: untyped): untyped = preserveBlocking:
   self.blocking = oldBlocking
 template withBlocking(body: untyped): untyped = setBlocking(true, body)
 template withoutBlocking(body: untyped): untyped = setBlocking(false, body)
+template setdent(body: untyped) {.dirty.} =
+  let (oldOur, oldCur) = (self.ourLevel, self.curLevel)
+  self.curLevel = self.pos.col
+  self.ourLevel = self.curLevel
+  body
+  (self.ourLevel, self.curLevel) = (oldOur, oldCur)
 
 proc parseStmt(self: Parser): Stmt
 proc parseExpr(self: Parser, allowBlock: bool): Expr
@@ -153,7 +161,7 @@ proc parseThenOrBlock(self: Parser): Expr = withBlocking:
     result = self.parseExpr(allowBlock=false)
   elif indented:
     result = self.parseBlock()
-  else: err fmt"Unexpected {self.cur}"
+  else: err fmt"Unexpected {self.cur} on level {self.curLevel}. Expected a then (`=>`) or an indented block"
 
 
 ####
@@ -188,9 +196,9 @@ proc parseAccess(self: Parser, path: var seq[AccessOp], implicitAccess: bool) = 
         let op = AccessSwizzle(paths: @[])
         while not nextIs tRParen:
           var s: seq[AccessOp]
-          echo fmt"Pos is {self.pos}"
+          # echo fmt"Pos is {self.pos}"
           self.parseAccessPath(s, startImplicitAccess=true)
-          echo fmt"s is {pretty jsonifyAll s}"
+          # echo fmt"s is {pretty jsonifyAll s}"
           op.paths.add s
           if not tryMatch tComma: break
         match tRParen
@@ -211,7 +219,7 @@ proc parseAccess(self: Parser, path: var seq[AccessOp], implicitAccess: bool) = 
 # {access | call | index}
 proc parseAccessPath(self: Parser, path: var seq[AccessOp], startImplicitAccess=false) = preserveBlocking:
   var implicitAccess = startImplicitAccess
-  echo fmt"Got into parseAccessPath. Next is {self.cur}, implicit is {implicitAccess}"
+  # echo fmt"Got into parseAccessPath. Next is {self.cur}, implicit is {implicitAccess}"
   while implicitAccess or nextIs {tLParen, tLBracket, tAccess}:
     if tryMatch tLParen:
       let call = AccessCall(kind: ckCall, args: @[])
@@ -263,7 +271,7 @@ proc parseIfArm(self: Parser): IfArm =
   result.val = self.parseThenOrBlock
   moveline
 # if ifArm {'elif' ifArm} [elseFinally]
-proc parseIf(self: Parser): If = withBlocking:
+proc parseIf(self: Parser): If = withBlocking: setdent:
   new result
   match tIf
   while true:
@@ -271,7 +279,33 @@ proc parseIf(self: Parser): If = withBlocking:
     if not tryMatch tElIf: break
   parseElseFinally()
 
-proc parseWhen(self: Parser): When = withBlocking: return
+
+proc parseWhenArm(self: Parser): WhenArm = withBlocking:
+  match tIs
+  if nextIs WhenOps:
+    result.op = BinOp take(WhenOps).tag
+  else:
+    result.op = opEq
+  result.rhs = self.parseExpr(allowBlock=false)
+  parseCapts result.capt
+  result.val = self.parseThenOrBlock()
+proc parseWhen(self: Parser): When = withBlocking: setdent:
+  new result
+  match tWhen
+  result.lhs = self.parseExpr(allowBlock=false)
+  parseCapts result.lhsCapt
+  if not indented: err "Expected indentation to start a list of `is` arms"
+  moveline
+  movedent
+  
+  if not nextIs tIs: err "Expected a list of `is` arms"
+  movedent
+  moveline
+  while nextIs tIs:
+    result.arms.add self.parseWhenArm()
+  parseElseFinally()
+
+
 
 proc parseLoop(self: Parser): Loop = withBlocking: return
 proc parseFor(self: Parser): For = withBlocking: return
@@ -314,8 +348,31 @@ proc parseBinary(self: Parser, level=0): Expr = preserveBlocking:
     result = Binary(op: op.tag.BinOp, lhs: result, rhs: nextLayer())
 
 
+template parseBindInit() =
+  var b = Bind()
+  b.loc = self.parseBindLoc()
+  if tryMatch tAssg: b.init = self.parseExpr(allowBlock=true)
+  result.binds.add b
+# bindSpec (blockOfBinds | bind {',' bind})
+proc parseBindGroup(self: Parser): BindGroup = withBlocking:
+  new result
+  result.spec = BindSpec take(BindSpecs).tag
+  result.binds = @[]
+  if indented:
+    movedent
+    while not dedented:
+      moveline
+      parseBindInit()
+  else:
+    while true:
+      parseBindInit()
+      if not tryMatch tComma: break
+
+
 proc parseStmt(self: Parser): Stmt = withBlocking:
-  result = self.parseExpr(allowBlock=false)
+  result =
+    if nextIs BindSpecs: self.parseBindGroup()
+    else: self.parseExpr(allowBlock=false)
 proc parseExpr(self: Parser, allowBlock: bool): Expr = preserveBlocking:
   #echo fmt"Indent is {indented} and allowBlock is {allowBlock}"
   if allowBlock and indented:

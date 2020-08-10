@@ -20,14 +20,54 @@ elif y => printy
 else => dont
 
 
+-- These 2 are equiv
 x.y.z
 x.
   y
   z
 
+-- These 2 are equiv
 vec.(x, y, z)
 vec.(
   x,
   y,
   z
 )
+
+let x = 10
+
+-- These 2 are equiv
+let x = 11, y = 12
+let
+  x = 11
+  y = 12
+
+let Vec2 = struct
+  field
+    x: f32
+    y: f32
+
+let Meal = enum
+  enum Breakfast
+  enum Lunch
+  enum Supper
+
+
+-- elif/else/finally determine their location based on the indent of the leading if/for/while/etc
+-- (Of course, it's recommended to write these as properly blocked structures, not with `=>`)
+if x => if y => innerThen
+        elif z => innerElIf
+        else => innerElse
+else => outerElse
+
+-- Exception to the above: all is/else/finally must be indented from the leading `when`
+when x+50 -> val
+  is 10
+    printf("It's 10")
+  is 20
+    printf("It's 20")
+  else
+    printf("Was neither")
+  finally
+    printf("Was either 10 or 20")
+

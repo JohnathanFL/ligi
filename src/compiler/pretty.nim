@@ -36,7 +36,16 @@ proc jsonify*(self: IfArm): JsonNode = %*{
   "capt": doJsonify self.capt,
   "val": jsonify self.val
 }
-proc jsonify*(self: WhenArm): JsonNode = %*self
+proc jsonify*(self: WhenArm): JsonNode = %*{
+  "capt": doJsonify self.capt,
+  "op": %*self.op,
+  "rhs": jsonify self.rhs,
+  "val": jsonify self.val,
+}
+proc jsonify*(self: Bind): JsonNode = %*{
+  "loc": jsonify self.loc,
+  "init": doJsonify self.init,
+}
 
 
 # Cannot assume that all things are not nil, so we guard
@@ -84,6 +93,16 @@ pretty If: %*{
   "finallyCapt": doJsonify self.finCapt,
   "finally": doJsonify self.final
 }
+pretty When: %*{
+  "control": "when",
+  "lhsCapt": doJsonify self.lhsCapt,
+  "lhs": jsonify self.lhs,
+  "arms": jsonifyAll self.arms,
+  "elseCapt": doJsonify self.defCapt,
+  "else": doJsonify self.default,
+  "finallyCapt": doJsonify self.finCapt,
+  "finally": doJsonify self.final
+}
 pretty Binary: %*{
   "op": %*self.op,
   "lhs": jsonify self.lhs,
@@ -92,4 +111,9 @@ pretty Binary: %*{
 pretty Unary: %*{
   "op": %*self.op,
   "val": jsonify self.val,
+}
+
+pretty BindGroup: %*{
+  "spec": %*self.spec,
+  "binds": jsonifyAll self.binds
 }
