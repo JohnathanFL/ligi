@@ -381,6 +381,62 @@ proc parseControlStructure(self: Parser): ControlStructure = preserveBlocking:
     elif nextIs tWhile: self.parseWhile()
     else: err "Expected a control structure!"
 
+proc parseMacro(self: Parser): Macro = withBlocking:
+  new result
+  match tMacro
+
+  # Macros are the same as functions but can't have a `->` ret bind
+  if indented:
+    withBlocking:
+      result.body = self.parseBlock()
+  # No args but `=>` or `->` specified
+  elif tryMatch tThen: result.body = self.parseExpr(allowBlock=true)
+  else:
+    withoutBlocking:
+      while not nextIs tThen:
+        result.args.add self.parseBindLoc()
+        if not tryMatch tComma: break
+    moveline
+    result.body = self.parseExpr(allowBlock=true)
+
+
+template parseVoidBody() =
+  result.ret = Bind(
+    loc: BindName(
+      name:"_",
+      ty: Word(word:"void"),
+    ),
+    init: self.parseExpr(allowBlock=true),
+  )
+template parseRetBody() =
+  if tryMatch tThen: parseVoidBody()
+  elif tryMatch tStoreIn:
+    result.ret = Bind(
+      loc: self.parseBindLoc()
+    )
+    match tAssg
+    result.ret.init = self.parseExpr(allowBlock=true)
+  else: err "Expected either `=>` and a function body or `->` and a return binding"
+proc parseFn(self: Parser): Fn = withBlocking:
+  new result
+  match tFn
+
+  # A void function with no args
+  if indented:
+    withBlocking:
+      parseVoidBody()
+  # No args but `=>` or `->` specified
+  elif nextIs {tThen, tStoreIn}:
+    parseRetBody()
+  else:
+    withoutBlocking:
+      while not nextIs {tThen, tStoreIn}:
+        result.args.add self.parseBindLoc()
+        if not tryMatch tComma: break
+    moveline
+    parseRetBody()
+
+
 # return and break are included here so you can do things like
 # let x = optional or return false
 # (since they're divergent, they're fine type-wise)
@@ -390,6 +446,8 @@ proc parseAtom(self: Parser): Expr = preserveBlocking:
     if nextIs tReturn: self.parseReturn()
     elif nextIs tBreak: self.parseBreak()
     elif nextIs {tIf, tWhen, tWhile, tFor, tLoop}: self.parseControlStructure()
+    elif nextIs tFn: self.parseFn()
+    elif nextIs tMacro: self.parseMacro()
     else: self.parseAccessible()
 
 proc parseUnary(self: Parser, allowBlock=false): Expr = preserveBlocking:

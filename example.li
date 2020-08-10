@@ -105,3 +105,15 @@ finally
   .y =
     2
 ]
+
+let add =
+  -- Blocking is suspended while parsing args
+  fn a:usize,
+     b:usize,
+  -- And resumed when parsing the ret/body
+  =>
+    printf("Hey")
+
+let ret10 = macro
+  return 10
+  

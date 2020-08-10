@@ -165,3 +165,13 @@ pretty StructLit: %*{
   "ty": doJsonify self.ty,
   "fields": jsonifyAll self.fields,
 }
+pretty Fn: %*{
+  "functor": "function",
+  "args": jsonifyAll self.args,
+  "ret": jsonify self.ret,
+}
+pretty Macro: %*{
+  "functor": "macro",
+  "args": jsonifyAll self.args,
+  "body": jsonify self.body,
+}
