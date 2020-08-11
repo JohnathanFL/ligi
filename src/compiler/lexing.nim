@@ -18,8 +18,8 @@ type Tag* = enum
   #Assignments
   tAssg, tAddAssg, tSubAssg, tMulAssg, tDivAssg,
   #Binaries
-  tEq, tNotEq, tSpaceship, tGt, tLt, tGtEq, tLtEq,
   tOr, tXor, tAnd,
+  tEq, tNotEq, tSpaceship, tGt, tLt, tGtEq, tLtEq,
   tIn, tNotIn,
   tOpenRange, tClosedRange,
   tAdd, tSub, tMul, tDiv, tMod,
@@ -182,7 +182,7 @@ proc advance(self: var Lexer): char =
   if result != '\0':
     if result == '\n':
       self.pos.line += 1
-      self.pos.col = 0
+      self.pos.col = 1
     else:
       self.pos.col += 1
   # echo fmt"Advanced over {result}"
@@ -279,7 +279,7 @@ proc scan*(self: var Lexer): tuple[pos: Pos, tok: Token] =
 
 proc lex*(data: iterator(): char {.closure.}): Lexer =
   result = Lexer(
-    pos: (1, 0),
+    pos: (1, 1),
     data: data,
   )
   result.consume 3 # Kick the next buffer.

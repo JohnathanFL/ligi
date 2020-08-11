@@ -11,8 +11,12 @@ const AssgOps*: set[Tag] = {
 }
 
 const BinOps* = [
-  { tEq, tNotEq, tSpaceship },
+  { tOr },
+  { tXor },
+  { tAnd },
+  { tEq, tNotEq },
   { tLt, tGt, tLtEq, tGtEq },
+  { tSpaceship },
   { tAdd, tSub },
   { tMul, tDiv, tMod },
 ]

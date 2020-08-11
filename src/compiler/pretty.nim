@@ -48,14 +48,17 @@ proc jsonify*(self: Bind): JsonNode = %*{
 }
 
 
-# Cannot assume that all things are not nil, so we guard
-# USE THIS ONE whenever it may be nil
-
+# TODO: These 2 are very ugly. Find a way to merge them
 proc jsonifyAll*[T](things: seq[T]): JsonNode =
   result = newJArray()
   for s in things:
     # We can assume none of these are null
     result.elems.add jsonify s
+proc jsonifyAllRecurse*[T](things: seq[T]): JsonNode =
+  result = newJArray()
+  for s in things:
+    # We can assume none of these are null
+    result.elems.add jsonifyAll s
 
 pretty BindName: %*{
   "name": %*self.name,
@@ -70,8 +73,11 @@ pretty AccessCall: %*{
   "call": if self.kind == ckCall: "call" else: "index",
   "args": jsonifyAll self.args,
 }
-pretty AccessValue: %*self.name
-pretty AccessSwizzle: jsonifyAll self.paths
+pretty AccessName: %*self.name
+pretty AccessSwizzle: jsonifyAllRecurse self.paths
+pretty AccessPipe: %*{
+  "pipeInto": jsonify self.into
+}
 
 pretty String: %*self
 pretty Word: %*{
@@ -82,6 +88,7 @@ pretty Return: %*{
   "return": doJsonify self.val,
 }
 pretty Break: %*{
+  "break": "",
   "label": %*self.label,
   "val": doJsonify self.val,
 }
@@ -174,4 +181,8 @@ pretty Macro: %*{
   "functor": "macro",
   "args": jsonifyAll self.args,
   "body": jsonify self.body,
+}
+pretty Assert: %*{
+  "assert": jsonify self.val,
+  "msg": %*self.msg,
 }

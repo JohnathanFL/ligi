@@ -42,12 +42,12 @@ let
   x = 11
   y = 12
 
-let Vec2 = struct
+let Vec2 = struct:
   field
     x: f32
     y: f32
 
-let Meal = enum
+let Meal = enum:
   enum Breakfast
   enum Lunch
   enum Supper
@@ -93,20 +93,24 @@ finally
   didntBreak
 
 
-(:Vec3: x, y, z)
+(=Vec3= x, y, z)
 [1, 2, 3]
 [.x, .y]
+
 -- These 2 are functionally equivalent
 [.x = 1, .y = 2,]
 [
   .x =
     1
   -- Note that the dedent from the assignment block served as a comma
+  -- This may be removed in the future.
   .y =
     2
 ]
 
-let add =
+let add = fn a: usize, b: usize -> c: usize = a + b
+
+let foo =
   -- Blocking is suspended while parsing args
   fn a:usize,
      b:usize,
@@ -116,4 +120,24 @@ let add =
 
 let ret10 = macro
   return 10
-  
+
+arr::map::reduce
+
+
+not: true or false
+-- functionally equivalent to not(true or false)
+
+-- `:` calls are added to the most recent call
+a(b): c
+-- To `:` call a returned function, add `()`
+a(b)(): c -- (Or just put it in the ())
+
+arr::
+  filter: fn each -> keep = each mod 2 == 0
+  map: fn each -> new = each * 2
+
+a::b::c::d
+a::
+  b
+  c
+  d

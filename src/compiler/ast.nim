@@ -18,14 +18,17 @@ type
     path*: seq[AccessOp]
   AccessOp* = ref object of RootObj
   AccessSwizzle* = ref object of AccessOp
-    paths*: seq[AccessOp]
-  AccessValue* = ref object of AccessOp
+    ty*: Expr #?
+    paths*: seq[seq[AccessOp]]
+  AccessName* = ref object of AccessOp
     name*: string
   CallKind* = enum
     ckCall, ckIndex
   AccessCall* = ref object of AccessOp # Either () or []
     kind*: CallKind
     args*: seq[Expr]
+  AccessPipe* = ref object of AccessOp
+    into*: Expr
 
 
 type BindSpec* = enum
@@ -33,6 +36,9 @@ type BindSpec* = enum
   bsLet = tLet, bsVar = tVar, bsCVar = tCVar, bsField = tField
   bsEnum = tEnum, 
 type BinOp* = enum # Incomplete
+  opOr=tOr,
+  opXor=tXor,
+  opAnd=tAnd,
   opEq=tEq,
   opNotEq=tNotEq,
   opSpaceship=tSpaceship
@@ -131,9 +137,6 @@ type Macro* = ref object of Expr
 type Fn* = ref object of Expr
   args*: seq[BindLoc]
   ret*: Bind
-
-type Pipeline* = ref object of Expr
-  parts*: seq[Expr]
 
 type ControlStructure* = ref object of Expr
   label*: string #?=""
