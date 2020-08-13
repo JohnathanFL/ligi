@@ -50,11 +50,17 @@ type Parser = ref object
 # Commands for working with indentation
 template newlined() : bool {.dirty.} = self.blocking and self.newlined
 template samelined(): bool {.dirty.} = not newlined 
+template samelined(): bool {.dirty.} = not newlined 
 template indented() : bool {.dirty.} = self.blocking and self.curLevel > self.ourLevel
 template dedented() : bool {.dirty.} = self.blocking and self.curLevel < self.ourLevel
 template moveline() {.dirty.} = self.newlined = false
 # Move to the current line's indent
 template movedent() {.dirty.} = self.ourLevel = self.curLevel
+
+# We'll make commas optional inside tups/compounds, but we'll also let them
+# act like semicolons in C++ and let them be matched as many times as the user likes.
+template skipcommas() {.dirty.} =
+  while tryMatch tComma: discard
 
 proc advance(self: Parser): Token =
   result = self.cur
@@ -148,6 +154,8 @@ proc parseBindLoc(self: Parser): BindLoc = preserveBlocking:
       while not tryMatch tRParen:
         loc.locs.add self.parseBindLoc()
         if not tryMatch tComma: break
+  else:
+    err "Expected either a word or a left paren"
   result.ty = self.parseTypeDesc
 
 
@@ -192,7 +200,7 @@ proc parseArrayLit(self: Parser): ArrayLit = withoutBlocking:
   new result
   while not nextIs tRBracket:
     result.vals.add self.parseExpr(allowBlock=false)
-    if not tryMatch tComma: break
+    skipcommas
 
 proc parseStructLit(self: Parser): StructLit = withoutBlocking:
   new result
@@ -225,7 +233,7 @@ proc parseTuple(self: Parser): Tuple = withoutBlocking:
   result.ty = self.parseTypeDesc(assgDelimited=true)
   while not nextIs tRParen:
     result.vals.add self.parseExpr(allowBlock=false)
-    if not tryMatch tComma: break
+    skipcommas
   match tRParen
 
 
@@ -251,7 +259,7 @@ proc parseCall(self: Parser, path: var seq[AccessOp]) =
   withoutBlocking:
     while not nextIs closer:
       args.add self.parseExpr(allowBlock=false)
-      if not tryMatch tComma: break
+      skipcommas
     match closer
   path.add AccessCall(kind:kind, args:args)
 
@@ -275,7 +283,7 @@ proc parseAccess(self: Parser, path: var seq[AccessOp]) =
         var innerPath: seq[AccessOp] = @[]
         self.parseAccessPath(innerPath, assumeAccess=true)
         pathList.add innerPath
-        if not tryMatch tComma: break
+        skipcommas
       match tRParen
       path.add AccessSwizzle(ty:ty, paths:pathList)
   else:
@@ -321,10 +329,12 @@ proc parsePipe(self: Parser, path: var seq[AccessOp]) =
 proc parseAccessPath(self: Parser, path: var seq[AccessOp], assumeAccess=false) = preserveBlocking:
   # For kickstarting inside swizzles, mainly
   if assumeAccess: self.parseAccess path
-  while nextIs {tAccess, tPipe, tLParen, tLBracket}:
+  while nextIs({tAccess, tPipe}) or (nextIs({tLParen, tLBracket}) and not self.newlined):
     if tryMatch tAccess: self.parseAccess(path)
     elif tryMatch tPipe: self.parsePipe(path)
-    elif nextIs {tLParen, tLBracket}: self.parseCall path
+    else: withBlocking: # tLParen or tLBracket must be on the same line
+      if nextIs {tLParen, tLBracket}:
+        self.parseCall path
   if tryMatch tColon:
     withBlocking:
       let arg = self.parseExpr(allowBlock=true)
@@ -434,20 +444,17 @@ proc parseControlStructure(self: Parser): ControlStructure = preserveBlocking:
 proc parseMacro(self: Parser): Macro = withBlocking:
   new result
   match tMacro
+  withoutBlocking:
+    while not nextIs tThen:
+      result.args.add self.parseBindLoc()
+      if not tryMatch tComma: break
 
-  # Macros are the same as functions but can't have a `->` ret bind
-  if indented:
-    withBlocking:
-      result.body = self.parseBlock()
-  # No args but `=>` or `->` specified
-  elif tryMatch tThen: result.body = self.parseExpr(allowBlock=true)
-  else:
-    withoutBlocking:
-      while not nextIs tThen:
-        result.args.add self.parseBindLoc()
-        if not tryMatch tComma: break
-    moveline
+  if tryMatch tThen:
     result.body = self.parseExpr(allowBlock=true)
+  elif tryMatch tStoreIn:
+    err "Macros may currently only use then (`=>`) syntax, not return binding"
+  else:
+    err "Expected an optional list of arguments followed by `=>` and the macro body"
 
 
 template parseVoidBody() =
@@ -458,7 +465,7 @@ template parseVoidBody() =
     ),
     init: self.parseExpr(allowBlock=true),
   )
-template parseRetBody() =
+template parseRetBody() = withBlocking:
   if tryMatch tThen: parseVoidBody()
   elif tryMatch tStoreIn:
     result.ret = Bind(
@@ -467,24 +474,20 @@ template parseRetBody() =
     match tAssg
     result.ret.init = self.parseExpr(allowBlock=true)
   else: err "Expected either `=>` and a function body or `->` and a return binding"
-proc parseFn(self: Parser): Fn = withBlocking:
+proc parseFn(self: Parser): Fn =
   new result
   match tFn
+  withoutBlocking:
+    while not nextIs {tThen, tStoreIn}:
+      result.args.add self.parseBindLoc()
+      skipcommas
+  moveline
 
-  # A void function with no args
-  if indented:
-    withBlocking:
-      parseVoidBody()
   # No args but `=>` or `->` specified
-  elif nextIs {tThen, tStoreIn}:
+  if nextIs {tThen, tStoreIn}:
     parseRetBody()
   else:
-    withoutBlocking:
-      while not nextIs {tThen, tStoreIn}:
-        result.args.add self.parseBindLoc()
-        if not tryMatch tComma: break
-    moveline
-    parseRetBody()
+    err "Expected either `=>` and the function body or `->` and the return bind"
 
 # return and break are included here so you can do things like
 # let x = optional or return false
@@ -507,6 +510,7 @@ proc parseUnary(self: Parser): Expr = preserveBlocking:
     if tryMatch tColon:
       withBlocking:
         result = Unary(op: op, val: self.parseExpr(allowBlock=true))
+      # `:` calls are unambiguous enders, whether they're on a unary or not
     elif indented:
       err fmt"Unexpected indentation after a unary. Did you mean to use a colon?"
     else:

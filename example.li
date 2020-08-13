@@ -112,13 +112,13 @@ let add = fn a: usize, b: usize -> c: usize = a + b
 
 let foo =
   -- Blocking is suspended while parsing args
-  fn a:usize,
-     b:usize,
-  -- And resumed when parsing the ret/body
+  fn a:usize
+     b:usize -- (and commas are optional)
+  -- And resumed upon reading the `=>` or `->` for parsing the ret/body
   =>
     printf("Hey")
 
-let ret10 = macro
+let ret10 = macro =>
   return 10
 
 arr::map::reduce
@@ -141,3 +141,22 @@ a::
   b
   c
   d
+
+-- Commas are actually optional in tups/arrays/structs
+(
+  a
+  b
+  -- You only need them when it is ambiguous, as below
+  c,
+  -d
+  -- however, you could also write the above as
+  c
+  (-d)
+  -- In other words, as long as you don't start an expression with `-`, you're fine
+  -- to skip all commas in tups/arrays/structs
+)
+-- Optional commas are to better support things like
+let funcs = overload [
+  fn a, b -> c = a + b -- We *could* put a comma here, but why bother?
+  fn c, d -> e = c / d
+]
