@@ -1,6 +1,8 @@
 import strutils
 import tables
 import strformat
+import algorithm
+import sets
 
 
 template alias(what: untyped, asWhat: untyped): untyped =
@@ -14,124 +16,130 @@ const WordChars: set[char] = {'a'..'z', 'A'..'Z', '0'..'9', '_', '@'}
 
 type Tag* = enum
   # Values
-  tWord, tLabel, tStr, tChar,
+  tWord = "@WORD@",
+  tLabel = "@LABEL@",
+  tStr = "@STR@",
+  tChar = "@CHAR@",
   #Assignments
-  tAssg, tAddAssg, tSubAssg, tMulAssg, tDivAssg,
+  tAssg = "=",
+  tAddAssg = "+=",
+  tSubAssg = "-=",
+  tMulAssg = "*=",
+  tDivAssg = "/=",
   #Binaries
-  tOr, tXor, tAnd,
-  tEq, tNotEq, tSpaceship, tGt, tLt, tGtEq, tLtEq,
-  tIn, tNotIn,
-  tOpenRange, tClosedRange,
-  tAdd, tSub, tMul, tDiv, tMod,
-  tBitOr, tBitAnd, tBitXor,
+  tOr = "or",
+  tXor = "xor",
+  tAnd = "and",
+  tEq = "==",
+  tNotEq = "!=",
+  tSpaceship = "<=>",
+  tGt = ">",
+  tLt = "<",
+  tGtEq = ">=",
+  tLtEq = "<=",
+  tIn = "in",
+  tNotIn = "notin",
+  tOpenRange = "..",
+  tClosedRange = "..=",
+  tAdd = "+",
+  tSub = "-",
+  tMul = "*",
+  tDiv = "/",
+  tMod = "mod",
+  tBitOr = "|",
+  tBitAnd = "&",
+  tBitXor = "^",
   #Unaries
-  tBitNot, tNot,
+  tBitNot = "~",
+  tNot = "not",
 
-  tStruct, tRef, tSlice, tArray, tConst, tComptime,
-  tOpt, tPure, tInline, tOverload, tProperty, tConcept,
+  tStruct = "struct",
+  tRef = "ref",
+  tSlice = "slice",
+  tArray = "array",
+  tConst = "const",
+  tComptime = "comptime",
+  tOpt = "?",
+  tPure = "pure",
+  tInline = "inline",
+  tOverload = "overload",
+  tProperty = "property",
+  tConcept = "concept",
 
-  tBlock,
+  tBlock = "block",
   # Special unary:
-  tExpand,
+  tExpand = "$",
   # Accesses
-  tAccess, tPipe,
+  tAccess = ".",
+  tPipe = "::",
   # Binds
-  tUsing, tLet, tVar, tCVar, tField, tEnum, tAlias, tPub,
+  tUsing = "using",
+  tLet = "let",
+  tVar = "var",
+  tCVar = "cvar",
+  tField = "field",
+  tEnum = "enum",
+  tAlias = "alias",
+  tPub = "pub",
   # Keywords
-  tUse, tAssert, tBreak, tReturn, tDefer, tIf, tElIf, tElse, tWhen,
-  tIs, tWhile, tLoop, tFor, tFinally, tFn, tMacro, tContinue,
+  tUse = "use",
+  tAssert = "assert",
+  tBreak = "break",
+  tReturn = "return",
+  tDefer = "defer",
+  tIf = "if",
+  tElIf = "elif",
+  tElse = "else",
+  tWhen = "when",
+  tIs = "is",
+  tWhile = "while",
+  tLoop = "loop",
+  tFor = "for",
+  tFinally = "finally",
+  tFn = "fn",
+  tMacro = "macro",
+  tContinue = "continue",
   # Punctuation
-  tColon, tComma, tStoreIn, tThen, tLParen, tRParen, tLBracket, tRBracket,
-  tLBrace, tRBrace, tSemicolon,
+  tColon = ":",
+  tComma = ",",
+  tStoreIn = "->",
+  tThen = "=>",
+  tLParen = "(",
+  tRParen = ")",
+  tLBracket = "[",
+  tRBracket = "]",
+  tLBrace = "{",
+  tRBrace = "}",
+  tSemicolon = ";",
 
-  tEOF,
+  tEOF = "@EOF@",
 
-const Keywords = toTable {
-  "alias": tAlias,
-  "and": tAnd,
-  "array": tArray,
-  "assert": tAssert,
-  "break": tBreak,
-  "comptime": tComptime,
-  "concept": tConcept,
-  "const": tConst,
-  "continue": tContinue,
-  "cvar": tCVar,
-  "defer": tDefer,
-  "elif": tElIf,
-  "else": tElse,
-  "enum": tEnum,
-  "field": tField,
-  "finally": tFinally,
-  "finally": tFinally,
-  "fn": tFn,
-  "for": tFor,
-  "if": tIf,
-  "in": tIn,
-  "inline": tInline,
-  "is": tIs,
-  "let": tLet,
-  "loop": tLoop,
-  "macro": tMacro,
-  "mod": tMod,
-  "notin": tNotIn,
-  "not": tNot,
-  "or": tOr,
-  "overload": tOverload,
-  "property": tProperty,
-  "pub": tPub,
-  "pure": tPure,
-  "ref": tRef,
-  "return": tReturn,
-  "slice": tSlice,
-  "struct": tStruct,
-  "use": tUse,
-  "using": tUsing,
-  "var": tVar,
-  "when": tWhen,
-  "while": tWhile,
-  "xor": tXor,
-}
+proc extractAllKeywords(): set[Tag] {.compileTime.} =
+  for tag in Tag.low..Tag.high:
+    let first = ($tag)[0]
+    if first.isAlphaAscii: result.incl tag
+const KeywordSet* = extractAllKeywords()
+proc mapAllKeywords(): Table[string, Tag] {.compileTime.} =
+  for tag in KeywordSet: result.add($tag, tag)
+const KeywordMap* = mapAllKeywords()
+
+proc extractAllSigils(): set[Tag] {.compileTime.} =
+  for tag in Tag.low..Tag.high:
+    let first = ($tag)[0]
+    if not first.isAlphaAscii() and not (first == '@'): result.incl tag
+const SigilSet* = extractAllSigils()
+proc orderAllSigils(): OrderedSet[Tag] {.compileTime.} =
+  var allSigils: seq[Tag]
+  for tag in SigilSet:
+    allSigils.add tag
+  # Sort by len. Does it ascending
+  allSigils.sort do (x, y: Tag) -> int:
+    result = cmp($x, $y)
+  while allSigils.len > 0: result.incl allSigils.pop
+
+
 # Must keep these sorted by len
-const Sigils = toOrderedTable {
-  "=>": tThen,
-  "->": tStoreIn,
-  "~": tBitNot,
-  "?": tOpt,
-  "+=": tAddAssg,
-  "+": tAdd,
-  "-=": tSubAssg,
-  "-": tSub,
-  "*=": tMulAssg,
-  "*": tMul,
-  "/=": tDivAssg,
-  "/": tDiv,
-  "..=": tClosedRange,
-  "..": tOpenRange,
-  ".": tAccess,
-  "::": tPipe,
-  ":": tColon,
-  "<=>": tSpaceship,
-  "<=": tLtEq,
-  "<": tLt,
-  ">=": tGtEq,
-  ">": tGt,
-  "==": tEq,
-  "=": tAssg,
-  "!=": tNotEq,
-  "|": tBitOr,
-  "&": tBitAnd,
-  "^": tBitXor,
-  "(": tLParen,
-  ")": tRParen,
-  "[": tLBracket,
-  "]": tRBracket,
-  "{": tLBrace,
-  "}": tRBrace,
-  ",": tComma,
-  ";": tSemicolon,
-  "$": tExpand,
-}
+const SigilList* = orderAllSigils()
 
 # Level is the indentation of that line, even though we also do INDENT/DEDENT tokens
 type Pos* = tuple[line: int, col: int]
@@ -217,14 +225,17 @@ proc scanMLStr(self: var Lexer): Token =
   var multiline = false
   while nextIs "\\\\":
     consume 2
-    if not nextIs " ": err "A \\\\ string literal must always have a space after the last \\"
-    consume 1
+    if nextIs "\n":
+      if multiline: result.str &= "\\n"
+    elif not nextIs " ":
+      err "A \\\\ string literal must always have a space after the last \\"
+    else:
+      consume 1
+      if multiline: result.str &= "\\n"
+      multiline = true
 
-    if multiline: result.str &= "\\n"
-    multiline = true
-
-    while not nextIs '\n': result.str &= self.advance
-    self.skip
+      while not nextIs '\n': result.str &= self.advance
+      self.skip
 
 proc scanStr(self: var Lexer): Token =
   result = Token(tag: tStr, str: "")
@@ -239,9 +250,8 @@ proc scanStr(self: var Lexer): Token =
 proc scanWord(self: var Lexer, checkKeyword: static[bool] = true): Token =
   result = Token(tag: tWord, str: self.consumeWord)
   if checkKeyword:
-    for word, tag in Keywords:
-      if word == result.str:
-        return Token(tag: tag)
+    if KeywordMap.contains result.str:
+      result = Token(tag: KeywordMap[result.str])
 
 
 proc scan*(self: var Lexer): tuple[pos: Pos, tok: Token] =
@@ -271,9 +281,9 @@ proc scan*(self: var Lexer): tuple[pos: Pos, tok: Token] =
     if not nextIs WordChars: err "A single \\ must be followed by a word to strop"
     token = self.scanWord(checkKeyword=false)
   else:
-    for sigil, tag in Sigils:
-      if nextIs sigil:
-        consume sigil.len
+    for tag in SigilList:
+      if nextIs $tag:
+        consume ($tag).len
         tok tag
 
 

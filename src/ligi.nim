@@ -3,7 +3,7 @@ import os
 import json
 import macros
 
-import compiler/[lexing, parser, ast, pretty]
+import ligipkg/[lexing, parser, ast, pretty]
 
 
 when isMainModule:
