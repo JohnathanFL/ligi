@@ -1,37 +1,98 @@
 -- This sample is just a collection of random mini-samples that don't really
--- warrant their own files
+-- warrant their own files. Mainly intended to give a general overview of Ligi.
 
+-- Basics:
+-- `--` is a line comment
+-- - It used to be `(:`, so don't be surprised if you see random `:)` lying around 
+-- Indentation matters
+-- Semicolons aren't used
+-- An indented block of statements may follow:
+-- - A control structure arm (e.g `if true` or `else`)
+-- - A `:` function call (e.g `my_func:`)
+-- - An assignment operator (e.g `=`, `+=`, etc)
+-- If you just want a block for its scope, use the no-op `block` unary operator with `:` syntax.
+-- An indented block may be replaced by `=>` and a single statement
+-- Unary operators may operate on a block by using `:` call syntax on them
+-- Binds take the form `name:type`
+-- All non-void functions have a return bind location after `->`
+
+
+let x = 10 -- constant declaration
+assert x.@type == usize -- usize is default type for int literals. @type is a property of all things
+var -- variables
+  y = 20 -- blocked declarations
+  z: usize = 30 -- specifying a type
+let w = -- implicit block after `=`
+  var myVar = 50.as: isize -- .as is a builtin for primitive types. `:` call syntax lets you avoid parens
+  -- Even though `w` is const, we can assign to it freely inside its init block
+  w = 1.5 -- floats default to f64
+  while myVar > 0
+    w *= 2
+    myVar -= myVar / 2
+-- myVar is now out of scope
+
+
+-- Functions
 -- IsEven. It should be its own package, but we'll include it here :)
+-- No need to specify types. Functions can be generic by default
 let is_even = pure fn x -> isEven = x mod 2 == 0
+-- You can overload using the `overload` unary op and an array of functions
+let is_int = overload [
+  fn x -> isInt = x.@type.@typeInfo.isInt, -- First element is the default
+  fn x: usize -> isInt = true, -- Functions are considered in reverse order
+  fn x: isize -> isInt = true,
+  fn x: f32 -> isInt = false,
+]
+assert 1::is_int -- `::` is similar to `|>` from functional languages, but binds tighter than unary
 
 -- Ensure that `A < x < B` (A=10, B=30)
 -- `_` is used in a range to mean "type.max" or "type.min", where `type` is the type of
 -- the other side of the range. Thus, in this case it's "usize.min" and "usize.max"
-assert x in (_..10, 31.._) 
+assert x in (_..10, 31.._)
+
+
+-- Multilayered control statements match their `else` and such based on the indentation of their
+-- first word (e.g `if`)
+if true => if false => printf: "Hi"
+           else => printf: "I bind to `if false`"
+else => printf: "I bind to `if true`"
+-- Of course, you're heavily encouraged to use proper blocking syntax for anything that convoluted:
+if true -- note the lack of `:`. Python programmers beware.
+  if false
+    printf: "Hi"
+  else
+    printf: "I bind to `if false`"
+else
+  printf: "I bind to `if true`"
+
 
 -- Fizzbuzz
 -- ..= is inclusive range [n,m], .. is [n,m)
-for 0..=100 -> i => when (i mod 3, i mod 5)
-  is (0, 0) => printf("FizzBuzz\n")
-  is (0, _) => printf("Fizz\n")
-  is (_, 0) => printf("Buzz\n")
-  else => printf("{}\n", i)
+for 0..=100 -> i
+  when (i mod 3, i mod 5)
+    is (0, 0)
+      printf("FizzBuzz\n")
+    is (0, _)
+      printf("Fizz\n")
+    is (_, 0)
+      printf("Buzz\n")
+    else => printf("{}\n", i)
 
 -- Multi-range loop (http://rosettacode.org/wiki/Loops/with_multiple_ranges)
 -- Normally, `for (range, range, range)` would iterate over (x, y, z) (zipped iter)
 -- We can make a function to merge them. This function would be included in the standard library,
--- if as a builtin.
-let merge = pure fn ranges -> mergedRange = {
+-- or as a builtin.
+let merge = pure fn ranges -> mergedRange =
   -- Assigning to a hitherto unspecified type translates to having assigned to it
   -- in name:type form. This is just a sugar to make things more readable
-  mergedRange.@type = ranges.@type + struct {
+  mergedRange.@type = ranges.@type + struct: -- remember to use `:` syntax for a unary on a block
     -- `do` is passed by the compiler and is the body of the for loop
     @overloads[#For] += fn self, do => 
-      for self.@tup -> range =>
-        for range -> v => do(v)
-  }
+      for self.@tup -> range
+        for range -> v
+          do(v)
   mergedRange = [.ranges = ranges]
-}
+
 let pow = pure fn x, y -> res = { -- For completeness' sake
   res = x
   for 1..y => res *= x
@@ -48,30 +109,33 @@ let range = (
   (x..=y).step(z),
   (11::pow(x)..=11::pow(x) + 1)
 )
-for range::merge() -> j =>
-  if @abs(prod) < 2::pow(27) & j != 0 => prod = prod * j
+for merge: range -> j
+  -- A ** operator may be added later
+  if @abs(prod) < 2::pow(27) and j != 0
+    prod = prod * j
 
 printf(" sum= {}", sum)
 printf("prod= {}", prod)
 
 
 -- Fibonacci
-let fib = pure fn n -> f = when n
-  is > 2 => fib(n - 1) + fib(n - 2)
-  else => 1
+let fib = pure fn n -> f =
+  when n
+    is > 2 => fib(n - 1) + fib(n - 2)
+    else => 1
 
 
 -- Make and initialize a struct
-let Food = struct {
-  field name: str
-  field calories: usize
-}
+let Food = struct:
+  field
+    name: str
+    calories: usize
 let turkey = [.name = "Turkey", .calories = 1000]
 
 
 -- Store an arbitrary enum
 let t = #Taggy
-assert t.@type == anyenum -- Objects have a special property called @type to get their type
+assert t.@type == anyenum 
 assert t == #Taggy
 -- Note that the tag (the part after #) can be any ligi word, including reserved words
 -- If you want to restrict anyenum to a particular subset of values, you need a full enum
@@ -79,15 +143,17 @@ assert t == #Taggy
 
 -- Make an enum
 -- `enum` at the start of a statement is a bind specifier. `enum` in an expression is a unary op
+-- This is so you can specify things inside the enum declaration
 -- Long form:
-let Meal = enum {
+let Meal = enum:
   -- Could also combine these into one `enum Breakfast, Lunch, Supper` line
-  enum Breakfast
-  enum Lunch
-  enum Supper
-}
+  enum
+    Breakfast
+    Lunch
+    Supper
+
 -- Shortest form:
-let Meal = enum (Breakfast, Lunch, Supper)
+let Meal = enum (#Breakfast, #Lunch, #Supper)
 -- The above can assign values, but cannot set types for algebraic data types
 
 let m = Meal.Breakfast
@@ -100,13 +166,14 @@ let Health = enum {
   enum Alive: usize
 }
 let h: Health = #Alive(100)
-assert
+assert (
   h != #Dead
   and h == #Alive -- Comparison against an anyenum (#Word) checks only the tag
   and h == #Alive(100) -- Comparison against a full enum literal (#Word(vals)) checks tag and vals
   and h == #Alive(_) -- Comparison against a sink (`_`) is always true, so this just checks the tag
   and h != #Alive(99)
   and h.Health == 99 -- Can also access it like a field. This would fail if h was #Dead
+)
 
 -- An even better version of the above, using ranged enums:
 let Health = enum {
@@ -115,8 +182,8 @@ let Health = enum {
   enum Dead = 0
   enum Alive = 1..=100
 }
-var h = (:Health: 1)
-assert h == #Alive and h == (:Health: 1)
+var h = (=Health= 1)
+assert h == #Alive and h.val == 1
 h.val -= 1
 assert h == #Dead
 -- Thus, you can have a sort of "named range", as well as an algebraic data type that stores
@@ -131,20 +198,17 @@ bar = pure fn u -> b = if u > 100 => true else => foo(u + 20) > 100
 -- Structs:
 -- You can also do the above and below in "one" statement using an init block
 -- This is the preferred way, as it clearly delimits the "recursive zone"
-let (Stmt: type, Expr: type) = {
-  Stmt = enum {
+let (Stmt: type, Expr: type) =
+  Stmt = enum:
     enum
-      Expr: Expr,
+      Expr: Expr
       Assert: Expr
-  }
-  Expr = enum {
+  Expr = enum:
     enum
-      Bin: (*Expr, anyenum, *Expr),
-      Una: (anyenum, *Expr),
-      Word: str,
+      Bin: (*Expr, anyenum, *Expr)
+      Una: (anyenum, *Expr)
+      Word: str
       Block: slice Stmt
-  }
-}
 
 -- Largest element
 let ar = [12, 5, 123, 64, 1235, 654]
@@ -164,38 +228,41 @@ for ar[0..ar.len/2] -> el, i => (el, ar.rev[i]) = (ar.rev[i], el)
 -- Rotate an array in place n slots
 var arr = [12, 5, 123, 64, 1235, 654]
 -- The naive solution: Rotate n times in a row
-let rotate = fn ar: ref _, n => when n
-  is 0 {}
-  is 1 => for (ar[0..ar.len], ar[1..ar.len]) -> (x, y) => (x, y) = (y, x)
-  else => for 0..n => rotate(ar.addr, 1)
+let rotate = fn ar: ref _, n =>
+  when n
+    is 0 => ()
+    is 1
+      for (ar[0..ar.len], ar[1..ar.len]) -> (x, y)
+        (x, y) = (y, x)
+    else
+      for 0..n => rotate(ar.addr, 1)
 -- The optimized solution:
 let rotate = fn ar: ref _, n =>
-  for ar -> el, i {
-    alias el2 = ar[(i + n) mod ar.len] -- aliases are lazily evaluated each time they're used
+  for ar -> el, i
+    alias el2 = ar[(i + n) mod ar.len] -- aliases are lazily evaluated each time they're used, like macros
     (el, el2) = (el2, el)
-  }
 
 
 -- Sort an array: Simple bubble sort (in place)
 let bubble_sort = fn items: slice _ =>
   for items -> x, i =>
-    for items[i..items.len] -> y =>
+    for items[i..items.len] -> y
       if y < x => (x, y) = (y, x)
 -- Unit test
-test "bubble_sort" {
+test "bubble_sort"
   var ar     = [1, 6, 2, 3, 7, 1]
   let sorted = [1, 1, 2, 3, 6, 7]
   ar::bubble_sort()
   -- Don't ya love zipped iteration
   for (ar, sorted) -> (x, y) => assert x == y
-}
+
 
 -- List Interface
 -- Ligi uses concepts to define "interfaces". By convention, we follow the `I` naming scheme.
 -- Ligi follows Nim's concept of a "concept" definition, for the most part
 -- Ligi just checks to see if the concept's block can pass type checking. Additionally,
 -- comptime code (like asserts) are evaluated.
-let IList = fn T: comptime type -> L = concept {
+let IList = fn T: comptime type -> L = concept:
   -- @This is defined inside here, just as with struct and enum, and is the type
   -- we're checking against the idea of a List
   var list: @This -- Only checks type checking, so we don't need to give a value
@@ -206,25 +273,33 @@ let IList = fn T: comptime type -> L = concept {
   list[0] = el -- check for both indexing and indexing as `ref T`
   -- A type which satisfies a concept is at least as good as it. Thus >= is `implements`
   assert list.insert(0, el).@type >= builtin.IResult(void)
-}
+
 
 
 -- Overloaded functions
-let describe = overload (
+let describe = overload [
   fn b: bool => printf("It's a bool"),
-  fn i: isize => printf("It's an int")
-)
-describe(true) --= It's a bool
-describe(-1) --= It's an int
+  fn i: isize => printf("It's an int"),
+]
+describe: true --= It's a bool
+describe: -1 --= It's an int
 
 
 -- Overloading operators
-let Vec2 = struct {
+let Vec2 = struct:
   field x: f32, y: f32
   @overloads[#Add] += pure fn lhs, rhs -> res = [ .x = lhs.x + rhs.x, .y = lhs.y + rhs.y ]
-}
-let (v1, v2): (Vec2, Vec2) =  ([.x = 1, .y = 2], [.x = 2, .y = 1])
+
+
+-- Can multiply types to make a tuple
+let (v1, v2): 2*Vec2 =  ([.x = 1, .y = 2], [.x = 2, .y = 1])
 assert (v1 + v2) == [.x = 3, .y = 3]
 -- Of course, the above is better accomplished by just using a tuple (f32,f32) and letting the
--- builtin overloads handle it
+-- builtin overloads handle it:
+let Vec2 = (f32, f32) + struct:
+  -- You can directly unpack a tuple argument
+  let len = property fn (x, y) -> l = @sqrt(x*x + y*y)
+let (v1, v2): 2*Vec2 = ((1, 2), (2, 1))
+assert (v1 + v2) == (3, 3)
+let l = v1.len
 
