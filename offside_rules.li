@@ -1,126 +1,91 @@
--- Ligi is now (experimentally) going to follow the offside rule.
--- Blocks are now entered by indenting the next line and left by dedenting
+-- This is to try and document the complete, current rules for indentation
 
--- This allows for binds like so:
-let
-  x = 10
-  y = 20
+-- Indentation matters.
+-- "Level" is the indentation of the first token of the current line
+-- "Our" level is the level when we entered a blocking construct, like `if` or `while`
+-- Each control structure has many "arms", each of which have a "shoulder" that begin them
 
--- Blocks may be implicitly entered by any unary operator
-let Vec3 = struct
+
+-- Other than `fn` and `macro`, which require either `->` or `=>`, all syntax constructs may
+-- implicitly enter a block after their shoulder:
+if true -- shoulder
+  printf("In block") -- rest of the arm
+  let x = 10
+  let y = 20
+else -- another shoulder
+  printf("In block") -- rest of `else`'s arm
+
+-- Within a block, a new block may only be started:
+-- - After a shoulder:
+if true
+  let x = 1
+-- - In a `:` call for listing args
+
+-- (This will go one of two ways. The first:)
+printf: 
+  "Hello, {}!\n"
+  "Kagome"
+-- (the second:)
+printf("Hello, {}!\n"):
+  let s = "Kagome"
+  s -- yielded as the value for this implicit block
+-- (both of the above are equivalent to `printf("Hello, {}!\n", "Kagome")`)
+
+-- - After a unary operator that used a `:`
+let Vec2 = struct:
   field x: f32, y: f32
+-- - After an assignment operator
+let (A, B): (type, type) =
+  A = struct
+    field x: *B
+  B = struct
+    field y: *A
 
 
--- `=` shall also be considered a block starter
-let x =
-  x = 20
-  x += 1
-  x = rand(x)
-  x *= 2
-
-
--- This means that technically the following is valid:
-let x = not
-  let cond = false
-  cond
-assert x == true
--- I'll leave it as an exercise to the user to not be a dumdum.
-
-
--- However, a normal block (the way you would normally use {}) must be entered with the special `block` op
-block
-  let r = 10
--- r is out of scope now
-
-
--- Blocks may be directly entered after a control structure
--- This prevents having to either type `=>` each time or needing workarounds for using
--- `:` (Python-style), as `:` is already used for specifying types, as in the capture below:
-let o: ?usize = 10
-if o -> x
-  printf("{}", x)
--- To do a single-line control structure, `=>` must be used.
-elif o == null => printf("nope")
--- `=>` may also be used when doing blocked style
-finally =>
-  printf("nope")
-
-
--- `when` shall allow indent or no indent without any need for `=>` (before the `is`, that is)
-when o
-  is #Some -> x => printf("{}", x)
-  is null
-    printf("Was null")
--- However, it will not allow an indent before the following `is` or `else`s:
-when o is #Some => printf("Oi")
-  is #null -- ERROR
-
--- Labels shall now be done like so
-let x = #my block
-  break #my : 10
-#my for 0..10 -> i
-  break #my
-
--- If you want properly aligned arithmetic expressions, use `()`, as it will suspend blocking inside
+-- Blocking is suspended:
+-- - Within `()`
 let x = (
-   y
-  +102031023123
-  ==
-  z
+  1000
+  +50
+  +600
+  +20.5
 )
--- However, control structures within will restart blocking
-let x = (
-  if true
-    10
-  else
-    20
-)
-
--- The indentation won't allow the previous `.` chains. Now you'll have to always put them in `.()`:
--- (this is because Indent and Dedent tokens will be suspended inside `()`)
-foo.(
-  -- We may also allow a leading `.` in swizzles (perhaps to become required)
-  .bar
-  .baz()
-  .bar()
+assert x == (1000 + 50 + 600 + 20.5)
+-- - Within `[]`
+let add = overload [
+  pure fn a, b -> c =
+    a + b -- this blocking is purely aesthetic
+    -- another statement here before the `,` would be an error
   ,
-  -- the leading `.` would also be allowed after each `,`
-  .far()
-)
+  pure fn a: bool, b: bool -> c: bool = a xor b,
+]
 
--- Another possibility is `.<Indent>` with additional leading `.`
-foo.
-  .bar
-  .baz()
-  .bar()
--- (not allowing swizzling)
--- I'm in favor of allowing this one, as the `.()` syntax is somewhat cumbersome
+-- If blocking has been suspended, it can only be restarted again with `{}`:
+let add = overload [
+  pure fn a, b -> c = {
+    let res = a + b
+    c = res
+  }, -- This lets us have a clear place to put the `,` without it sorta "floating" like in the last example
+  pure fn a: bool, b: bool -> c: bool = a xor b,
+]
 
--- Additionally, the above rules shall apply to `::`
-foo.(
-  ::bar()
-  ::baz()
-  ::bar()
-)
-foo::
-  ::bar()
-  ::baz()
-  ::bar()
+-- Of course, `{}` may also be used when blocking is already in place, and may also be used to start a new
+-- block directly:
+if true
+  {
+    let x = 10
+  }
+  -- x is no longer in scope
+  printf("End of the if block")
 
--- I'm now actually in favor of allowing things like
-foo.
-  bar
-  baz
-  baf
-foo::
-  bar
-  baz
-  baf
--- where a newline serves as an implicit `.` or `::`
-
--- In summary, the following may come immediately before blocks:
--- - Unary operators
--- - `.` and `::`
--- - A control structure's condition and capture
-
--- Also, `()` and `[]` suspend blocking, while control structures always restart blocking
+-- `{}` may also be used directly on control structures, in place of normal `=>`:
+if true {
+  
+}
+fn a, b {
+  printf:
+    "a={}, b={}\n"
+    (a, b)
+}
+-- Of course, normal indented blocking is the officially endorsed way of doing things
+-- when not inside `()` or `[]`

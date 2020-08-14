@@ -1,0 +1,147 @@
+-- Ligi is now (experimentally) going to follow the offside rule.
+-- Blocks are now entered by indenting the next line and left by dedenting
+
+-- This allows for binds like so:
+let
+  x = 10
+  y = 20
+
+-- Blocks may be implicitly entered by any unary operator (when using `:`)
+let Vec3 = struct:
+  field x: f32, y: f32
+
+
+-- `=` shall also be considered a block starter
+let x =
+  x = 20
+  x += 1
+  x = rand(x)
+  x *= 2
+
+
+-- This means that technically the following is valid:
+let x = not:
+  let cond = false
+  cond
+assert x == true
+-- I'll leave it as an exercise to the user to not be a dumdum.
+
+
+-- However, a normal block (the way you would normally use {}) must be entered with the special `block` op
+-- (`block` is actually to be a no-op passthrough unary operator, so `block 1` is the same as `1`)
+block:
+  let r = 10
+-- r is out of scope now
+
+
+-- Blocks may be directly entered after a control structure
+-- This prevents having to either type `=>` each time or needing workarounds for using
+-- `:` (Python-style), as `:` is already used for specifying types, as in the capture below:
+let o: ?usize = 10
+if o -> x
+  printf("{}", x)
+-- To do a single-line control structure, `=>` must be used.
+elif o == null => printf("nope")
+-- `=>` may also be used when doing blocked style
+finally =>
+  printf("nope")
+
+
+-- `when` shall allow indent or no indent without any need for `=>` (before the `is`, that is)
+when o
+  is #Some -> x => printf("{}", x)
+  is null
+    printf("Was null")
+-- However, it will not allow an indent before the following `is` or `else`s:
+when o is #Some => printf("Oi")
+  is #null -- ERROR
+
+-- Labels shall now be done like so
+let x = #my block
+  break #my : 10
+#my for 0..10 -> i
+  break #my
+
+-- If you want properly aligned arithmetic expressions, use `()`, as it will suspend blocking inside
+let x = (
+   y
+  +102031023123
+  ==
+  z
+)
+-- However, control structures within will restart blocking
+let x = (
+  if true
+    10
+  else
+    20
+)
+
+-- The indentation won't allow the previous `.` chains. Now you'll have to always put them in `.()`:
+-- (this is because Indent and Dedent tokens will be suspended inside `()`)
+foo.(
+  -- We may also allow a leading `.` in swizzles (perhaps to become required)
+  .bar
+  .baz()
+  .bar()
+  ,
+  -- the leading `.` would also be allowed after each `,`
+  .far()
+)
+
+-- Another possibility is `.<Indent>` with additional leading `.`
+foo.
+  .bar
+  .baz()
+  .bar()
+-- (not allowing swizzling)
+-- I'm in favor of allowing this one, as the `.()` syntax is somewhat cumbersome
+
+-- Additionally, the above rules shall apply to `::`
+foo.(
+  ::bar()
+  ::baz()
+  ::bar()
+)
+foo::
+  ::bar()
+  ::baz()
+  ::bar()
+
+-- I'm now actually in favor of allowing things like
+foo.
+  bar
+  baz
+  baf
+foo::
+  bar
+  baz
+  baf
+-- where a newline serves as an implicit `.` or `::`
+
+-- In summary, the following may come immediately before blocks:
+-- - Unary operators
+-- - `.` and `::`
+-- - A control structure's condition and capture
+
+-- Also, `()` and `[]` suspend blocking, while control structures always restart blocking
+
+-- I'm thinking of allowing using `{}` to make a new block
+-- It would be a package deal with disallowing things from implicitly restarting blocking inside
+-- tuples/arrays/structs:
+let x = (
+  foo:
+    x -- blocking was not restarted. `indented == false`
+  ,
+  foo: {
+    x -- blocking was restarted. Now inside a block
+  }
+)
+-- This would allow us to ignore that old "unambiguous ender" idea
+-- We could also get rid of the `block` no-op
+-- This would also completely replace the old `{}` calls
+
+-- With this latest change, the official rules would be:
+-- - Blocking is suspended at all times inside `()` and `[]`
+-- - Blocking may only be restarted by `{}`
+-- - `:` and assignment operators may implicitly start a block outside `()` and `[]`
