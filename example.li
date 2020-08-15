@@ -18,39 +18,63 @@ if x -> y
   printf
 elif y => printy
 else => dont
+-- Equivalent to the above
+if x -> y {
+  printf
+} elif y => printy
+else {
+  dont
+}
+-- `{}` can be used in place of indentation if desired
 
 
 -- These 2 are equiv
 x.y.z
-x.
+x. -- note this only works when blocking is enabled (i.e outside `()` and `[]` or inside `{}`)
   y
   z
 
--- These 2 are equiv
 vec.(x, y, z)
-vec.(
-  x,
-  y,
-  z
-)
 
 let x = 10
 
 -- These 2 are equiv
 let x = 11, y = 12
-let
+let -- Blocking is always enabled when a bind statement is valid, so don't worry
   x = 11
   y = 12
 
-let Vec2 = struct:
+let Vec2 = struct: -- `:` needed here to start the new block. It's a part of the operator's call.
   field
     x: f32
     y: f32
+-- Note on the above `:`
+-- `:` restarts precedence and allows for an indented block **if blocking is enabled**.
+-- Thus, you can also do things like
+if not: a and b and c => then
+-- equivalent to
+if not (a and b and c) => then
+-- This is to be called "command style", similar to Nim's `func arg` syntax. Ligi just makes it explicit.
+-- (Also works with functions):
+printf: "Hello, world!"
+-- (adds to the last call, or makes a new call)
+printf("Hello, {}!"): "Sango" -- printf("Hello, {}!", "Sango")
+printf("Hello, {}!"):
+  let s = "Sango"
+  s -- printf("Hello, {}!", "Sango")
+-- (The second indented block style is intended for macro bodies)
+
 
 let Meal = enum:
   enum Breakfast
   enum Lunch
   enum Supper
+-- Equivalent to the above:
+let Meal = enum {
+  enum Breakfast
+  enum Lunch
+  enum Supper
+}
 
 
 -- elif/else/finally determine their location based on the indent of the leading if/for/while/etc
@@ -72,22 +96,22 @@ when x+50 -> val
     printf("Was either 10 or 20")
 
 loop -> c
-  break
-else
-  broke
+  break:1
+else -> valBrokenWith
+  assert valBrokenWith == 1
 finally
   didntBreak
 
 for x -> val
-  break
-else
-  broke
-finally
+  break:1 
+else -> valBrokenWith
+  assert valBrokenWith == 1
+finally -> lastValueOfVal
   didntBreak
   
 while true
-  break
-else
+  break:1
+else -> valBrokenWith
   broke
 finally
   didntBreak
@@ -103,8 +127,8 @@ let add = fn a: usize, b: usize -> c: usize = a + b
 
 let foo =
   -- Blocking is suspended while parsing args
-  fn a:usize
-     b:usize -- (and commas are optional)
+  fn a:usize, 
+     b:usize, -- trailing comma allowed
   -- And resumed upon reading the `=>`,`{}`, or `->` for parsing the ret/body
   =>
     printf("Hey")
@@ -135,21 +159,10 @@ a::
   c
   d
 
--- Commas are actually optional in tups/arrays/structs
-(
-  a
-  b
-  -- You only need them when it is ambiguous, as below
-  c,
-  -d
-  -- however, you could also write the above as
-  c
-  (-d)
-  -- In other words, as long as you don't start an expression with `-`, you're fine
-  -- to skip all commas in tups/arrays/structs
-)
--- Optional commas are to better support things like
 let funcs = overload [
-  fn a, b -> c = a + b -- We *could* put a comma here, but why bother?
-  fn c, d -> e = c / d
+  fn a, b -> c = a + b,
+  fn c, d -> e = c / d,
 ]
+
+
+

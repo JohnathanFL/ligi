@@ -1,16 +1,13 @@
 import system
-import os
 import json
-import macros
 
 import ligipkg/[lexing, parser, ast, pretty]
 
 
 when isMainModule:
   var exText = readFile "example.li"
-  let o = exText.lex.parse
-  for i in o:
-    echo pretty jsonify i
+  let p = exText.lex.parse
+  echo pretty jsonifyAll p.parseStmtSeq
   # var lexer = exText.lex
   # var (pos, tok)= lexer.scan()
   # while tok.tag != tEOF:

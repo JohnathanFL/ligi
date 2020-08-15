@@ -1,14 +1,12 @@
 import ast
 import lexing
 import lexast
-import pretty
 
 
 import options
 import strformat
 import tables
 import sets
-import sequtils
 import json
 
 
@@ -108,39 +106,33 @@ template setdent(body: untyped) {.dirty.} =
   body
   (self.ourLevel, self.curLevel) = (oldOur, oldCur)
 
-proc parseStmt(self: Parser): Stmt
-proc parseExpr(self: Parser, allowBlock: bool): Expr
+proc parseStmt*(self: Parser): Stmt
+proc parseExpr*(self: Parser, allowBlock: bool): Expr
 
 
 ####
 # Below are small helper parsers
 ####
 
-proc parseStmtSeq(self: Parser): seq[Stmt] = withBlocking:
+proc parseStmtSeq*(self: Parser): seq[Stmt] = withBlocking:
   while not (indented or dedented) and not nextIs tEOF:
     let startLine = self.pos.line
     let next = self.parseStmt()
-    echo pretty jsonify next
     result.add next
     if (self.pos.line == startLine) and not nextIs tEOF: err "Expected a newline"
     moveline
   if indented: err "Unexpected indent"
-proc parseBlock(self: Parser, label="", braced=false): Block = withBlocking:
+proc parseBlock*(self: Parser, label="", braced=false): Block = preserveLevel:
   if braced:
     match tLBrace
-    # If we're braced, reset indentation for the duration of the block
-    # The withBlocking: will take care of resetting it
-    movedentTo 0
-    moveline
-  else:
-    movedent
-    moveline
+  movedent
+  moveline
   result = Block(label:label, stmts: self.parseStmtSeq())
 
   if braced:
     match tRBrace
 
-proc parseTypeDesc(self: Parser, assgDelimited=false): Expr =
+proc parseTypeDesc*(self: Parser, assgDelimited=false): Expr =
   if assgDelimited and tryMatch tAssg:
     result = self.parseExpr(allowBlock=false)
     match tAssg
@@ -152,7 +144,7 @@ proc parseTypeDesc(self: Parser, assgDelimited=false): Expr =
   # else: no typedesc, result is nil by default, all is well in the world
 
 # (word | '(' bindLoc {',' bindLoc | ','}')')
-proc parseBindLoc(self: Parser): BindLoc =
+proc parseBindLoc*(self: Parser): BindLoc =
   if nextIs tWord:
     result = BindName(name:tWord.take.str)
   elif tryMatch tLParen:
@@ -166,10 +158,10 @@ proc parseBindLoc(self: Parser): BindLoc =
   result.ty = self.parseTypeDesc
 
 
-proc parseCapts(self: Parser, capt: var BindLoc) =
+proc parseCapts*(self: Parser, capt: var BindLoc) =
   if tryMatch tStoreIn:
     capt = self.parseBindLoc()
-proc parseCapts(self: Parser, capt1, capt2: var BindLoc) =
+proc parseCapts*(self: Parser, capt1, capt2: var BindLoc) =
   if tryMatch tStoreIn:
     capt1 = self.parseBindLoc()
     if tryMatch tComma: capt2 = self.parseBindLoc()
@@ -178,7 +170,7 @@ template parseCapts(capt1, capt2: var BindLoc) = self.parseCapts capt1, capt2
 
 
 # a `{}` block, an indented block, or `=>` and a statement
-proc parseBody(self: Parser, allowIndent: bool): Expr =
+proc parseBody*(self: Parser, allowIndent: bool): Expr =
   if indented:
     result = self.parseBlock(braced=false)
   elif nextIs tLBrace:
@@ -194,7 +186,7 @@ proc parseBody(self: Parser, allowIndent: bool): Expr =
 ####
 
 # 'return' [block | expr]
-proc parseReturn(self: Parser): Return =
+proc parseReturn*(self: Parser): Return =
   new result
   match tReturn
   if indented:
@@ -203,7 +195,7 @@ proc parseReturn(self: Parser): Return =
     result.val = self.parseExpr(allowBlock=true)
 
 # 'break' [label] [':' expr]
-proc parseBreak(self: Parser): Break =
+proc parseBreak*(self: Parser): Break =
   new result
   match tBreak
   if indented:
@@ -211,13 +203,13 @@ proc parseBreak(self: Parser): Break =
   if nextIs tLabel: result.label = tLabel.take.str
   if tryMatch tColon: result.val = self.parseExpr(allowBlock=true)
 
-proc parseArrayLit(self: Parser): ArrayLit = withoutBlocking:
+proc parseArrayLit*(self: Parser): ArrayLit = withoutBlocking:
   new result
   while not nextIs tRBracket:
     result.vals.add self.parseExpr(allowBlock=false)
     skipcommas
 
-proc parseStructLit(self: Parser): StructLit = withoutBlocking:
+proc parseStructLit*(self: Parser): StructLit = withoutBlocking:
   new result
   while tryMatch tAccess:
     var b = Bind()
@@ -228,7 +220,7 @@ proc parseStructLit(self: Parser): StructLit = withoutBlocking:
     # Allow indentation to serve as a comma if we parsed an indented block
     if not tryMatch tComma: break
 
-proc parseCompound(self: Parser): Compound = withoutBlocking:
+proc parseCompound*(self: Parser): Compound = withoutBlocking:
   match tLBracket
   let ty = self.parseTypeDesc(assgDelimited=true)
   # []
@@ -240,13 +232,14 @@ proc parseCompound(self: Parser): Compound = withoutBlocking:
   result.ty = ty
   match tRBracket
 
-proc parseTuple(self: Parser): Tuple = withoutBlocking:
+proc parseTuple*(self: Parser): Tuple = withoutBlocking:
   result = Tuple(ty:nil, vals: @[])
   match tLParen
   result.ty = self.parseTypeDesc(assgDelimited=true)
   while not nextIs tRParen:
     result.vals.add self.parseExpr(allowBlock=false)
-    skipcommas
+    if not tryMatch tComma: break
+    else: skipcommas
   match tRParen
 
 
@@ -254,8 +247,8 @@ proc parseTuple(self: Parser): Tuple = withoutBlocking:
 # However, the syntax we're parsing is also messed up.
 # Revisit the syntax itself, then rewrite this section for the 4th time.
 
-proc parseAccessPath(self: Parser, path: var seq[AccessOp], assumeAccess=false)
-proc parseCall(self: Parser, path: var seq[AccessOp]) =
+proc parseAccessPath*(self: Parser, path: var seq[AccessOp], assumeAccess=false)
+proc parseCall*(self: Parser, path: var seq[AccessOp]) =
   var
     kind: CallKind
     closer: Tag
@@ -272,12 +265,13 @@ proc parseCall(self: Parser, path: var seq[AccessOp]) =
   withoutBlocking:
     while not nextIs closer:
       args.add self.parseExpr(allowBlock=false)
-      skipcommas
+      if not tryMatch tComma: break
+      else: skipcommas
     match closer
   path.add AccessCall(kind:kind, args:args)
 
 
-proc parseAccess(self: Parser, path: var seq[AccessOp]) =
+proc parseAccess*(self: Parser, path: var seq[AccessOp]) =
   # '.' is already matched. Next is (swizzle | word | indented accesses)
   if indented:
     preserveLevel:
@@ -296,7 +290,9 @@ proc parseAccess(self: Parser, path: var seq[AccessOp]) =
         var innerPath: seq[AccessOp] = @[]
         self.parseAccessPath(innerPath, assumeAccess=true)
         pathList.add innerPath
-        skipcommas
+        if not tryMatch tComma: break
+        else: skipcommas
+       
       match tRParen
       path.add AccessSwizzle(ty:ty, paths:pathList)
   else:
@@ -319,7 +315,7 @@ template commonPipe(): Expr =
 
   into
 
-proc parsePipe(self: Parser, path: var seq[AccessOp]) =
+proc parsePipe*(self: Parser, path: var seq[AccessOp]) =
   # '::' is already matched. Next is (tuple | word | indentedPipes), optionally followed by
   # a AccessCall. Even if there's more after that, we don't parse it in this proc.
   if indented: # Many pipes at once
@@ -339,7 +335,7 @@ proc parsePipe(self: Parser, path: var seq[AccessOp]) =
 
 # Each is:
 # '.' (blockOfAccess | name | swizzle) | `::` (blockOfAccess | tuple | name)
-proc parseAccessPath(self: Parser, path: var seq[AccessOp], assumeAccess=false) = 
+proc parseAccessPath*(self: Parser, path: var seq[AccessOp], assumeAccess=false) = 
   # For kickstarting inside swizzles, mainly
   if assumeAccess:
     self.parseAccess path
@@ -357,12 +353,12 @@ proc parseAccessPath(self: Parser, path: var seq[AccessOp], assumeAccess=false) 
         path.add AccessCall(kind: ckCall, args: @[arg])
 
 # (tuple|compund|word|str) [accessPath]
-proc parseAccessible(self: Parser, restrict=false): Expr =
+proc parseAccessible*(self: Parser, restrict=false): Expr =
   if nextIs tWord: result = Word(word: tWord.take.str)
   elif nextIs tStr: result = String(str: tStr.take.str)
   elif nextIs tLParen: result = self.parseTuple()
   elif nextIs tLBracket: result = self.parseCompound()
-  elif nextIs tLBrace: result = self.parseBlock()
+  elif nextIs tLBrace: result = self.parseBlock(braced=true)
   else:
     err fmt"Expected a tuple, compound, word, or string, got {self.cur.tag}"
   self.parseAccessPath result.path
@@ -378,13 +374,13 @@ template parseElseFinally() =
     result.final = self.parseBody(allowIndent=true)
 
 # expr [capt] thenOrBlock
-proc parseIfArm(self: Parser): IfArm =
+proc parseIfArm*(self: Parser): IfArm =
   result.cond = self.parseExpr(allowBlock=false)
   parseCapts result.capt
   result.val = self.parseBody(allowIndent=true)
   moveline
 # if ifArm {'elif' ifArm} [elseFinally]
-proc parseIf(self: Parser): If = setdent:
+proc parseIf*(self: Parser): If = setdent:
   new result
   match tIf
   while true:
@@ -393,7 +389,7 @@ proc parseIf(self: Parser): If = setdent:
   parseElseFinally()
 
 
-proc parseWhenArm(self: Parser): WhenArm =
+proc parseWhenArm*(self: Parser): WhenArm =
   match tIs
   if nextIs WhenOps:
     result.op = BinOp take(WhenOps).tag
@@ -402,7 +398,7 @@ proc parseWhenArm(self: Parser): WhenArm =
   result.rhs = self.parseExpr(allowBlock=false)
   parseCapts result.capt
   result.val = self.parseBody(allowIndent=true)
-proc parseWhen(self: Parser): When = setdent:
+proc parseWhen*(self: Parser): When = setdent:
   new result
   match tWhen
   result.lhs = self.parseExpr(allowBlock=false)
@@ -421,7 +417,7 @@ proc parseWhen(self: Parser): When = setdent:
 
 
 
-proc parseLoop(self: Parser): Loop = setdent:
+proc parseLoop*(self: Parser): Loop = setdent:
   new result
   match tLoop
   parseCapts result.counter
@@ -434,16 +430,16 @@ template parseCondLoop() =
   parseCapts result.capt, result.counter
   result.body = self.parseBody(allowIndent=true)
   parseElseFinally()
-proc parseFor(self: Parser): For = setdent:
+proc parseFor*(self: Parser): For = setdent:
   new result
   match tFor
   parseCondLoop()
-proc parseWhile(self: Parser): While = setdent:
+proc parseWhile*(self: Parser): While = setdent:
   new result
   match tWhile
   parseCondLoop()
 
-proc parseControlStructure(self: Parser): ControlStructure =
+proc parseControlStructure*(self: Parser, label=""): ControlStructure =
   result =
     if nextIs tIf: self.parseIf()
     elif nextIs tWhen: self.parseWhen()
@@ -455,7 +451,7 @@ proc parseControlStructure(self: Parser): ControlStructure =
 
 # TODO: Refactor common elements from parseMacro and parseFn
 # 'macro' [arglist] (block | '=>' stmt)
-proc parseMacro(self: Parser): Macro =
+proc parseMacro*(self: Parser): Macro =
   new result
   match tMacro
   withoutBlocking:
@@ -477,7 +473,7 @@ template parseVoidBody() =
     ),
     init: self.parseExpr(allowBlock=true),
   )
-template parseRetBody() = withBlocking:
+template parseRetBody() = preserveLevel:
   if tryMatch tThen: parseVoidBody()
   elif tryMatch tStoreIn:
     result.ret = Bind(
@@ -486,13 +482,15 @@ template parseRetBody() = withBlocking:
     match tAssg
     result.ret.init = self.parseExpr(allowBlock=true)
   else: err "Expected either `=>` and a function body or `->` and a return binding"
-proc parseFn(self: Parser): Fn =
+proc parseFn*(self: Parser): Fn =
   new result
   match tFn
   withoutBlocking:
     while not nextIs {tThen, tStoreIn}:
       result.args.add self.parseBindLoc()
-      skipcommas
+      if not tryMatch tComma: break
+      else: skipcommas
+      
   moveline
 
   # No args but `=>` or `->` specified
@@ -501,22 +499,35 @@ proc parseFn(self: Parser): Fn =
   else:
     err "Expected either `=>` and the function body or `->` and the return bind"
 
+# label [ (tuple|compound) | controlStructure | bracedBlock ]
+proc parseLabeled*(self: Parser): Expr =
+  let lab = take tLabel
+  if nextIs tLParen:
+    result = EnumLit(label: lab.str, inner: self.parseTuple())
+  elif nextIs tLBracket:
+    result = EnumLit(label: lab.str, inner: self.parseCompound())
+  elif nextIs {tIf, tWhen, tWhile, tLoop, tFor}:
+    result = self.parseControlStructure(label=lab.str)
+  else:
+    err fmt"Unexpected {self.cur} after a label. Expected tuple, array, struct, control structure, or nothing"
+
 # return and break are included here so you can do things like
 # let x = optional or return false
 # (since they're divergent, they're fine type-wise)
 # return | break | fn | macro | controlStructure | pipeline
-proc parseAtom(self: Parser): Expr =
+proc parseAtom*(self: Parser): Expr =
   result =
     if nextIs tReturn: self.parseReturn()
     elif nextIs tBreak: self.parseBreak()
     elif nextIs {tIf, tWhen, tWhile, tFor, tLoop}: self.parseControlStructure()
     elif nextIs tFn: self.parseFn()
     elif nextIs tMacro: self.parseMacro()
+    elif nextIs tLabel: self.parseLabeled()
     else: self.parseAccessible()
 
 
 # {unary} (unary ':' exprOrBlock | pipable)
-proc parseUnary(self: Parser): Expr =
+proc parseUnary*(self: Parser): Expr =
   if nextIs UnaOps:
     let op = take(UnaOps).tag.UnaOp
     if tryMatch tColon:
@@ -530,7 +541,7 @@ proc parseUnary(self: Parser): Expr =
   else:
     result = self.parseAtom()
 
-proc parseBinary(self: Parser, level=0): Expr =
+proc parseBinary*(self: Parser, level=0): Expr =
   template nextLayer(): Expr {.dirty.} =
     if level + 1 == BinOps.len: self.parseUnary()
     else: self.parseBinary(level+1)
@@ -546,7 +557,7 @@ template parseBindInit() =
   if tryMatch tAssg: b.init = self.parseExpr(allowBlock=true)
   result.binds.add b
 # bindSpec (blockOfBinds | bind {',' bind})
-proc parseBindGroup(self: Parser): BindGroup = withBlocking:
+proc parseBindGroup*(self: Parser): BindGroup = withBlocking:
   new result
   result.spec = BindSpec take(BindSpecs).tag
   result.binds = @[]
@@ -560,19 +571,19 @@ proc parseBindGroup(self: Parser): BindGroup = withBlocking:
       parseBindInit()
       if not tryMatch tComma: break
 
-proc parseAssert(self: Parser): Assert = withBlocking:
+proc parseAssert*(self: Parser): Assert = withBlocking:
   new result
   match tAssert
   result.val = self.parseExpr(allowBlock=false)
   if tryMatch tColon:
     result.msg = take(tStr).str
 
-proc parseStmt(self: Parser): Stmt = withBlocking:
+proc parseStmt*(self: Parser): Stmt = withBlocking:
   result =
     if nextIs BindSpecs: self.parseBindGroup()
     elif nextIs tAssert: self.parseAssert()
     else: self.parseExpr(allowBlock=false)
-proc parseExpr(self: Parser, allowBlock: bool): Expr =
+proc parseExpr*(self: Parser, allowBlock: bool): Expr =
   #echo fmt"Indent is {indented} and allowBlock is {allowBlock}"
   if allowBlock and indented:
     result = self.parseBlock()
@@ -581,10 +592,10 @@ proc parseExpr(self: Parser, allowBlock: bool): Expr =
   else:
     result = self.parseBinary()
 
-proc parse*(lexer: Lexer): seq[Stmt] =
+proc parse*(lexer: Lexer): Parser =
   var self = Parser(lexer: lexer, blocking: true)
   # Kick .cur and .pos
   discard self.advance()
   moveline
   movedent
-  return self.parseStmtSeq()
+  return self

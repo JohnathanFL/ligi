@@ -1,4 +1,5 @@
 import options
+import macros
 
 import lexing
 
@@ -128,7 +129,7 @@ type StructLit* = ref object of Compound
   fields*: seq[Bind]
 type EnumLit* = ref object of Expr
   label*: string
-  inner*: Compound
+  inner*: Expr
 
 
 type Macro* = ref object of Expr
@@ -178,7 +179,5 @@ type For* = ref object of Loop
 type While* = ref object of Loop
   expr*: Expr
   capt*: BindLoc #?
-
-
 
 
