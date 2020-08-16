@@ -1,0 +1,31 @@
+-- Note: I'm shooting this proposal back down before it gets any real traction in the code.
+-- I've found that it's far more readable to just re-allow `{}` to create blocks, especially now
+-- that `func: arg` syntax does the same thing the old `func {arg block}` was supposed to do
+-- I leave this proposal in the repo as another log of my foolishness
+
+-- This is a basic syntax proposal
+
+-- Right now, we have things
+let fnList = [
+  fn =>
+    printf("I'm in a block")
+  , -- the `,` on its own here is just ugly
+  fn => printf("I'm not"),
+  fn => printf("Same here")
+]
+-- where an expression couldn't possibly continue, yet the parser will still try and get th comma
+-- to end it officially.
+
+-- This proposal introduces into the parser the concept of an "unambiguous ender".
+-- This will mostly just be blocks, `:` calls, and things like that which reset precedence.
+-- If an "unambiguous ender" is found, then csv parsers will know they can ignore the comma.
+-- The parser will, however, still attempt to match any comma it finds, so as to not make it too confusing
+-- for the programmer.
+
+-- Thus, the above example becomes:
+let fnList = [
+  fn =>
+    printf("I'm in a block")
+  fn => printf("I'm not")   -- Commas could still be used here, but since a fn's body parses
+  fn => printf("Same here") -- a new expression, we've been unambiguously ended
+]

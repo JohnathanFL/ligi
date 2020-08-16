@@ -1,0 +1,18 @@
+-- This is to change the loop label style
+-- Once, we had
+for 0..10 -> i `lab {
+  
+}
+
+-- However this no longer works now that we have #lab and `=>` syntax:
+for 0..10 -> i #lab {
+  
+}
+for 0..10 -> i => #lab {} -- breaking #lab would logically just break that block, not the loop (i.e continue)
+
+
+-- This is a proposal to change it either like so:
+for #lab 0..10 -> i => {}
+-- or
+#lab for 0..10 -> i => {}
+-- The latter would be more consistent with the `#lab {}` block style, so I'm leaning toward that

@@ -1,0 +1,23 @@
+-- Currently, we can use tuples for zipped iteration in for loops
+
+-- This proposal would allow for sequential iteration of multiple ranges:
+for 0..100, 200..300 -> i, j
+  if i > 100
+    assert i != j
+
+
+-- All sequential iterators must yield the same type
+-- This has no issues with zipped iteration (given each zipped pair yields the same type)
+for (0..100, 100..200), (200..300, 300..400) -> (i, j)
+  assert j == i + 100
+-- If one zipped iterator ends before the other, it will simply move to the next in the sequence
+
+-- It would allow multilining the sequentials, as long as each line ends with a `,`
+for (0..100, 100..200),
+    (200..300, 300..400)
+  assert j == i + 100
+
+
+-- In short, this is just an easy way of rolling up multiple identical loops
+-- over a discontinuous range without resorting to methods like the `merge` function
+-- I implemented in samples/basics.li.

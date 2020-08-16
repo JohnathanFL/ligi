@@ -1,0 +1,24 @@
+-- This is to (finally) specify a usage for `else` for loops:
+
+-- Currently, we allow `finally` for if the loop never breaks.
+-- `else` will be the opposite.
+-- Thus, `finally` executes after a long time when the loop "finally" ends, while
+-- `else` executes if the loop encounters a different ("else") situation.
+
+
+-- Obviously, you'd prefer to return an ?usize, but just bear with me
+let index_of = fn haystack, needle -> index:usize =
+  for haystack -> el, i { if el == needle => break:i } -- note the {} to keep the else off the if
+  -- The value you broke with is available as a capture
+  -- (as per "proposals/capture_finally.li")
+  -- and you have to re-yield the value for it to be the value of the loop
+  -- (if no `else`, it acts like you had `else -> v => v`)
+  else -> val 
+    printf("We found it at {}, captured as {}!", (i, val))
+    val
+  finally
+    @panic("We didn't find it!") -- could also do a `null` here, if we had an optional return
+-- The value that is b
+
+-- Additionally, this proposal specifies that the last value of both the capture and the counter are
+-- available in both else and finally blocks for loops

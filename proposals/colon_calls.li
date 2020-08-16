@@ -1,0 +1,48 @@
+-- Now that we have braceless syntax, let's see what else we can add
+
+
+-- This proposal would add the following behavior
+
+let add = pure fn a, b -> c = a + b
+assert (add(1): 2) == add(1, 2)
+-- It parses the expression immediately after it and places it as the last argument in its lhs
+-- It's essentially the reverse of the :: operator
+assert (add(1): 2) == 1::add(2)
+
+-- It can also allow implicit blocks:
+let dowhile = macro cond: untyped, do: untyped =>
+  loop
+    do
+    if not cond: break
+
+var x = 10
+dowhile(x > 0):
+  printf("Doing")
+
+-- (Implicit blocks with macros are the main intended usage of this)
+
+
+-- These could also be used to make @align, `@callconv`, and similar stuff:
+let add = @callconv(#c): pure fn a: usize, b: usize -> c =
+  a + b
+
+-- Assuming an interleaved vertex array of [posx,colr,posy,colg,posz,colb] (6 els):
+let
+  CompTy = f32
+  alignment = @sizeof(CompTy) * 5
+  AlignedPtr = fn T -> t = @align(@sizeof(T) * 5): *T
+  (PosX, ColR, PosY, ColG, PosZ, ColB) = AlignedPtr(CompTy) * 6
+-- (Assuming I'm thinking about alignment right)
+
+
+-- With this change, I also plan to require that unary operators which lead into a block use this style:
+let Vec2 = struct:
+  field x: f32, y: f32
+-- This makes the intent clearer, as the only time that an expression can ever continue as a block is now
+-- explicit
+
+
+-- As part of this, I'm also changing the typedesc on compounds to using =type=:
+let v = (=Vec3= 1, 2, 3)
+-- without this, `:type:` is ambiguous between `:typedesc:` and `:(func: args):`
+-- Funny note: This is how I discovered I still had the old happy doc-comment style in the syntax highlighter
