@@ -1,9 +1,19 @@
 import strutils
 import tables
 import strformat
-import algorithm
-import sets
 
+import ast
+
+# Lexing specific tags. No need for the AST in general to know about them
+makeTags {
+  iLParen: "(",
+  iRParen: ")",
+  iLBracket: "[",
+  iRBracket: "]",
+  iLBrace: "{",
+  iRBrace: "}",
+  iComma: ",",
+}
 
 template alias(what: untyped, asWhat: untyped): untyped =
   template what():untyped {.dirty.} = asWhat
@@ -13,153 +23,50 @@ template err(msg: string) =
 
 const WordChars: set[char] = {'a'..'z', 'A'..'Z', '0'..'9', '_', '@'}
 
+# To form sigils like `+`, `=>`, or '<=>'
+const SigilChars: set[char] = {
+  '-', '+', '*', '/', '?', '=', '<', '>', '~',
+  '$', ':', '.'
+}
 
-type Tag* = enum
-  # Values
-  tWord = "@WORD@",
-  tLabel = "@LABEL@",
-  tStr = "@STR@",
-  tChar = "@CHAR@",
-  #Assignments
-  tAssg = "=",
-  tAddAssg = "+=",
-  tSubAssg = "-=",
-  tMulAssg = "*=",
-  tDivAssg = "/=",
-  #Binaries
-  tOr = "or",
-  tXor = "xor",
-  tAnd = "and",
-  tEq = "==",
-  tNotEq = "!=",
-  tSpaceship = "<=>",
-  tGt = ">",
-  tLt = "<",
-  tGtEq = ">=",
-  tLtEq = "<=",
-  tIn = "in",
-  tNotIn = "notin",
-  tOpenRange = "..",
-  tClosedRange = "..=",
-  tAdd = "+",
-  tSub = "-",
-  tMul = "*",
-  tDiv = "/",
-  tMod = "mod",
-  tBitOr = "|",
-  tBitAnd = "&",
-  tBitXor = "^",
-  #Unaries
-  tBitNot = "~",
-  tNot = "not",
-
-  tStruct = "struct",
-  tRef = "ref",
-  tSlice = "slice",
-  tArray = "array",
-  tConst = "const",
-  tComptime = "comptime",
-  tOpt = "?",
-  tPure = "pure",
-  tInline = "inline",
-  tOverload = "overload",
-  tProperty = "property",
-  tConcept = "concept",
-
-  tBlock = "block",
-  # Special unary:
-  tExpand = "$",
-  # Accesses
-  tAccess = ".",
-  tPipe = "::",
-  # Binds
-  tUsing = "using",
-  tLet = "let",
-  tVar = "var",
-  tCVar = "cvar",
-  tField = "field",
-  tEnum = "enum",
-  tAlias = "alias",
-  tPub = "pub",
-  # Keywords
-  tUse = "use",
-  tAssert = "assert",
-  tBreak = "break",
-  tReturn = "return",
-  tDefer = "defer",
-  tIf = "if",
-  tElIf = "elif",
-  tElse = "else",
-  tWhen = "when",
-  tIs = "is",
-  tWhile = "while",
-  tLoop = "loop",
-  tFor = "for",
-  tFinally = "finally",
-  tFn = "fn",
-  tMacro = "macro",
-  tContinue = "continue",
-  # Punctuation
-  tColon = ":",
-  tComma = ",",
-  tStoreIn = "->",
-  tThen = "=>",
-  tLParen = "(",
-  tRParen = ")",
-  tLBracket = "[",
-  tRBracket = "]",
-  tLBrace = "{",
-  tRBrace = "}",
-  tSemicolon = ";",
-
-  tEOF = "@EOF@",
-
-proc extractAllKeywords(): set[Tag] {.compileTime.} =
-  for tag in Tag.low..Tag.high:
-    let first = ($tag)[0]
-    if first.isAlphaAscii: result.incl tag
-const KeywordSet* = extractAllKeywords()
-proc mapAllKeywords(): Table[string, Tag] {.compileTime.} =
-  for tag in KeywordSet: result.add($tag, tag)
-const KeywordMap* = mapAllKeywords()
-
-proc extractAllSigils(): set[Tag] {.compileTime.} =
-  for tag in Tag.low..Tag.high:
-    let first = ($tag)[0]
-    if not first.isAlphaAscii() and not (first == '@'): result.incl tag
-const SigilSet* = extractAllSigils()
-proc orderAllSigils(): OrderedSet[Tag] {.compileTime.} =
-  var allSigils: seq[Tag]
-  for tag in SigilSet:
-    allSigils.add tag
-  # Sort by len. Does it ascending
-  allSigils.sort do (x, y: Tag) -> int:
-    result = cmp($x, $y)
-  while allSigils.len > 0: result.incl allSigils.pop
+type
+  TokFlag* = enum
+    tfWord, # A word, i.e not a sigil
+    tfAssg, # An assignment-type operator
+    tfBinOp, # A binary infix operator
+    tfUnaOp, # A unary prefix operator
+  TokFlags* = set[TokFlag]
 
 
-# Must keep these sorted by len
-const SigilList* = orderAllSigils()
-
-# Level is the indentation of that line, even though we also do INDENT/DEDENT tokens
 type Pos* = tuple[line: int, col: int]
 
-# TODO: A "StringStash" styled object
+type
+  TokenKind* = enum
+    tkEOF,
+    tkWord, tkStr, tkChar, tkLabel,
+    tkStrop, # A word which may have the characters of a keyword, but may not be interpreted as one
+             # (may also be a sigil)
 
-type Token* = object
-  case tag*: Tag
-    of tWord, tLabel, tStr:
-      str*: string
-    of tChar:
-      chr*: char
-    else: discard
+  Token* = object
+    pos*: Pos
+    flags*: TokFlags
+    case kind*: TokenKind
+      of tkWord, tkLabel, tkStrop:
+        id*: StringID
+        prec*: int # Operator precedence, or -1
+      of tkStr:
+        str*: string
+      of tkChar:
+        chr*: char
+      else: discard
+
 
 proc `$`*(t: Token): string =
-  result = case t.tag:
-    of tWord: fmt"""$"{t.str}""""
-    of tStr: fmt "\"{t.str}\""
-    of tChar: fmt"'{t.chr}'"
-    else: repr(t.tag)
+  result = case t.kind:
+    of tkWord: t.id.lookup
+    of tkStr: fmt""""{t.str}""""
+    of tkChar: fmt"'{t.chr}'"
+    else: $t.kind
 # proc `$`*(t: Token): string = repr(t.tag)
 
 type Lexer* = object
@@ -198,15 +105,27 @@ proc consume*(self: var Lexer, n = 1) =
   for i in 1..n: discard advance self
 template consume(n: int) =
   self.consume n
+template tryMatch(what: string): bool =
+  if not nextIs what: false
+  else:
+    consume what.len
+    true
 template match(what: string) =
-  if not nextIs what: err "Expected `" & what & "`"
-  else: consume what.len
+  if not tryMatch what:
+    err fmt"Expected " & what
 
-proc consumeWord(self: var Lexer): string =
-  result = ""
+proc consumeWord(self: var Lexer): StringID =
+  var str = ""
   if self.cur notin WordChars: err "Expected a word char"
   while self.cur in WordChars:
-    result &= self.advance
+    str &= self.advance
+  return str.toID
+proc consumeSigil(self: var Lexer): StringID =
+  var str = ""
+  if self.cur notin SigilChars: err "Expected a sigil char"
+  while self.cur in SigilChars:
+    str &= self.advance
+  return str.toID
 
 
 proc skip(self: var Lexer) =
@@ -220,71 +139,87 @@ proc skip(self: var Lexer) =
       dirty = true
       while not nextIs "\n": consume 1
 
-proc scanMLStr(self: var Lexer): Token =
-  result = Token(tag: tStr, str: "")
+proc scanMLStr(self: var Lexer): string =
+  result = ""
   var multiline = false
   while nextIs "\\\\":
     consume 2
     if nextIs "\n":
-      if multiline: result.str &= "\\n"
+      if multiline: result &= "\\n"
     elif not nextIs " ":
       err "A \\\\ string literal must always have a space after the last \\"
     else:
       consume 1
-      if multiline: result.str &= "\\n"
+      if multiline: result &= "\\n"
       multiline = true
 
-      while not nextIs '\n': result.str &= self.advance
+      while not nextIs '\n': result &= self.advance
       self.skip
 
-proc scanStr(self: var Lexer): Token =
-  result = Token(tag: tStr, str: "")
+proc scanStr(self: var Lexer): string =
+  result = ""
   match "\""
   while not nextIs "\"":
     if nextIs "\n": err "A \"\" string literal may not have a newline in it!"
-    elif nextIs "\\": result.str &= self.advance
-    result.str &= self.advance
+    elif nextIs "\\": result &= self.advance
+    result &= self.advance
   match "\""
-
-
-proc scanWord(self: var Lexer, checkKeyword: static[bool] = true): Token =
-  result = Token(tag: tWord, str: self.consumeWord)
-  if checkKeyword:
-    if KeywordMap.contains result.str:
-      result = Token(tag: KeywordMap[result.str])
 
 
 proc scan*(self: var Lexer): tuple[pos: Pos, tok: Token] =
   alias pos: result.pos
   alias token: result.tok
-  template tok(t: Tag) =
-    token = Token(tag:t)
-    return
-  template tok(t: Tag, s: string) =
-    token = Token(tag: t, str: s)
-    return
+
+  template tok(t: TokenKind) =
+    token = Token(kind: t)
+  template tok(t: TokenKind, i: StringID) =
+    token = Token(kind: t, id: i)
+  template tok(i: StringID) = tok tkWord, i
+  template tok(s: string) =
+    token = Token(kind: tkStr, str: s)
 
   self.skip
   pos = self.pos
 
-  if nextIs "\0": tok tEOF
-  elif nextIs WordChars: token = self.scanWord
-  elif nextIs "\\\\": token = self.scanMLStr
-  elif nextIs "\"": token = self.scanStr
+  if nextIs "\0": tok tkEOF
+  elif tryMatch "(": tok iLParen
+  elif tryMatch ")": tok iRParen
+  elif tryMatch "[": tok iLBracket
+  elif tryMatch "]": tok iRBracket
+  elif tryMatch "{": tok iLBrace
+  elif tryMatch "}": tok iRBrace
+  elif tryMatch ",": tok iComma
+  elif nextIs WordChars:
+    tok self.consumeWord
+    token.flags.incl tfWord
+    let prec = token.id.opPrec
+    if prec != -1:
+      token.prec = prec
+      token.flags.incl tfBinOp
+  elif nextIs "\\\\": tok self.scanMLStr
+  elif nextIs "\"": tok self.scanStr
   elif nextIs "#":
     consume 1
-    if nextIs WordChars: tok tLabel, self.consumeWord
-    elif nextIs "\"": tok tLabel, self.scanStr().str
+    if nextIs WordChars:
+      tok tkLabel, self.consumeWord
+    elif nextIs SigilChars:
+      tok tkLabel, self.consumeSigil
+    elif nextIs "\"": tok tkLabel, self.scanStr.toID
     else: err "Expected either a word or a string literal"
   elif nextIs "\\":
     consume 1
-    if not nextIs WordChars: err "A single \\ must be followed by a word to strop"
-    token = self.scanWord(checkKeyword=false)
-  else:
-    for tag in SigilList:
-      if nextIs $tag:
-        consume ($tag).len
-        tok tag
+    if not nextIs WordChars + SigilChars:
+      err "A single \\ must be followed by a word or sigil to strop"
+    if nextIs WordChars:
+      tok tkStrop, self.consumeWord
+    else:
+      tok tkStrop, self.consumeSigil
+  elif nextIs SigilChars:
+    tok self.consumeSigil
+    let prec = token.id.opPrec
+    if prec != -1:
+      token.prec = prec
+      token.flags.incl tfBinOp
 
 
 proc lex*(data: iterator(): char {.closure.}): Lexer =

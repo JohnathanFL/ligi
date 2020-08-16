@@ -1,183 +1,98 @@
-import options
 import macros
+import tables
 
 import lexing
 
-# By convention, I:
-# - mark nullable references with #?
-# - use `ty` for the type of an expression
-# - use `val` when a type holds only one Expr (that's intended to be returned)
-# - use `default` for `else`
-# - use `final` for `finally`
-
-
-# Only yields void
-type Stmt* = ref object of RootObj
-# May yield any type
 type
-  Expr* = ref object of Stmt
-    path*: seq[AccessOp]
-  AccessOp* = ref object of RootObj
-  AccessSwizzle* = ref object of AccessOp
-    ty*: Expr #?
-    paths*: seq[seq[AccessOp]]
-  AccessName* = ref object of AccessOp
-    name*: string
-  CallKind* = enum
-    ckCall, ckIndex
-  AccessCall* = ref object of AccessOp # Either () or []
-    kind*: CallKind
-    args*: seq[Expr]
-  AccessPipe* = ref object of AccessOp
-    into*: Expr
+  StringID* = uint64
+  StringCache* = Table[string, StringID]
+  StringLookup* = Table[StringID, string]
+  AtomKind* = enum
+    akWord, akList, akStr, akChar, akLabel
+  Atom* = object
+    # pos*: Pos
+    case kind*: AtomKind
+      of akWord, akLabel: # Includes operators
+        word*: StringID
+      of akStr:
+        str*: string # We'll only keep words/labels in the string cache
+      of akChar:
+        chr*: char
+      of akList:
+        list*: seq[Atom]
 
 
-type BindSpec* = enum
-  # What a load of bs
-  bsLet = tLet, bsVar = tVar, bsCVar = tCVar, bsField = tField
-  bsEnum = tEnum, 
-type BinOp* = enum # Incomplete
-  opOr=tOr,
-  opXor=tXor,
-  opAnd=tAnd,
-  opEq=tEq,
-  opNotEq=tNotEq,
-  opSpaceship=tSpaceship
-  opGt=tGt,
-  opLt=tLt,
-  opGtEq=tGtEq,
-  opLtEq=tLtEq
-  opIn=tIn,
-  opNotIn=tNotIn,
-  opAdd=tAdd,
-  opSub=tSub,
-  opMul=tMul,
-  opDiv=tDiv,
-  opMod=tMod,
-type UnaOp* = enum # Incomplete
-  opNeg = tSub,
-  opPtr = tMul,
-  opBitNot = tBitNot,
-  opNot = tNot,
-  opStruct = tStruct,
-  opRef = tRef,
-  opSlice = tSlice,
-  opArray = tArray,
-  opConst = tConst
-  opComptime = tComptime,
-  opOpt = tOpt,
-  opPure = tPure,
-  opInline = tInline,
-  opOverload = tOverload,
-  opProperty = tProperty,
-  opConcept = tConcept,
-  opBlock = tBlock,
-  opEnum = tEnum,
+var nextID: StringID = 0.StringID
+const INITIAL_CACHE_SIZE = 1024 # Because programs gots lots of idents
+var stringCache: StringCache = initTable[string, StringID](INITIAL_CACHE_SIZE)
+var stringLookup: StringLookup = initTable[StringID, string](INITIAL_CACHE_SIZE)
 
 
-type
-  BindLoc* = ref object of RootObj
-    ty*: Expr #? (this means you can do `let (x, y: usize): (isize, usize)`)
-  BindName* = ref object of BindLoc
-    name*: string
-  BindTuple* = ref object of BindLoc
-    locs*: seq[BindLoc]
-type Bind* = object
-  loc*: BindLoc
-  init*: Expr #?
+proc toID*(s: string): StringID =
+  if stringCache.contains s:
+    return stringCache[s]
+  else:
+    inc nextID
+    stringCache[s] = nextID
+    stringLookup[nextID] = s
+    return nextID
 
-type Assert* = ref object of Stmt
-  val*: Expr
-  msg*: string
-type Break* = ref object of Expr
-  label*: string #?=""
-  val*: Expr
-type Defer* = ref object of Stmt
-  stmt*: Stmt
-type Return* = ref object of Expr
-  val*: Expr
-type BindGroup* = ref object of Stmt
-  spec*: BindSpec
-  binds*: seq[Bind]
-type Assg* = ref object of Stmt
-  augment*: Option[BinOp] # +=, -=, etc
-  to*: Expr
-  val*: Expr
+proc lookup*(s: StringID): string =
+  return stringLookup[s]
 
-type Binary* = ref object of Expr
-  op*: BinOp
-  lhs*: Expr
-  rhs*: Expr
-type Unary* = ref object of Expr
-  op*: UnaOp
-  val*: Expr
+macro makeTags*(body: untyped): untyped =
+  expectKind body, nnkTableConstr
+  result = newStmtList()
 
+  for node in body.children:
+    expectKind node, nnkExprColonExpr
+    result.add newLetStmt(postfix(node[0], "*"), newCall("toID", node[1]))
 
-type Word* = ref object of Expr
-  word*: string
-type String* = ref object of Expr
-  str*: string
-type Block* = ref object of Expr
-  label*: string #?=""
-  stmts*: seq[Stmt]
-type Compound* = ref object of Expr
-  ty*: Expr
-type Tuple* = ref object of Compound
-  vals*: seq[Expr]
-type ArrayLit* = ref object of Tuple # An array is a tuple that holds only one type
-type StructLit* = ref object of Compound
-  fields*: seq[Bind]
-type EnumLit* = ref object of Expr
-  label*: string
-  inner*: Expr
+makeTags {
+  iSpaceship: "<=>",
 
+  iAnd: "and",
+  iOr: "or",
 
-type Macro* = ref object of Expr
-  args*: seq[BindLoc]
-  body*: Stmt
-type Fn* = ref object of Expr
-  args*: seq[BindLoc]
-  ret*: Bind
+  iEq: "==",
+  iNeq: "!=",
+  iLt: "<",
+  iGt: ">",
+  iLtEq: "<=",
+  iGtEq: ">=",
 
-type ControlStructure* = ref object of Expr
-  label*: string #?=""
+  iAdd: "+",
+  iSub: "-",
+  iMul: "*",
+  iPtr: "*",
+  iDiv: "/",
+  iMod: "mod",
 
-  default*: Expr #?
-  defCapt*: BindLoc #?
+  iFn: "fn",
+  iMacro: "macro",
 
-  final*: Expr #?
-  finCapt*: BindLoc #?
+  iLet: "let",
+  iVar: "var",
+  iCVar: "cvar",
+  iField: "field",
+  iEnum: "enum",
+}
+let MaxBuiltin* = nextID - 1
 
+let OpPrecs = @[
+  @[iSpaceship],
+  @[iOr],
+  @[iAnd],
+  @[iEq, iNeq],
+  @[iLt, iGt, iLtEq, iGtEq],
+  @[iAdd, iSub],
+  @[iMul, iDiv, iMod],
 
-type Selection* = ref object of ControlStructure
-type
-  IfArm* = object
-    cond*: Expr
-    capt*: BindLoc #?
-    val*: Expr
-  If* = ref object of Selection
-    arms*: seq[IfArm]
-
-type
-  WhenArm* = object
-    op*: BinOp # Defaults to opEq
-    rhs*: Expr
-    capt*: BindLoc #?
-    val*: Stmt
-  When* = ref object of Selection
-    lhs*: Expr
-    lhsCapt*: BindLoc #?
-    arms*: seq[WhenArm]
-
-
-type Loop* = ref object of ControlStructure
-  counter*: BindLoc #?, can assume !nil if capt is !nil
-  body*: Stmt
-type For* = ref object of Loop
-  expr*: Expr
-  capt*: BindLoc #?
-type While* = ref object of Loop
-  expr*: Expr
-  capt*: BindLoc #?
-
-
+]
+proc opPrec*(id: StringID): int =
+  result = -1
+  # First handle the known cases, then deduce(TODO)
+  for i, precs in OpPrecs:
+    for op in precs:
+      if id == op:
+        return i
