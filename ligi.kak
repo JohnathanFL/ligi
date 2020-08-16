@@ -13,7 +13,7 @@ add-highlighter shared/ligi/mlstring region %{c?\\\\} $                 fill str
 add-highlighter shared/ligi/char     region c?'       (?<!\\)(?:\\\\)*' group
 
 add-highlighter shared/ligi/comment region -- $ fill comment
-add-highlighter shared/ligi/doc_comment region \(= $                 fill comment
+#add-highlighter shared/ligi/doc_comment region \(= $                 fill comment
 add-highlighter shared/ligi/code/ regex \.(addr|deref|has|val|ptr|len)\b 0:variable # Since these two can never be a valid field access otherwise
 
 add-highlighter shared/ligi/string/   fill string
@@ -87,7 +87,7 @@ hook -group ligi-highlight global WinSetOption filetype=ligi %{
 
 hook global WinSetOption filetype=ligi %[
     set-option buffer comment_line '--'
-    set-option -add buffer extra_word_chars '@'
+    set-option -add buffer extra_word_chars '@' '_'
     hook -group ligi-hooks window ModeChange insert:.* ligi-filter-around-selections
     hook -group ligi-indent window InsertChar \n ligi-indent-on-new-line
     hook -group ligi-indent window InsertChar \} ligi-indent-on-closing-curly-brace
