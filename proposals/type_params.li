@@ -1,5 +1,4 @@
--- This is to document the idea of adding Odin-styled
--- inferred type-parameters.
+-- This is to document the idea of adding Odin-styled inferred type-parameters.
 
 -- In essence, you'd be able to do this:
 
@@ -21,3 +20,40 @@ let reverse = fn ar, stack => {
 }
 -- In fact, I'm a bigger fan of this one, as the first example would restrict you to
 -- only slices, whereas this one allows much more flexibility.
+
+
+
+-- Update 08/21/20: I'm planning on adding this, using `!` as the specifier, along with
+-- proposals/type_constraint.li . Thus, we can do things like:
+let reverse = fn ar: array !T, stack: IStack(T) =>
+  for ar -> el => stack.push(el)
+  while stack.pop() -> el, i => ar[i] = el
+-- or technically even
+let reverse = fn ar: array (!N, !T), stack: IStack(T) =>
+  for ar -> el => stack.push(el)
+  while stack.pop() -> el, i => ar[i] = el
+-- though this means we can't allow using either `array(N, T)` or `array(T, N)` interchangebly
+-- (or maybe named tuples? `array(.size = !N, .type = !T)`)
+
+-- I do not plan to allow the !T to be out of order with its usage, so you can't do:
+let reverse = fn stack: IStack(T), ar: array !T =>
+  for ar -> el => stack.push(el)
+  while stack.pop() -> el, i => ar[i] = el
+-- Of course, you can just move the `!` to the first T, and you're golden.
+
+-- I plan to allow this to occur within a single type decl:
+let takes_a_pair = fn pair: (!T, T) => printf("Pair was {}", pair)
+-- You could even do more complicated assertions:
+let takes_an_interleaved_quadruple = fn iquad: (!T, !U, T, U) => printf("Quad was {}", quad)
+
+
+-- I also want to allow this wherever `:` typedescs are allowed, possibly including normal bindings:
+let x: !T = 1
+assert T == usize
+
+let ar = [true, false, true]
+for ar -> a:!T
+  assert T == bool
+-- Allowing this and normal type constraints in all typedescs would make the syntax normal and cement them as
+-- normal parts of the language in the same was `enum` and `struct` are just normal unary ops
+-- Thus, `!` would still just be a unary op, but would be an error to evaluate it outside a typedesc

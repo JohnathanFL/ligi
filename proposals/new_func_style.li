@@ -42,3 +42,18 @@ let say_hi = fn -> printf = ("Saluton!")
 
 -- This new change allows us to get rid of `void`'s special semantics and keep it
 -- as another pre-defined variable.
+
+
+
+-- Update as of 08/21/20:
+let add = fn a: usize, b: usize -> c: usize = a + b -- standard style with return
+let say_hi = fn name -> _ = printf("Hello, {}!\n", name) -- void return
+-- (`_` as a return location must always mean void, even though `_` can take on other types in other
+--  instances, such as `let (_, x) = (1, 2)`)
+
+-- This latest change is to remove the need for `=>` in the entire language.
+-- I originally planned to also allow
+let say_hi = fn name { printf("Hello, {}!\n", name) }
+-- (similar to what I do allow with `if x {then}`)
+-- even with blocking rules, but decided that keeping the `->` style for all is more consistent
+

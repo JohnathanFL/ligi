@@ -1,0 +1,105 @@
+-- This is to propose the "spread" (`...`) operator
+-- This was previously in proposals/unpacking.li, but I think
+-- it deserves its own prop
+
+
+-- This is still very much a work in progress, and much of this may be illogical/inconsistent.
+-- I may split this operator into two parts, one for "spread", and one for "rest"
+
+
+-- Basic idea is that you spread values from an inner container out over an outer container
+
+
+-- Simple usages:
+
+-- Spread an inner array over an outer array
+-- The outer array's size needs to be a multiple of the spread array, but otherwise a smaller
+-- array will be automatically repeated
+-- If the array size is to be inferred, then the inner array is only used once.
+let ar = [=array(10, usize)= 0, ...[1, 2, 3]] -- 0 1 2 3 1 2 3 1 2 3
+-- You can also do `values, unpack, values`
+let ar = [=array(100, usize)= 1, 2, ...[0], 4, 5]
+assert ar[50] == 0
+-- Possibly even allowing it from slices, as long as the length is comptime known
+let other = [1, 2, 3]
+let ar = [0, ...other[0..1]]
+assert ar.len == 2
+
+
+-- You can also spread from a tuple (of one type) into an array. Use case is easier iteration of tuples
+let tys: type * _ = (usize, isize, bool, u8) -- imagine this was a parameter type or something
+for [...tys] -> ty
+  printf("Found type {}", ty)
+let v = (=Vec3= 1, 2, 3)
+let ar = [...v]
+
+
+-- Spread the values of another struct over the entire struct
+-- Note that `v` is not the same type as `w`. It goes based on name and type of the fields,
+-- and will only pull as many as needed to satisfy the outer container's remaining fields
+let v = [ .x = 10, .y = 20, .z = 30]
+let w = [=Vec3= .x = 100, ...v]
+-- You can also use this to provide sets of defaults
+let Vec3One = [=Vec3= .x = 1, .y = 1, .z = 1]
+let v = [...Vec3Zero, .z = 0]
+-- Type may be inferred from the spreader, as long as the outer container has no extra members
+-- not found in the inner
+assert v.@type == Vec3
+-- May spread multiple times. In this case, order matters
+let Vec3UpOut = [=Vec3= .x = 0, .y = 1, .z = 1]
+let k = [...Vec3One, ...Vec3UpOut]
+assert k.(x, y, z) == (1, 1, 1)
+
+
+-- concatenate tuples
+let tup1 = (1, 2)
+let 0tup1 = (0, ...tup1)
+-- In the tuple concat context, you may use many spreads:
+let tup2 = (3, 4)
+let tup1tup2 = (...tup1, ...tup2)
+-- I've been trying to figure out a way to allow this for a while, since normal `+` is defined
+-- as being spread out across all tuple members, and an exception for type tuples would feel weird
+-- I quite like the way this came out, so far
+
+
+-- Uses in unpacking: Many
+
+
+-- Using here with proposals/type_params.li
+let variadic_func = fn (firstEl, secondEl, ...rest): (!T, !U, ...!R) =>
+  printf(
+    \\ First was the {} {}, second was the {} {}, rest was the {} {}
+    , (T, firstEl, U, secondEl, R, rest)
+  )
+variadic_func((1, 1.0, true, "hello"))
+-- prints
+\\ First was the usize 1, second was the f64 1.0, rest was the (bool, str) (true, "hello")
+-- So in a way, you can use `...` to "split" tuples
+-- We can also use this for C++ styled variadic functions, where we use recursion
+-- to act on each argument, rather than needing the somewhat clunkier .@tup[i] or similar
+let print = overload [
+  fn () -> _ = (), -- I think the type of `()` shall be void, though I'm not certainA
+  fn i: isize -> _ = printf("{}:isize ", i)
+  fn b: bool -> _ = printf("{}:bool ", b)
+  fn (el, ...rest) -> _ = { print(el); print(rest) }
+]
+print( (-1, false, -2) ) -- -1:isize false:bool -2:isize
+
+-- Because of this addition, I'm considering adding proper variadic arguments, like
+let variadic = fn arg1, ...rest -> _ = printf("1={}, rest={}", (arg1, rest))
+
+
+-- Array unpacking
+let head = fn [first: !T, ...rest] -> f: T = first
+-- Haskell time, anyone?
+assert head([2, 1]) == 2
+let tail = fn [...rest, last: !T] -> l: T = last
+assert tail([2, 1]) == 1
+
+
+-- Unpacking a struct with spreading creates a struct of a type with fields for all not-explicitly-unpacked
+-- fields
+let v = [=Vec3= .x = 1, .y = 2, .z = 3]
+let [.x, .y, ...rest] = v
+assert rest.z == 3
+assert resut.@size == rest.z.@size

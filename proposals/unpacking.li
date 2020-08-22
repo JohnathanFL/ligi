@@ -45,7 +45,7 @@ let smallData = [0, 1]
 let MyVec2 = struct { field x: f32, y: f32 }
 let vec = [:MyVec2: .x = 0, .y = 20]
 
--- Simplest form: directly capture by name
+-- Simplest form: directly capture by name of the field
 { let [.x, .y] = vec }
 -- The variable name here must match the inner name.
 -- Thus, this is simply a way of doing
@@ -53,11 +53,16 @@ let vec = [:MyVec2: .x = 0, .y = 20]
 -- while being able to change the x/y without affecting the original values
 
 -- Second form: Specify the inner name and outer name
--- The form is .fieldName = bindName
-{ let [.x = myX, .y = myY] = vec }
+-- The form is .fieldName -> bindName
+-- I use `->` instead of `=` to make it more obvious which side is the new name
+{ let [.x -> myX, .y -> myY] = vec }
 -- Here, the `x` and `y` must match the vec.(x,y) field names
 
 -- Thus, for structs, unpacking form is just a more readable form of
 { let (x, y) = vec.(x, y) } -- Imagine if the members were longer. DRY. :)
 -- And a non-mutating form of
 { use vec.(x, y) }
+
+
+-- Note: All of these unpackings are to work *anywhere* a bind is allowed.
+-- This includes function arguments and captures.
