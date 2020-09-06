@@ -238,27 +238,27 @@ const File = struct {
 };
 
 const Tag = extern enum(c_int) {
-    EOF,
+    EOF = 0,
 
-    Newline,
-    Indent,
-    Dedent,
+    Newline = 1,
+    Indent = 2,
+    Dedent = 3,
 
-    LParen,
-    RParen,
-    LBrace,
-    RBrace,
-    LBracket,
-    RBracket,
+    LParen = 4,
+    RParen = 5,
+    LBrace = 6,
+    RBrace = 7,
+    LBracket = 8,
+    RBracket = 9,
 
-    Semicolon,
-    Comma,
-    Tag, // #
+    Semicolon = 10,
+    Comma = 11,
+    Tag = 12, // #
 
-    Str,
-    Word, // A normal word like 1, a, or void, or an escaped sigil like \+ (`\` not included)
-    Sigil, // A series of +, -, *, and others
-    Strop, // A word that was explicitly stropped (like `\if`)
+    Str = 13,
+    Word = 14, // A normal word like 1, a, or void, or an escaped sigil like \+ (`\` not included)
+    Sigil = 15, // A series of +, -, *, and others
+    Strop = 15, // A word that was explicitly stropped (like `\if`)
 };
 
 const StrID = usize;
@@ -378,13 +378,24 @@ test "indentation" {
 
 // Public API for LuaJIT
 
+pub export fn newCache() callconv(.C) *StringCache {
+    var res = std.heap.page_allocator.create(StringCache) catch unreachable;
+    res.* = StringCache.init(std.heap.page_allocator);
+    return res;
+}
+
+pub export fn newFile(cache: *StringCache, input: [*:0]const u8, len: usize) callconv(.C) *File {
+    var res = std.heap.page_allocator.create(File) catch unreachable;
+    res.* = File.init(cache, input[0..len]);
+    return res;
+}
+
 pub export fn lex(self: *File) callconv(.C) Token {
     return self.lex();
 }
 
-pub export fn strID(file: *File, str: [*]const u8, len: usize) callconv(.C) StrID {
+pub export fn strID(file: *File, str: [*:0]const u8, len: usize) callconv(.C) StrID {
     return file.cache.strID(str[0..len]);
-    // return 0;
 }
 pub export fn idStr(file: *File, id: StrID) callconv(.C) [*:0]const u8 {
     return @ptrCast([*:0]const u8, file.cache.idStr(id));

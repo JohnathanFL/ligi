@@ -2,7 +2,7 @@ const Builder = @import("std").build.Builder;
 
 pub fn build(b: *Builder) void {
     const mode = b.standardReleaseOptions();
-    const lib = b.addStaticLibrary("ligi", "src/main.zig");
+    const lib = b.addSharedLibrary("ligi", "src/main.zig", .{ .major = 1, .minor = 0, .patch = 0 });
     lib.setBuildMode(mode);
     lib.install();
 
