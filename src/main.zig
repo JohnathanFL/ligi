@@ -286,10 +286,6 @@ fn isSigilChar(c: u8) bool {
     };
 }
 
-pub fn lex(self: *File) callconv(.C) Token {
-    return self.lex();
-}
-
 const testing = std.testing;
 const expect = testing.expect;
 
@@ -378,4 +374,18 @@ test "indentation" {
         // printf("\nGot {}, expected {} \n", .{ t.tag, tag });
         expect(t.tag == tag);
     }
+}
+
+// Public API for LuaJIT
+
+pub export fn lex(self: *File) callconv(.C) Token {
+    return self.lex();
+}
+
+pub export fn strID(file: *File, str: [*]const u8, len: usize) callconv(.C) StrID {
+    return file.cache.strID(str[0..len]);
+    // return 0;
+}
+pub export fn idStr(file: *File, id: StrID) callconv(.C) [*:0]const u8 {
+    return @ptrCast([*:0]const u8, file.cache.idStr(id));
 }
