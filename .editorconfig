@@ -1,0 +1,20 @@
+# EditorConfig is awesome: https://EditorConfig.org
+	# Note from John on 02/01/20
+	# EditorConfig is enraging if you forget about it. I just spent the last
+	# few weeks going insane because my nim code was being indented 4-spaces
+	# when I *clearly* had my kakrc set for 2-spaces.
+	# Then I lose my mind for an hour actively searching for why.
+	# Then I find this little thing.
+	# Then I cried.
+	# Note from John on 06/06/20: Guess who forgot about this file...again....
+	# Note from John on 07/12/20: Hey, I actually remembered it this time
+
+# top-most EditorConfig file
+root = true
+
+# Unix-style newlines with a newline ending every file
+[*]
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+indent_size = 2
