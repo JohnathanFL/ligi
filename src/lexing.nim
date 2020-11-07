@@ -4,20 +4,7 @@ import strformat
 
 import ast
 
-# Lexing specific tags. No need for the AST in general to know about them
-makeTags {
-  iLParen: "(",
-  iRParen: ")",
-  iLBracket: "[",
-  iRBracket: "]",
-  iLBrace: "{",
-  iRBrace: "}",
-  iComma: ",",
-}
-
-template alias(what: untyped, asWhat: untyped): untyped =
-  template what():untyped {.dirty.} = asWhat
-# TODO
+# TODO: Better error handling
 template err(msg: string) =
   quit msg
 
@@ -29,31 +16,20 @@ const SigilChars: set[char] = {
   '$', ':', '.'
 }
 
-type
-  TokFlag* = enum
-    tfWord, # A word, i.e not a sigil
-    tfAssg, # An assignment-type operator
-    tfBinOp, # A binary infix operator
-    tfUnaOp, # A unary prefix operator
-  TokFlags* = set[TokFlag]
-
-
-type Pos* = tuple[line: int, col: int]
+type Pos* = tuple[line: int, col: int, level: int]
 
 type
   TokenKind* = enum
     tkEOF,
-    tkWord, tkStr, tkChar, tkLabel,
+    tkWord, tkSigil, tkStr, tkChar, tkLabel,
+    tkPunc,
     tkStrop, # A word which may have the characters of a keyword, but may not be interpreted as one
              # (may also be a sigil)
 
   Token* = object
-    pos*: Pos
-    flags*: TokFlags
     case kind*: TokenKind
-      of tkWord, tkLabel, tkStrop:
-        id*: StringID
-        prec*: int # Operator precedence, or -1
+      of tkWord, tkSigil, tkLabel, tkStrop, tkPunc:
+        id*: StrID
       of tkStr:
         str*: string
       of tkChar:
@@ -64,6 +40,9 @@ type
 proc `$`*(t: Token): string =
   result = case t.kind:
     of tkWord: t.id.lookup
+    of tkSigil: fmt"\{t.id.lookup}"
+    of tkStrop: fmt"\{t.id.lookup}"
+    of tkPunc: fmt"Punc'{t.id.lookup}'"
     of tkStr: fmt""""{t.str}""""
     of tkChar: fmt"'{t.chr}'"
     else: $t.kind
@@ -71,7 +50,8 @@ proc `$`*(t: Token): string =
 
 type Lexer* = object
   pos*: Pos
-  curLevel*: int
+  # The *end* of the last token scanned
+  lastPos*: Pos
   data*: iterator(): char
   next*: array[3, char]
 
@@ -97,7 +77,7 @@ proc advance(self: var Lexer): char =
   if result != '\0':
     if result == '\n':
       self.pos.line += 1
-      self.pos.col = 1
+      self.pos.col = 0
     else:
       self.pos.col += 1
   # echo fmt"Advanced over {result}"
@@ -114,13 +94,13 @@ template match(what: string) =
   if not tryMatch what:
     err fmt"Expected " & what
 
-proc consumeWord(self: var Lexer): StringID =
+proc consumeWord(self: var Lexer): StrID =
   var str = ""
   if self.cur notin WordChars: err "Expected a word char"
   while self.cur in WordChars:
     str &= self.advance
   return str.toID
-proc consumeSigil(self: var Lexer): StringID =
+proc consumeSigil(self: var Lexer): StrID =
   var str = ""
   if self.cur notin SigilChars: err "Expected a sigil char"
   while self.cur in SigilChars:
@@ -129,6 +109,7 @@ proc consumeSigil(self: var Lexer): StringID =
 
 
 proc skip(self: var Lexer) =
+  let lastLine = self.pos.line
   var dirty = true
   while dirty:
     dirty = false
@@ -138,6 +119,8 @@ proc skip(self: var Lexer) =
     if nextIs "--":
       dirty = true
       while not nextIs "\n": consume 1
+  if self.pos.line != lastLine:
+    self.pos.level = self.pos.col
 
 proc scanMLStr(self: var Lexer): string =
   result = ""
@@ -154,7 +137,6 @@ proc scanMLStr(self: var Lexer): string =
       multiline = true
 
       while not nextIs '\n': result &= self.advance
-      self.skip
 
 proc scanStr(self: var Lexer): string =
   result = ""
@@ -166,36 +148,39 @@ proc scanStr(self: var Lexer): string =
   match "\""
 
 
-proc scan*(self: var Lexer): tuple[pos: Pos, tok: Token] =
-  alias pos: result.pos
-  alias token: result.tok
-
+type TupTok* = tuple[
+  # Where is the token?
+  pos: Pos,
+  # Was it attached to the previous token? (i.e no whitespace between)
+  attached: bool,
+  # What is it?
+  tok: Token
+]
+proc scan*(self: var Lexer): TupTok =
   template tok(t: TokenKind) =
-    token = Token(kind: t)
-  template tok(t: TokenKind, i: StringID) =
-    token = Token(kind: t, id: i)
-  template tok(i: StringID) = tok tkWord, i
+    result.tok = Token(kind: t)
+  template tok(t: TokenKind, i: StrID) =
+    result.tok = Token(kind: t, id: i)
+  template tok(i: StrID) = tok tkWord, i
   template tok(s: string) =
-    token = Token(kind: tkStr, str: s)
+    result.tok = Token(kind: tkStr, str: s)
 
   self.skip
-  pos = self.pos
+  result.attached = self.pos == self.lastPos
+  result.pos = self.pos
 
   if nextIs "\0": tok tkEOF
-  elif tryMatch "(": tok iLParen
-  elif tryMatch ")": tok iRParen
-  elif tryMatch "[": tok iLBracket
-  elif tryMatch "]": tok iRBracket
-  elif tryMatch "{": tok iLBrace
-  elif tryMatch "}": tok iRBrace
-  elif tryMatch ",": tok iComma
+  elif tryMatch "(": tok tkPunc, iLParen
+  elif tryMatch ")": tok tkPunc, iRParen
+  elif tryMatch "[": tok tkPunc, iLBracket
+  elif tryMatch "]": tok tkPunc, iRBracket
+  elif tryMatch "{": tok tkPunc, iLBrace
+  elif tryMatch "}": tok tkPunc, iRBrace
+  elif tryMatch ",": tok tkPunc, iComma
   elif nextIs WordChars:
     tok self.consumeWord
-    token.flags.incl tfWord
-    let prec = token.id.opPrec
-    if prec != -1:
-      token.prec = prec
-      token.flags.incl tfBinOp
+    # TODO
+    # token.prec = token.id.opPrec
   elif nextIs "\\\\": tok self.scanMLStr
   elif nextIs "\"": tok self.scanStr
   elif nextIs "#":
@@ -215,16 +200,15 @@ proc scan*(self: var Lexer): tuple[pos: Pos, tok: Token] =
     else:
       tok tkStrop, self.consumeSigil
   elif nextIs SigilChars:
-    tok self.consumeSigil
-    let prec = token.id.opPrec
-    if prec != -1:
-      token.prec = prec
-      token.flags.incl tfBinOp
+    tok tkSigil, self.consumeSigil
+    #token.prec = token.id.opPrec
+  self.lastPos = self.pos
 
 
 proc lex*(data: iterator(): char {.closure.}): Lexer =
   result = Lexer(
-    pos: (1, 1),
+    pos: (0, 0, 0),
+    lastPos: (-1, -1, 0),
     data: data,
   )
   result.consume 3 # Kick the next buffer.
