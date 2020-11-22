@@ -201,6 +201,8 @@ proc scan*(self: var Lexer): TupTok =
       tok tkStrop, self.consumeSigil
   elif nextIs SigilChars:
     tok tkSigil, self.consumeSigil
+    if result.tok.id == iStoreIn:
+      result.tok.kind = tkPunc
     #token.prec = token.id.opPrec
   self.lastPos = self.pos
 

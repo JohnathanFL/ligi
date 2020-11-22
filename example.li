@@ -2,3 +2,22 @@ x + y + z
 x + y * z
 
 x / y * z
+
+x.y.z
+x
+  .y
+  .z
+
+x.(y, z)
+
+x.y.z.w
+x
+  .y.z
+  .w
+
+
+let x = 1
+let greet = fn names:slice str -> () =
+  for $name in names:
+    printf "Hello, {}\n", name
+    x + 1

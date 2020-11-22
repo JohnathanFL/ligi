@@ -28,8 +28,10 @@ type
   AtomRef* = ref Atom
   Atom* = object
     case kind*: AtomKind
-      of akWord, akStr, akTag:
-        str*: StrID
+      of akWord, akTag:
+        id*: StrID
+      of akStr:
+        str*: string
       of akCompound:
         compoundKind*: CompoundKind
         typeSpec*: AtomRef #?
@@ -85,6 +87,7 @@ makeTags {
   iRParen: ")",
   iLBracket: "[",
   iRBracket: "]",
+  iStoreIn: "->",
 
   iAssg: "=",
   iAddAssg: "+=",
@@ -169,9 +172,9 @@ proc `$`*(self: seq[Atom]): string =
   # result &= "]"
 proc `$`*(self: Atom): string =
   case self.kind:
-    of akWord: fmt"[Word {self.str.lookup}]"
-    of akStr: fmt"[Str `{self.str.lookup}`]"
-    of akTag: fmt"[Tag #{self.str.lookup}]"
+    of akWord: fmt"[Word {self.id.lookup}]"
+    of akStr: fmt"[Str `{self.str}`]"
+    of akTag: fmt"[Tag #{self.id.lookup}]"
     of akCompound: fmt"[{self.compoundKind} :{self.typeSpec}: {self.children}]"
     of akCmd: fmt"[do `{self.cmd.lookup}` {self.args}]"
     of akUnit: fmt"Unit"
