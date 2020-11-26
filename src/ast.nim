@@ -216,7 +216,7 @@ proc `$`*(self: seq[Atom]): string =
 proc `$`*(self: Atom): string =
   case self.kind:
     of akWord: fmt"{self.id.lookup}"
-    of akStr: fmt"""[Str "{self.str}"]"""
+    of akStr: fmt""""{self.str}""""
     of akTag: fmt"#{self.id.lookup}"
     of akList: fmt"({self.children})"
     else:

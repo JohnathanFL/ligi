@@ -117,7 +117,7 @@ proc precOf*(t: Token): int =
       else:
         if ControlWords.contains(t.id) or AccessOps.contains(t.id) or AssgOps.contains(t.id): result = -1
         else:
-          echo fmt"Precedence calculation is TODO ({t})"
+          # echo fmt"Precedence calculation is TODO ({t})"
           Precedences[t.id] = -1
     else: discard
 

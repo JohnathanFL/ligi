@@ -9,5 +9,4 @@ when isMainModule:
   # let p = exText.lex.parse
   # echo pretty jsonifyAll p.parseStmtSeq
   let main = exText.lex.parse
-  for i in main.children:
-    echo i
+  echo $main

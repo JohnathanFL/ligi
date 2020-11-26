@@ -42,9 +42,7 @@ proc parseFn*(self: Parser): Atom =
   setLine
   setDent
   match iStoreIn
-  result.children.add self.parseExpr UnblockedExpr
-  match iAssg
-  result.add self.parseExpr(NormalExpr + {canImplicitBlock})
+  result.add list(ibBind, iVar.toAtom, self.parseExpr(AssingableExpr + {canImplicitBlock}))
 registerHandler [iFn, iMacro], parseFn
 
 
