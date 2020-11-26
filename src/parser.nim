@@ -198,17 +198,17 @@ template tryMatch*(thing: untyped): bool =
 
 
 template setDent*() {.dirty.} =
-  echo "SetDent to ", self.pos.level
+  # echo "SetDent to ", self.pos.level
   self.refPos.level = self.pos.level
 template setLine*() {.dirty.} =
-  echo "SetLine to ", self.pos.line
+  # echo "SetLine to ", self.pos.line
   self.refPos.line = self.pos.line
 
 template pushRef*(body: untyped) =
   let oldRefPos = self.refPos
   body
   self.refPos = oldRefPos
-  echo fmt"Back to {self.refPos}"
+  # echo fmt"Back to {self.refPos}"
 
 template setBlocking(body: untyped, wth: bool): untyped =
   let oldBlocking = self.blocking
@@ -226,41 +226,47 @@ template descend*(body: untyped) =
 
 template thisExprCan*(can: set[ExprCan]): bool = can <= self.exprStyle
 
-
 # The fundamental funcs
 proc parseExpr*(self: Parser, kind: ExprStyle): Atom
-proc parseTypeDesc*(self: Parser, trailing: bool): AtomRef
+proc parseTypeDesc*(self: Parser, trailing: bool): Atom
 proc parseBlock*(self: Parser): Atom
-
 
 
 template parseDelimited*(delim: StrID, endCond: untyped): seq[Atom] =
   var result: seq[Atom]
-  echo "Parsing a `" & delim.lookup & "` delimited list"
+  # echo "Parsing a `" & delim.lookup & "` delimited list"
   while not endCond:
     if nextIs delim:
       match iComma
       continue
-    echo fmt"Parsing expr when next is {self.cur}"
+    # echo fmt"Parsing expr when next is {self.cur}"
     result.add(self.parseExpr(UnblockedExpr))
     self.stopped = false
     if not nextIs delim:
-      echo "Breaking"
+      # echo "Breaking"
       break
     match delim
   result
 
+proc parseTypeDesc*(self: Parser, trailing: bool): Atom =
+  if not nextIs iColon:
+    return iSink.toAtom
+
+  let innerKind =
+    if trailing:
+      NormalExpr - { canBlock, canColon }
+    else:
+      NormalExpr
+
+  match iColon
+  result = self.parseExpr innerKind
+
+  if trailing: match iColon
 
 proc parseBlock*(self: Parser): Atom =
-  result = Atom(
-    kind: akCompound,
-    compoundKind: ckBlock,
-    typeSpec: nil,
-    children: @[],
-  )
+  result = list(ibBlock, [])
   withoutBlocking:
-    if nextIs iColon:
-      result.typeSpec = self.parseTypeDesc(true)
+    result.add self.parseTypeDesc(true)
 
   # Note that we setDent *after* the typedesc.
   # Thus you can do `{ :i32:
@@ -274,21 +280,6 @@ proc parseBlock*(self: Parser): Atom =
       result.children.add self.parseExpr(NormalExpr)
       self.stopped = false
 
-proc parseTypeDesc*(self: Parser, trailing: bool): AtomRef =
-  if not nextIs iColon:
-    return nil
-
-  let innerKind =
-    if trailing:
-      NormalExpr - { canBlock, canColon }
-    else:
-      NormalExpr
-
-  match iColon
-  new result
-  result[] = self.parseExpr innerKind
-
-  if trailing: match iColon
 
 
 
@@ -317,33 +308,26 @@ proc parseAccessible*(self: Parser): Atom =
   # echo fmt"Got a {result}"
 
 template handlePostOps() =
-  echo fmt"Parsing a postop on {self.cur}"
+  # echo fmt"Parsing a postop on {self.cur}"
   if nextIs iLParen:
     withoutBlocking:
       match iLParen
-      result = Atom(
-        kind: akCmd,
-        cmd: iCall,
-        args: @[result].concat parseDelimited(iComma, nextIs iRParen),
+      result = list(
+        result,
+        parseDelimited(iComma, nextIs iRParen)
       )
       match iRParen
   elif nextIs iLBracket:
     withoutBlocking:
       match iLBracket
-      result = Atom(
-        kind: akCmd,
-        cmd: iIndex,
-        args: parseDelimited(iComma, nextIs iRBracket)
-      )
+      result = list(ibAt, result)
+      result.children = result.children.concat parseDelimited(iComma, nextIs iRBracket)
       match iRBracket
   elif self.isAccess:
-    result = Atom(
-      kind: akCmd,
-      cmd: self.advance.id,
-      # mayAccess=false guards against self.stopped.
-      # Doing it recursively with a "base-case" mayAccess=false allows tuples and the like
-      # to be parsed from this.
-      args: @[result, self.parseRedirectable(mayAccess=false)]
+    result = list(
+      self.advance.id, # `.`, `?.`, etc
+      result,
+      self.parseRedirectable(mayAccess=false)
     )
   else:
     err "Improper usage of handlePostOps"
@@ -354,7 +338,7 @@ proc parseRedirectable*(self: Parser, mayAccess = true): Atom =
     # `if`, `while`, `let`, `{} blocks`, etc
     # All control structures set stopped, but stuff like `{}` or `()` don't.
     descend:
-      echo "Parsing control ", self.cur.id.lookup
+      # echo "Parsing control ", self.cur.id.lookup
       result = ControlWords[self.cur.id](self)
       if self.stopped and not mayAccess:
         err "May not have an unambiguous stop in a non-accessible redirectable."
@@ -366,15 +350,14 @@ proc parseRedirectable*(self: Parser, mayAccess = true): Atom =
 
   if nextIs(iColon) and thisExprCan {canColon}:
     match iColon
-    result = Atom(
-      kind: akCmd,
-      cmd: iCall,
-      args: @[result, self.parseExpr (NormalExpr + {canImplicitBlock})]
+    result = list(
+      result,
+      self.parseExpr (NormalExpr + {canImplicitBlock})
     )
     self.stopped = true
 
   elif indented and self.isAccess:
-    echo "In here"
+    # echo "In here"
     pushRef:
       setDent
       while not dedented:
@@ -394,15 +377,11 @@ proc parseUnary(self: Parser): Atom =
   # 
   # If the next op is a marked bin/assgop, we need to fall back to parseBinary
   if not (self.isBin or self.isAssg or newlined) and self.cur.kind notin { tkPunc }:
-    result = Atom(
-      kind: akCmd,
-      cmd: iCall,
-      args: @[result, self.parseUnary()]
-    )
+    result = list( result, self.parseUnary() )
     if nextIs(iComma) and thisExprCan {canComma}:
       self.exprStyle = self.exprStyle - {canComma}
       while tryMatch iComma:
-        result.args.add self.parseUnary()
+        result.children.add self.parseUnary()
       self.stopped = true
 
 proc parseBinary(self: Parser, prec = 0): Atom =
@@ -412,11 +391,7 @@ proc parseBinary(self: Parser, prec = 0): Atom =
   descend: result = nextLevel()
   while self.cur.kind in {tkWord, tkSigil} and Precedences.getOrDefault(self.cur.id, -1) == prec:
     descend:
-      result = Atom(
-        kind: akCmd,
-        cmd: self.advance.id,
-        args: @[result, nextLevel()]
-      )
+      result = list( self.advance.id, result, nextLevel() )
 
 proc parseExpr*(self: Parser, kind: ExprStyle): Atom =
   let oldStyle = self.exprStyle
@@ -429,12 +404,8 @@ proc parseExpr*(self: Parser, kind: ExprStyle): Atom =
   else:
     result = self.parseBinary()
     if nextIs(AssgOps) and thisExprCan {canAssg}:
-      result = Atom(
-        kind: akCmd,
-        cmd: self.advance.id,
-        # Cannot chain assignments.
-        args: @[result, self.parseExpr (self.exprStyle - {canAssg})],
-      )
+      # Cannot chain assignments.
+      result = list( self.advance.id, result, self.parseExpr(self.exprStyle - {canAssg}) )
 
   self.exprStyle = oldStyle
 

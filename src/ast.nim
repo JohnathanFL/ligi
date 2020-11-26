@@ -7,41 +7,34 @@ import lexing
 
 type
   ID* = uint64
+  FnID* = ID
+  TypeID* = ID
+  StaticID* = ID
   StrID* = ID
   StringCache* = Table[string, StrID]
   StringLookup* = Table[StrID, string]
   CompoundKind* = enum ckArray, ckTup, ckBlock
   AtomKind* = enum
-    akWord, akStr, akTag, akCompound, akCmd,
-    akUnit, akSink, akNone,
+    akWord, akStr, akChar, akTag, akList,
     # Posteval:
     akFn, akType, akStatic,
     akVal
 
-  FnID* = ID
-  TypeID* = ID
-  StaticID* = ID
-  Arm* = object
-    kind*: StrID
-    expr*: AtomRef #?
-    body*: AtomRef #?
-  AtomRef* = ref Atom
   Atom* = object
     case kind*: AtomKind
+      # Stuff that can exist directly in a text file to parse
       of akWord, akTag:
         id*: StrID
       of akStr:
         str*: string
-      of akCompound:
-        compoundKind*: CompoundKind
-        typeSpec*: AtomRef #?
+      of akChar:
+        chr*: char
+      of akList: # wush that you jush shaid? I have a lishp?
         children*: seq[Atom]
-      of akCmd:
-        # Cmd is *never* a variable
-        # It's only keywords/sigils.
-        cmd*: StrID
-        args*: seq[Atom]
-      of akUnit, akSink, akNone: discard
+
+      # Evaluated stuff
+      # I may eventually replace these with fully qualified words.
+      # e.g: A function "add" could be the single word %"root.foo.add"
       of akFn:
         fnID*: FnID
       of akType:
@@ -49,7 +42,6 @@ type
       of akStatic:
         staticID*: StaticID
       of akVal: discard # TODO
-
 
 var nextID: StrID = 0.StrID
 const INITIAL_CACHE_SIZE = 1024 # Because programs gots lots of idents
@@ -77,6 +69,33 @@ macro makeTags*(body: untyped): untyped =
     expectKind node, nnkExprColonExpr
     result.add newLetStmt(postfix(node[0], "*"), newCall("toID", node[1]))
 
+# Ast helpers
+
+proc toAtom*(word: StrID): Atom = Atom(
+  kind: akWord,
+  id: word,
+)
+proc toAtom*(atom: Atom): Atom = atom
+
+proc list*(cmd: StrID, items: varargs[Atom, toAtom]): Atom =
+  result = Atom( kind: akList, children: @[ Atom(kind: akWord, id: cmd) ] )
+  for item in items:
+    result.children.add item
+proc list*(cmd: StrID, items: seq[Atom]): Atom =
+  result = Atom( kind: akList, children: @[ Atom(kind: akWord, id: cmd) ] )
+  for item in items:
+    result.children.add item
+proc list*(cmd: Atom, items: seq[Atom]): Atom =
+  result = Atom( kind: akList, children: @[ cmd ] )
+  for item in items:
+    result.children.add item
+proc list*(cmd: Atom, items: varargs[Atom, toAtom]): Atom =
+  result = Atom( kind: akList, children: @[ cmd ] )
+  for item in items:
+    result.children.add item
+
+proc add*(a: var Atom, items: varargs[Atom, toAtom]) = 
+  a.children.add items
 
 makeTags {
   iColon: ":",
@@ -116,6 +135,7 @@ makeTags {
   iPtr: "*", # One benefit of the StrID setup is it's wonderfully easy to alias keywords/sigils
   iDiv: "/",
   iMod: "mod",
+  iExpand: "...",
 
   iAccess: ".",
   iAccessPipe: ".>",
@@ -148,19 +168,42 @@ makeTags {
   iDelete: "delete",
   iContinue: "continue",
 
-  iCall: "()",
-  iIndex: "[]",
+  iSink: "_",
+
+
+  # Purely AST ids - ([i]d of [b]uiltin)
+  # Because these are just words, this also means Ligi can be homoiconic
+  #
+  # ###################
+  # # Core statements #
+  # ###################
+  #
+  # For these three, children[1] is always the typedesc. If no desc was present, it's `_`
+  ibBlock: "@block",     # a series of statements, with the last one yielding the value
+  ibTuple: "@tuple",     # a set of values
+  ibArray: "@array",     # a series of values
+  # ibCall: "@()",       # No such thing. Lists are always function calls
+  ibAt: "@at",           # an indexing, with [1] being what to index and [2.._] being the arguments
+  ibArm: "@arm",         # a normal arm of a control statement. Exact meaning dependant upon which.
+  ibElse: "@else",       # the else arm of a statement
+  ibFinally: "@finally", # the finally arm of a statement
+  ibIf: "@if",           # an if statement. Each arm is a sequential if/elif. Last two may be @else/@finally
+  ibWhen: "@when",       # a when statement.
+  ibWhile: "@while",     # a while loop
+  ibFor: "@for",         # a for loop
+  ibLoop: "@loop",       # a loop-de-loop
+  ibBind: "@bind",       # a bind statement. [1] is the spec, [2.._] are the expressions to bind
+  #
+  # ##################
+  # # Ext statements #
+  # ##################
+  #
+  ibFunc: "@func",       # a result-location function or macro definition. [1] is either fn or macro
 }
 
-proc `$`*(self: AtomRef): string
 proc `$`*(self: seq[Atom]): string
 proc `$`*(self: Atom): string
 
-proc `$`*(self: AtomRef): string =
-  if self.isNil:
-    return "nil"
-  else:
-    return $(self[])
 proc `$`*(self: seq[Atom]): string =
   # result = "["
   for (n, el) in self.pairs:
@@ -172,13 +215,9 @@ proc `$`*(self: seq[Atom]): string =
   # result &= "]"
 proc `$`*(self: Atom): string =
   case self.kind:
-    of akWord: fmt"[Word {self.id.lookup}]"
-    of akStr: fmt"[Str `{self.str}`]"
-    of akTag: fmt"[Tag #{self.id.lookup}]"
-    of akCompound: fmt"[{self.compoundKind} :{self.typeSpec}: {self.children}]"
-    of akCmd: fmt"[do `{self.cmd.lookup}` {self.args}]"
-    of akUnit: fmt"Unit"
-    of akSink: fmt"Sink"
-    of akNone: fmt"None"
+    of akWord: fmt"{self.id.lookup}"
+    of akStr: fmt"""[Str "{self.str}"]"""
+    of akTag: fmt"#{self.id.lookup}"
+    of akList: fmt"({self.children})"
     else:
       quit fmt"{self.kind} is TODO"

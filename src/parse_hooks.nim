@@ -1,14 +1,13 @@
 # Largely just calls to registerHandler and the like.
 
-import options, sugar
+import options, sugar, sequtils
 
 import parser, ast
 
 proc parseBind(self: Parser): Atom =
-  result = Atom(
-    kind: akCmd,
-    cmd: self.advance.id,
-    args: @[]
+  result = list(
+    ibBind,
+    self.advance.id,
   )
   if indented: # Series of binds, 1 per line
     pushRef:
@@ -16,19 +15,19 @@ proc parseBind(self: Parser): Atom =
       while not dedented:
         setLine
         # We leave it to the interpreter to know that `=`(`()`(`x`, `int`), `1`) is `x: int = 1`
-        result.args.add self.parseExpr (NormalExpr - {canComma})
+        result.children.add self.parseExpr (NormalExpr - {canComma})
   else: # Series of binds, comma-separated, 1 line
     while not newlined:
-      result.args.add self.parseExpr (AssingableExpr - {canComma})
+      result.children.add self.parseExpr (AssingableExpr - {canComma})
       if not tryMatch iComma: break
-
 registerHandler [iLet, iVar, iField, iCase, iCVar], parseBind
 
-registerHandler [iFn, iMacro], proc(self: Parser): Atom =
-  result = Atom(
-    kind: akCmd,
-    cmd: self.advance.id,
-    args: @[]
+
+# TODO: Will we just translate `fn` into `$x => {}` directly?
+proc parseFn*(self: Parser): Atom =
+  result = list(
+    ibFunc,
+    self.advance.id,
   )
   var args: seq[Atom] = @[]
   withoutBlocking:
@@ -37,15 +36,16 @@ registerHandler [iFn, iMacro], proc(self: Parser): Atom =
         match iComma
         continue
       else:
-        args.add self.parseExpr UnblockedExpr
-  result.args.add args
+        args.add list(ibBind, iLet.toAtom, self.parseExpr UnblockedExpr)
+  result.children.add args
   # In case the `->` was on a different line
   setLine
   setDent
   match iStoreIn
-  result.args.add self.parseExpr UnblockedExpr
+  result.children.add self.parseExpr UnblockedExpr
   match iAssg
-  result.args.add self.parseExpr (NormalExpr + {canImplicitBlock})
+  result.add self.parseExpr(NormalExpr + {canImplicitBlock})
+registerHandler [iFn, iMacro], parseFn
 
 
 
@@ -72,30 +72,24 @@ proc parseArm(self: Parser, doBody = true): seq[Atom] = withBlocking:
 
 # word arm { slave arm } [ "else" arm ] [ "finally" arm ]
 # "Slave" is the generic term for control words like "elif" or "is"
-# which may only appear after their masters ("if" or "when")
+# which may only appear after their masters ("if" or "when") and which denote another arm.
 proc parseSimpleControl*(self: Parser, slave = none[StrID]()): Atom =
-  template newArm(c: StrID, a: seq[Atom]): Atom = Atom(
-    kind: akCmd,
-    cmd: c,
-    args: a
-  )
-  result = newArm(self.cur.id, @[newArm(self.advance.id, self.parseArm)])
+  result = list(self.cur.id, list(self.advance.id, self.parseArm))
   if slave.isSome:
     while nextIs slave.get:
-      result.args.add newArm(self.advance.id, self.parseArm)
+      result.children.add list(self.advance.id, self.parseArm)
   if nextIs iElse:
-    result.args.add newArm(self.advance.id, self.parseArm)
+    result.children.add list(self.advance.id, self.parseArm)
   if nextIs iFinally:
-    result.args.add newArm(self.advance.id, self.parseArm)
+    result.children.add list(self.advance.id, self.parseArm)
 registerHandler [iIf], self => self.parseSimpleControl(some iElse)
 registerHandler [iWhile, iFor, iLoop], self => self.parseSimpleControl()
 registerHandler [iWhen], self => self.parseSimpleControl(some iIs)
 
 # TODO: Make expect/assert distinct
-registerHandler [iExpect, iAssert, iBreak, iReturn, iDelete, iContinue], self => Atom(
-  kind: akCmd,
-  cmd: self.advance.id,
-  args: @[self.parseExpr NormalExpr]
+registerHandler [iExpect, iAssert, iBreak, iReturn, iDelete, iContinue], self => list(
+  self.advance.id,
+  self.parseExpr NormalExpr
 )
 
 
@@ -109,20 +103,18 @@ registerHandler [iLBrace], proc(self: Parser): Atom =
 
 registerHandler [iLBracket], proc(self: Parser): Atom = withoutBlocking:
   match iLBracket
-  result = Atom(
-    kind: akCompound,
-    compoundKind: ckArray,
-    typeSpec: self.parseTypeDesc(trailing=true),
-    children: parseDelimited(iComma, nextIs iRBracket)
+  result = list(
+    ibArray,
+    self.parseTypeDesc(trailing=true),
   )
+  result.children.add parseDelimited(iComma, nextIs iRBracket)
   match iRBracket
 
 registerHandler [iLParen], proc(self: Parser): Atom = withoutBlocking:
   match iLParen
-  result = Atom(
-    kind: akCompound,
-    compoundKind: ckTup,
-    typeSpec: self.parseTypeDesc(trailing=true),
-    children: parseDelimited(iComma, nextIs iRParen)
+  result = list(
+    ibTuple,
+    self.parseTypeDesc(trailing=true),
   )
+  result.children.add parseDelimited(iComma, nextIs iRParen)
   match iRParen
