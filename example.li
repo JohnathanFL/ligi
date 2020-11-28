@@ -17,17 +17,19 @@
 
 
 -- let x = 1
-let greet = fn names: slice str -> () =
-  for $name in names:
-    printf "Hello, {}\n", name
-    x + 1
+-- let greet = fn names: slice str -> () =
+--   for $name in names:
+--     printf "Hello, {}\n", name
+--     x + 1
 
 
-let foo = fn a, b, c -> d = e
+-- let foo = fn a, b, c -> d = e
 
 
-if x: y
-else: z
+-- if x: y
+-- else: z
 
-when x:
-  is y: 2
+-- when x:
+--   is y: 2
+
+print "Hello", "World"

@@ -296,13 +296,21 @@ proc parseAccessible*(self: Parser): Atom =
     )
   elif nextIs {tkStr}:
     result = Atom(
-      kind: akStr,
-      str: self.advance.str,
+      kind: akNative,
+      native: Native(
+        kind: nkString,
+        str: self.advance.str,
+      )
     )
   # For the purposes of unaries, treat as words
   elif nextIs {tkSigil}:
     result = Atom(
       kind: akWord,
+      id: self.advance.id,
+    )
+  elif nextIs {tkLabel}:
+    result = Atom(
+      kind: akTag,
       id: self.advance.id,
     )
   else:

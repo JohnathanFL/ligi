@@ -3,6 +3,7 @@ import tables
 import strformat
 import sequtils
 
+
 import lexing
 
 type
@@ -15,39 +16,47 @@ type
   StringLookup* = Table[StrID, string]
   CompoundKind* = enum ckArray, ckTup, ckBlock
   AtomKind* = enum
-    akWord, akStr, akChar, akTag, akList,
-    # Posteval:
-    akFn, akType, akStatic,
-    akVal
+    akWord, akTag, akList,
+    akNative,
 
+  NativeKind* = enum
+    nkProc, nkInt, nkUInt, nkFloat, nkString, nkChar, nkVoid, nkSink
+  Native* = object
+    case kind*: NativeKind
+      of nkProc:
+        procedure*: (proc(self: var Atom, context: Context)) # Takes the atom and the atom's current context
+      of nkInt:
+        integer*: int
+      of nkUInt:
+        uinteger*: uint
+      of nkFloat:
+        floating*: float
+      of nkString:
+        str*: string
+      of nkChar:
+        ch*: char
+      of nkVoid: discard
+      of nkSink: discard
+      else: discard
+  Context* = ref object
+    parent*: Context #?
+    values*: Table[StrID, Atom]
   Atom* = object
+    innerCtx*: Context #? # For doing field/method accesses.
     case kind*: AtomKind
       # Stuff that can exist directly in a text file to parse
+      # (+native stuff for strings)
       of akWord, akTag:
         id*: StrID
-      of akStr:
-        str*: string
-      of akChar:
-        chr*: char
-      of akList:        # wush that you jush shaid? I have a lishp?
+      of akList: # wush that you jush shaid? I have a lishp?
         children*: seq[Atom]
-
-      # Evaluated stuff
-      # I may eventually replace these with fully qualified words.
-      # e.g: A function "add" could be the single word %"root.foo.add"
-      of akFn:
-        fnID*: FnID
-      of akType:
-        typeID*: TypeID
-      of akStatic:
-        staticID*: StaticID
-      of akVal: discard # TODO
+      of akNative:
+        native*: Native
 
 var nextID: StrID = 0.StrID
 const INITIAL_CACHE_SIZE = 1024 # Because programs gots lots of idents
 var stringCache: StringCache = initTable[string, StrID](INITIAL_CACHE_SIZE)
 var stringLookup: StringLookup = initTable[StrID, string](INITIAL_CACHE_SIZE)
-
 
 proc toID*(s: string): StrID =
   if stringCache.contains s:
@@ -79,6 +88,16 @@ proc toAtom*(atom: Atom): Atom = atom
 
 template add*(a: Atom, items: untyped) =
   a.children.add items
+template len*(a: Atom): untyped =
+  if a.kind != akList: 1
+  else: a.children.len
+template `[]`*(a: Atom, i: untyped): var Atom = a.children[i]
+proc `==`*(a: Atom, s: StrID): bool = a.kind == akWord and a.id == s
+proc `==`*(s: StrID, a: Atom): bool = a == s
+proc `==`*(l, r: Atom): bool =
+  if not (l.kind == r.kind): return false
+  if l.kind != akWord: raise newException(ValueError, "Currently only support == for words")
+  return l.id == r.id
 
 proc list*(args: varargs[Atom, toAtom]): Atom =
   result = Atom(
@@ -86,10 +105,14 @@ proc list*(args: varargs[Atom, toAtom]): Atom =
     children: @[]
   )
   result.add args
+proc procAtom*(p: proc(self:var Atom, context:Context)): Atom = Atom(
+  kind: akNative,
+  native: Native(
+    kind: nkProc,
+    procedure: p
+  )
+)
 
-template `[]`*(a: Atom, i: untyped): var Atom = a.children[i]
-proc `==`*(a: Atom, s: StrID): bool = a.kind == akWord and a.id == s
-proc `==`*(s: StrID, a: Atom): bool = a == s
 
 makeTags {
   iColon: ":",
@@ -214,8 +237,43 @@ proc `$`*(self: seq[Atom]): string =
 proc `$`*(self: Atom): string =
   case self.kind:
     of akWord: fmt"{self.id.lookup}"
-    of akStr: fmt""""{self.str}""""
+    of akNative: $self.native
     of akTag: fmt"#{self.id.lookup}"
     of akList: fmt"({self.children})"
     else:
       quit fmt"{self.kind} is TODO"
+
+proc lookup*(c: Context, a: StrID): var Atom # Get the value of a word
+proc reduce*(a: var Atom, context: Context) # Ensure an atom is in its minimal state (i.e a native or similar)
+proc apply*(a: var Atom, context: Context) # Call a list. Assumes a[0] is pre-reduced
+
+let VoidAtom* = Atom(kind: akNative, native: Native(kind: nkVoid))
+proc lookup*(c: Context, a: StrID): var Atom =
+  if c.values.contains a:
+    return c.values.mgetOrPut(a, VoidAtom)
+  elif c.parent != nil:
+    return c.parent.lookup(a)
+  else:
+    raise newException(ValueError, fmt"Word {a}({a.lookup}) not found.")
+
+# Currently somewhat redundant. May stay that way, in fact.
+proc apply*(a: var Atom, context: Context) =
+  if a[0].kind != akNative or a[0].native.kind != nkProc:
+    raise newException(
+      ValueError,
+      fmt"Can only apply a [0] of akNative (currently)"
+    )
+  a[0].native.procedure(a, context)
+
+proc reduce*(a: var Atom, context: Context) =
+  case a.kind:
+    of akNative: discard # Already reduced
+    of akList:
+      # Don't reduce the entire list at once.
+      # This allows for short-circuit eval, if required.
+      reduce(a[0], context)
+      apply(a, context)
+    of akWord:
+      a = context.lookup(a.id)
+    of akTag:
+      quit "TODO: Tag reduction"

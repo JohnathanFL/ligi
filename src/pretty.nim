@@ -35,10 +35,13 @@ proc pretty(p: var Prettifier, a: Atom) =
       write ')'
     of akWord:
       write a.id.lookup
-    of akStr:
-      write '"'
-      write a.str
-      write '"'
+    of akNative:
+      case a.native.kind:
+        of nkString:
+          write '"'
+          write a.native.str
+          write '"'
+        else: discard
     else: discard
 
 proc pretty*(a: Atom) =
