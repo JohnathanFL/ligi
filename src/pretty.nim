@@ -5,10 +5,9 @@ import ast
 type Prettifier = object
   curDent: int
   stepDent: int
-  output: StringStream
 
 template write(a: untyped) =
-  p.output.write a
+  stdout.write a
 
 proc indent(p: var Prettifier) =
   p.curDent += p.stepDent
@@ -22,14 +21,17 @@ proc writeDent(p: Prettifier) =
 proc pretty(p: var Prettifier, a: Atom) =
   case a.kind:
     of akList:
-      p.writeDent
+      var isBlock = a[0] == ibBlock
       write '('
-      p.indent
-      p.writeDent
-      for c in a.children:
+      if isBlock: indent p
+      for i, c in a.children.pairs:
+        if isBlock: p.writeDent
         p.pretty c
-      p.dedent
-      p.writeDent
+        if isBlock or i == a.children.len - 1: discard
+        else: write ' '
+      if isBlock:
+        dedent p
+        writeDent p
       write ')'
     of akWord:
       write a.id.lookup
@@ -39,8 +41,10 @@ proc pretty(p: var Prettifier, a: Atom) =
       write '"'
     else: discard
 
-proc pretty*(a: Atom): string =
-  var prettifier = Prettifier(curDent: 0, stepDent: 2, output: newStringStream "")
+proc pretty*(a: Atom) =
+  var prettifier = Prettifier(
+    curDent: 0,
+    stepDent: 2,
+  )
   prettifier.pretty a
-  return prettifier.output.readAll
 

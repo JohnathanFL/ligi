@@ -29,7 +29,7 @@ type
         str*: string
       of akChar:
         chr*: char
-      of akList: # wush that you jush shaid? I have a lishp?
+      of akList:        # wush that you jush shaid? I have a lishp?
         children*: seq[Atom]
 
       # Evaluated stuff
@@ -77,25 +77,19 @@ proc toAtom*(word: StrID): Atom = Atom(
 )
 proc toAtom*(atom: Atom): Atom = atom
 
-proc list*(cmd: StrID, items: varargs[Atom, toAtom]): Atom =
-  result = Atom( kind: akList, children: @[ Atom(kind: akWord, id: cmd) ] )
-  for item in items:
-    result.children.add item
-proc list*(cmd: StrID, items: seq[Atom]): Atom =
-  result = Atom( kind: akList, children: @[ Atom(kind: akWord, id: cmd) ] )
-  for item in items:
-    result.children.add item
-proc list*(cmd: Atom, items: seq[Atom]): Atom =
-  result = Atom( kind: akList, children: @[ cmd ] )
-  for item in items:
-    result.children.add item
-proc list*(cmd: Atom, items: varargs[Atom, toAtom]): Atom =
-  result = Atom( kind: akList, children: @[ cmd ] )
-  for item in items:
-    result.children.add item
-
-proc add*(a: var Atom, items: varargs[Atom, toAtom]) = 
+template add*(a: Atom, items: untyped) =
   a.children.add items
+
+proc list*(args: varargs[Atom, toAtom]): Atom =
+  result = Atom(
+    kind: akList,
+    children: @[]
+  )
+  result.add args
+
+template `[]`*(a: Atom, i: untyped): var Atom = a.children[i]
+proc `==`*(a: Atom, s: StrID): bool = a.kind == akWord and a.id == s
+proc `==`*(s: StrID, a: Atom): bool = a == s
 
 makeTags {
   iColon: ":",
@@ -115,7 +109,7 @@ makeTags {
   iDivAssg: "/=",
 
   iLambda: "=>",
-  
+
   iSpaceship: "<=>",
 
   iAnd: "and",
@@ -128,6 +122,9 @@ makeTags {
   iGt: ">",
   iLtEq: "<=",
   iGtEq: ">=",
+
+  iIn: "in",
+  iNotIn: "notin",
 
   iAdd: "+",
   iSub: "-",
@@ -152,6 +149,7 @@ makeTags {
   iCase: "case",
 
   iIf: "if",
+  iElIf: "elif",
   iWhen: "when",
   iWhile: "while",
   iLoop: "loop",
@@ -179,26 +177,26 @@ makeTags {
   # ###################
   #
   # For these three, children[1] is always the typedesc. If no desc was present, it's `_`
-  ibBlock: "@block",     # a series of statements, with the last one yielding the value
-  ibTuple: "@tuple",     # a set of values
-  ibArray: "@array",     # a series of values
+  ibBlock: "@block", # a series of statements, with the last one yielding the value
+  ibTuple: "@tuple", # a set of values
+  ibArray: "@array", # a series of values
   # ibCall: "@()",       # No such thing. Lists are always function calls
-  ibAt: "@at",           # an indexing, with [1] being what to index and [2.._] being the arguments
-  ibArm: "@arm",         # a normal arm of a control statement. Exact meaning dependant upon which.
-  ibElse: "@else",       # the else arm of a statement
+  ibAt: "@at", # an indexing, with [1] being what to index and [2.._] being the arguments
+  ibArm: "@arm", # a normal arm of a control statement. Exact meaning dependant upon which.
+  ibElse: "@else", # the else arm of a statement
   ibFinally: "@finally", # the finally arm of a statement
-  ibIf: "@if",           # an if statement. Each arm is a sequential if/elif. Last two may be @else/@finally
-  ibWhen: "@when",       # a when statement.
-  ibWhile: "@while",     # a while loop
-  ibFor: "@for",         # a for loop
-  ibLoop: "@loop",       # a loop-de-loop
-  ibBind: "@bind",       # a bind statement. [1] is the spec, [2.._] are the expressions to bind
+  ibIf: "@if", # an if statement. Each arm is a sequential if/elif. Last two may be @else/@finally
+  ibWhen: "@when", # a when statement.
+  ibWhile: "@while", # a while loop
+  ibFor: "@for", # a for loop
+  ibLoop: "@loop", # a loop-de-loop
+  ibBind: "@bind", # a bind statement. [1] is the spec, [2.._] are the expressions to bind
   #
   # ##################
   # # Ext statements #
   # ##################
   #
-  ibFunc: "@func",       # a result-location function or macro definition. [1] is either fn or macro
+  ibFunc: "@func", # a result-location function or macro definition. [1] is either fn or macro
 }
 
 proc `$`*(self: seq[Atom]): string

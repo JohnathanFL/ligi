@@ -3,25 +3,24 @@ import lexing
 
 import strformat, tables, macros, options, sugar, sets, sequtils
 
-template err(msg: string) = quit fmt"{getStackTrace()}{self.pos.line}:{self.pos.col}: " & msg  # TODO
+template err(msg: string) = quit fmt"{getStackTrace()}{self.pos.line}:{self.pos.col}: " & msg # TODO
 
 type
-  # All of this is to be handled exclusively from the `parseExpr` function.
   # Individual parsing functions then check `.exprStyle` via `thisExprCan`.
   ExprCan* = enum
-    canColon,        # Can use `:` calls
-    canAssg,         # Can do assignments
-    canBlock,        # Can have an implicit block *at all*
-    canComma,        # Can use un-parenthesized function calls of multiple args
-    canImplicitBlock,# Can start with an Indent (i.e the entire expr is one implicit block)
+    canColon, # Can use `:` calls
+    canAssg,  # Can do assignments
+    canBlock, # Can have an implicit block *at all*
+    canComma, # Can use un-parenthesized function calls of multiple args
+    canImplicitBlock, # Can start with an Indent (i.e the entire expr is one implicit block)
   ExprStyle* = set[ExprCan]
 
 const
-  NormalExpr*: ExprStyle = { canColon, canBlock, canComma }
-  AssingableExpr*: ExprStyle = NormalExpr + { canAssg }
-  UnblockedExpr* = NormalExpr - { canBlock }
+  NormalExpr*: ExprStyle = {canColon, canBlock, canComma}
+  UnblockedExpr* = NormalExpr - {canBlock}
+  AssignableExpr*: ExprStyle = NormalExpr + {canAssg}
   # Anywhere you can implicit block, you could also pass an assignment.
-  MaybeBlockExpr* = NormalExpr + { canAssg, canImplicitBlock }
+  MaybeBlockExpr* = AssignableExpr + {canAssg, canImplicitBlock}
 
 type Parser* = ref object
   exprStyle*: ExprStyle
@@ -68,6 +67,7 @@ var Precedences* = makePrecs [
   [iOr, iXor],
   [iAnd],
   [iEq, iNeq, iGtEq, iLtEq, iLt, iGt],
+  [iIn, iNotIn],
   [iAdd, iSub],
   [iMul, iDiv, iMod],
 ]
@@ -115,7 +115,8 @@ proc precOf*(t: Token): int =
       if Precedences.contains t.id:
         result = Precedences[t.id]
       else:
-        if ControlWords.contains(t.id) or AccessOps.contains(t.id) or AssgOps.contains(t.id): result = -1
+        if ControlWords.contains(t.id) or AccessOps.contains(t.id) or
+            AssgOps.contains(t.id): result = -1
         else:
           # echo fmt"Precedence calculation is TODO ({t})"
           Precedences[t.id] = -1
@@ -142,7 +143,7 @@ proc advance*(self: Parser): Token =
   self.isControl = false
   self.isAccess = false
 
-  if self.cur.kind in { tkWord, tkSigil }:
+  if self.cur.kind in {tkWord, tkSigil}:
     self.prec = precOf self.cur
     if self.prec != -1:
       self.isBin = true
@@ -157,16 +158,18 @@ proc advance*(self: Parser): Token =
 # Commands for working with indentation
 template newlined*(): bool {.dirty.} =
   self.blocking and self.pos.line != self.refPos.line
-#template samelined(): bool {.dirty.} = not newlined 
+#template samelined(): bool {.dirty.} = not newlined
 template indented*(): bool {.dirty.} =
   self.blocking and self.pos.level > self.refPos.level
 template dedented*(): bool {.dirty.} =
   self.blocking and self.pos.level < self.refPos.level
 
 proc nextIs*(self: Parser, i: StrID, respectNewline = true): bool =
-  result = not (newlined and respectNewline) and self.cur.kind in {tkWord, tkSigil, tkPunc} and self.cur.id == i
+  result = not (newlined and respectNewline) and self.cur.kind in {tkWord,
+      tkSigil, tkPunc} and self.cur.id == i
 proc nextIs*(self: Parser, tags: HashSet[StrID], respectNewline = true): bool =
-  result = not (newlined and respectNewline) and self.cur.kind in {tkWord, tkSigil, tkPunc} and self.cur.id in tags
+  result = not (newlined and respectNewline) and self.cur.kind in {tkWord,
+      tkSigil, tkPunc} and self.cur.id in tags
 proc nextIs*(self: Parser, ids: openArray[StrID], respectNewline = true): bool =
   if newlined and respectNewline: return false
   result = false
@@ -176,7 +179,8 @@ proc nextIs*(self: Parser, ids: openArray[StrID], respectNewline = true): bool =
         return true
 proc nextIs*(self: Parser, kinds: set[TokenKind], respectNewline = true): bool =
   not (newlined and respectNewline) and self.cur.kind in kinds
-proc nextIs*(self: Parser, kind: TokenKind): bool = not newlined and self.cur.kind == kind
+proc nextIs*(self: Parser, kind: TokenKind): bool = not newlined and
+    self.cur.kind == kind
 
 
 template nextLineIs*(thing: untyped): bool = self.nextIs(thing, false)
@@ -254,7 +258,7 @@ proc parseTypeDesc*(self: Parser, trailing: bool): Atom =
 
   let innerKind =
     if trailing:
-      NormalExpr - { canBlock, canColon }
+      NormalExpr - {canBlock, canColon}
     else:
       NormalExpr
 
@@ -264,7 +268,7 @@ proc parseTypeDesc*(self: Parser, trailing: bool): Atom =
   if trailing: match iColon
 
 proc parseBlock*(self: Parser): Atom =
-  result = list(ibBlock, [])
+  result = list(ibBlock)
   withoutBlocking:
     result.add self.parseTypeDesc(true)
 
@@ -272,9 +276,10 @@ proc parseBlock*(self: Parser): Atom =
   # Thus you can do `{ :i32:
   #   code...
   # }`, where normally you couldn't put the `:i32:` at a "different" level from the main body.
-  # 
+  #
   withBlocking: pushRef:
     setDent
+    self.stopped = false
     while not (dedented or self.cur.kind == tkEOF):
       setLine
       result.children.add self.parseExpr(NormalExpr)
@@ -284,18 +289,18 @@ proc parseBlock*(self: Parser): Atom =
 
 
 proc parseAccessible*(self: Parser): Atom =
-  if nextIs { tkWord, tkStrop }:
+  if nextIs {tkWord, tkStrop}:
     result = Atom(
       kind: akWord,
       id: self.advance.id,
     )
-  elif nextIs { tkStr }:
+  elif nextIs {tkStr}:
     result = Atom(
       kind: akStr,
       str: self.advance.str,
     )
   # For the purposes of unaries, treat as words
-  elif nextIs { tkSigil }:
+  elif nextIs {tkSigil}:
     result = Atom(
       kind: akWord,
       id: self.advance.id,
@@ -312,22 +317,21 @@ template handlePostOps() =
   if nextIs iLParen:
     withoutBlocking:
       match iLParen
-      result = list(
-        result,
-        parseDelimited(iComma, nextIs iRParen)
-      )
+      result = list( result )
+      result.add parseDelimited(iComma, nextIs iRParen)
       match iRParen
   elif nextIs iLBracket:
     withoutBlocking:
       match iLBracket
       result = list(ibAt, result)
-      result.children = result.children.concat parseDelimited(iComma, nextIs iRBracket)
+      result.children = result.children.concat parseDelimited(iComma,
+          nextIs iRBracket)
       match iRBracket
   elif self.isAccess:
     result = list(
       self.advance.id, # `.`, `?.`, etc
       result,
-      self.parseRedirectable(mayAccess=false)
+      self.parseRedirectable(mayAccess = false)
     )
   else:
     err "Improper usage of handlePostOps"
@@ -345,7 +349,8 @@ proc parseRedirectable*(self: Parser, mayAccess = true): Atom =
   else:
     # Default handlers for strings, chars, and non-control words
     result = self.parseAccessible()
-  while mayAccess and not newlined and (self.isAccess or (self.attached and nextIs [iLParen, iLBracket])):
+  while mayAccess and not newlined and (self.isAccess or (self.attached and
+      nextIs [iLParen, iLBracket])):
     handlePostOps()
 
   if nextIs(iColon) and thisExprCan {canColon}:
@@ -355,7 +360,6 @@ proc parseRedirectable*(self: Parser, mayAccess = true): Atom =
       self.parseExpr (NormalExpr + {canImplicitBlock})
     )
     self.stopped = true
-
   elif indented and self.isAccess:
     # echo "In here"
     pushRef:
@@ -366,18 +370,18 @@ proc parseRedirectable*(self: Parser, mayAccess = true): Atom =
         setLine
         handlePostOps()
     self.stopped = true
-  elif nextIs iColon:
-    self.stopped = true
 
 proc parseUnary(self: Parser): Atom =
-  descend: result = self.parseRedirectable()
+  descend:
+    result = self.parseRedirectable()
   # Parsing things like `if` or `when` will self.stopped and properly prevent
   # us from treating them as unary operators. Thus, we can fearlessly treat anything
   # that gets here as "unary operator"-able
-  # 
+  #
   # If the next op is a marked bin/assgop, we need to fall back to parseBinary
-  if not (self.isBin or self.isAssg or newlined) and self.cur.kind notin { tkPunc }:
-    result = list( result, self.parseUnary() )
+  if not (self.isBin or self.isAssg or newlined) and self.cur.kind notin {tkPunc}:
+    result = list(result, self.parseUnary())
+    # echo fmt"Parsed a unary of {result.children[0].id.lookup}"
     if nextIs(iComma) and thisExprCan {canComma}:
       self.exprStyle = self.exprStyle - {canComma}
       while tryMatch iComma:
@@ -389,23 +393,27 @@ proc parseBinary(self: Parser, prec = 0): Atom =
     if prec == MaxPrec: self.parseUnary
     else: self.parseBinary(prec + 1)
   descend: result = nextLevel()
-  while self.cur.kind in {tkWord, tkSigil} and Precedences.getOrDefault(self.cur.id, -1) == prec:
+  while self.cur.kind in {tkWord, tkSigil} and Precedences.getOrDefault(
+      self.cur.id, -1) == prec:
     descend:
-      result = list( self.advance.id, result, nextLevel() )
+      result = list(self.advance.id, result, nextLevel())
 
 proc parseExpr*(self: Parser, kind: ExprStyle): Atom =
   let oldStyle = self.exprStyle
   self.exprStyle = kind
 
-
   if indented and thisExprCan {canImplicitBlock}:
-    result = self.parseBlock()
-    self.stopped = true
+    echo "Implicit blocking"
+    pushRef:
+      setDent
+      setLine
+      result = self.parseBlock()
+      self.stopped = true
   else:
     result = self.parseBinary()
     if nextIs(AssgOps) and thisExprCan {canAssg}:
       # Cannot chain assignments.
-      result = list( self.advance.id, result, self.parseExpr(self.exprStyle - {canAssg}) )
+      result = list(self.advance.id, result, self.parseExpr(self.exprStyle - {canAssg}))
 
   self.exprStyle = oldStyle
 

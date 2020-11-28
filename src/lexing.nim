@@ -24,7 +24,7 @@ type
     tkWord, tkSigil, tkStr, tkChar, tkLabel,
     tkPunc,
     tkStrop, # A word which may have the characters of a keyword, but may not be interpreted as one
-             # (may also be a sigil)
+ # (may also be a sigil)
 
   Token* = object
     case kind*: TokenKind
@@ -203,8 +203,11 @@ proc scan*(self: var Lexer): TupTok =
     tok tkSigil, self.consumeSigil
     if result.tok.id == iStoreIn:
       result.tok.kind = tkPunc
+    elif result.tok.id == iColon:
+      result.tok.kind = tkPunc
     #token.prec = token.id.opPrec
   self.lastPos = self.pos
+  # echo result
 
 
 proc lex*(data: iterator(): char {.closure.}): Lexer =
