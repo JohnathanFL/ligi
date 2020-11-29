@@ -53,8 +53,49 @@ proc evalTuple(self: var Atom, ctx: Context) =
     # Remove the @tuple and the typedesc
     for _ in 0..1: self.native.items.delete 0
 
+# spec is in [1] as an akWord. For each subsequent atom:
+# - That is an `(= lhs rhs)`, create the binding described in lhs and set it to the reduction of rhs
+# - That is anything else, assume the same format as `lhs` from above and create it
+# - When evaluating a lhs, assume the form `(name type)` (i.e function applications of `name(type)`, `name:type`, etc)
 proc evalBind(self: var Atom, ctx: Context) =
-  discard
+  # TODO: Respect bind specs and mutability rules
+  let spec = self[1].id # `let`, `var`, etc
+  # TODO: Implement another table (in context?) to store bind specs beyond let/var/cvar
+  for i, child in self.children.mpairs:
+    if i in 0..1: continue
+    # TODO: A full AST pattern matching library.
+    # For now, assume one of the forms `(= bind rhs)` or `bind`, where bind
+    # is of the form `name` or `(name type)`
+    var
+      name: Atom
+      ty: Atom
+      val: Atom
+
+    if child.kind == akList and child[0] == iAssg: # `(= bind value)`
+      name = move child[1]
+      val = move child[2]
+    else: # `bind`
+      name = move child
+      val = SinkAtom # Not yet specified (distinct from undef)
+
+    if name.kind == akList: # `(name type)`
+      ty = move name[1]
+      name = move name[0]
+    else:
+      ty = SinkAtom # Not yet specified
+
+    # Always starts as SinkAtom
+    var ctxVal: ptr Atom = ctx.bindName(name.id, ty).addr
+    # Note that ctx contains the binding before we evaluate val,
+    # allowing val to be a block which has assignments to name, as in
+    # `let x = { let y = 1; x = y + 1 }`
+    reduce val, ctx
+    # TODO: If ctxVal is no longer SinkAtom and val is now VoidAtom, consider it initialized.
+    #       Otherwise, replace ctxVal with val
+    ctxVal[] = move val
+  self = VoidAtom # Binds return nothing
+  # echo "After bind, ctx is", ctx.values
+
 proc evalPrint(self: var Atom, context: Context) =
   while self.len > 1:
     reduce self[1], context
@@ -62,22 +103,27 @@ proc evalPrint(self: var Atom, context: Context) =
     self.children.delete(1)
   self = VoidAtom
 
-let baseCtx = Context(
+
+# Essentially, each mode (interpreter, comptime interpreter, codegen) will have a different base context
+# that provides the appropriate implementations. That's the idea, anyway.
+let interpreterCtx = Context(
   values: toTable {
     ibBlock: procAtom evalBlock,
     "print".toID: procAtom evalPrint,
     iSink: Atom(kind: akNative, native: Native(kind: nkSink)),
     ibTuple: procAtom evalTuple,
+    ibBind: procAtom evalBind,
   }
 )
 
 when isMainModule:
-  var exText = readFile "example.li"
-  var main = exText.lex.parse
-  echo "\nCode:"
-  pretty main
-  # echo dumpCache()
-  echo "\nResult:"
-  reduce(main, baseCtx)
-  echo "\nLeftover:"
-  pretty main
+  while true:
+    var input = stdin.readAll()
+    var main = input.lex.parse
+    # echo "\nCode:"
+    # pretty main
+    echo dumpCache()
+    stdout.write ">>>"
+    reduce(main, interpreterCtx)
+    # echo "\nLeftover:"
+    # pretty main

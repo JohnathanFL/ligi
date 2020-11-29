@@ -6,10 +6,8 @@ import parser, ast
 
 proc parseBind(self: Parser): Atom =
   result = list(
-    list(
-      ibBind,
-      self.advance.id,
-    )
+    ibBind,
+    self.advance.id,
   )
   if indented: # Series of binds, 1 per line
     pushRef:

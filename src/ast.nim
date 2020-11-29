@@ -23,6 +23,7 @@ type
     nkProc, nkInt, nkUInt, nkFloat, nkString, nkChar, nkVoid, nkSink,
     nkTuple, nkArray,
   Native* = object
+    # TODO: Change this to have a type field
     case kind*: NativeKind
       of nkProc:
         procedure*: (proc(self: var Atom, context: Context)) # Takes the atom and the atom's current context
@@ -262,14 +263,20 @@ proc lookup*(c: Context, a: StrID): var Atom =
   elif c.parent != nil:
     return c.parent.lookup(a)
   else:
-    raise newException(ValueError, fmt"Word {a} not found.")
+    raise newException(ValueError, fmt"{a.lookup} not found in current context")
+proc bindName*(c: Context, name: StrID, ty: Atom): var Atom =
+  if c.values.contains name:
+    raise newException(ValueError, fmt"Name {name.lookup} already exists in the current context!")
+  # TODO: Putting types in the AST
+  c.values[name] = SinkAtom
+  return c.values[name]
 
 # Currently somewhat redundant. May stay that way, in fact.
 proc apply*(a: var Atom, context: Context) =
   if a[0].kind != akNative or a[0].native.kind != nkProc:
     raise newException(
       ValueError,
-      fmt"Can only apply a [0] of akNative (currently)"
+      fmt"Can currently only apply a [0] of akNative. Found {a}"
     )
   a[0].native.procedure(a, context)
 
