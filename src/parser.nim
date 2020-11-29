@@ -236,19 +236,19 @@ proc parseTypeDesc*(self: Parser, trailing: bool): Atom
 proc parseBlock*(self: Parser): Atom
 
 
-template parseDelimited*(delim: StrID, endCond: untyped): seq[Atom] =
-  var result: seq[Atom]
+proc parseDelimited*(self: Parser, delim: StrID, endCond: proc(self:Parser): bool): seq[Atom] =
   # echo "Parsing a `" & delim.lookup & "` delimited list"
-  while not endCond:
-    if nextIs delim:
-      match iComma
-      continue
+  # Skip initial delimiters
+  while nextIs delim:
+    match delim
+  while not self.endCond:
     # echo fmt"Parsing expr when next is {self.cur}"
     result.add(self.parseExpr(UnblockedExpr))
     self.stopped = false
     if not nextIs delim:
       # echo "Breaking"
       break
+    # echo fmt"Matching {delim.lookup}"
     match delim
   result
 
@@ -326,14 +326,14 @@ template handlePostOps() =
     withoutBlocking:
       match iLParen
       result = list( result )
-      result.add parseDelimited(iComma, nextIs iRParen)
+      result.add self.parseDelimited(iComma, self => nextIs iRParen)
       match iRParen
   elif nextIs iLBracket:
     withoutBlocking:
       match iLBracket
       result = list(ibAt, result)
-      result.children = result.children.concat parseDelimited(iComma,
-          nextIs iRBracket)
+      result.children = result.children.concat self.parseDelimited(iComma,
+          self => nextIs iRBracket)
       match iRBracket
   elif self.isAccess:
     result = list(
@@ -387,7 +387,10 @@ proc parseUnary(self: Parser): Atom =
   # that gets here as "unary operator"-able
   #
   # If the next op is a marked bin/assgop, we need to fall back to parseBinary
-  if not (self.isBin or self.isAssg or newlined) and self.cur.kind notin {tkPunc}:
+  if
+    not (newlined or self.isBin or self.isAssg) and
+    # If it's a punctuation, it must be one that begins a redirect
+    (if nextIs tkPunc: ControlWords.contains self.cur.id else: true):
     result = list(result, self.parseUnary())
     # echo fmt"Parsed a unary of {result.children[0].id.lookup}"
     if nextIs(iComma) and thisExprCan {canComma}:

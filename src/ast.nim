@@ -20,7 +20,8 @@ type
     akNative,
 
   NativeKind* = enum
-    nkProc, nkInt, nkUInt, nkFloat, nkString, nkChar, nkVoid, nkSink
+    nkProc, nkInt, nkUInt, nkFloat, nkString, nkChar, nkVoid, nkSink,
+    nkTuple, nkArray,
   Native* = object
     case kind*: NativeKind
       of nkProc:
@@ -35,6 +36,8 @@ type
         str*: string
       of nkChar:
         ch*: char
+      of nkTuple, nkArray:
+        items*: seq[Atom]
       of nkVoid: discard
       of nkSink: discard
       else: discard
@@ -58,6 +61,7 @@ const INITIAL_CACHE_SIZE = 1024 # Because programs gots lots of idents
 var stringCache: StringCache = initTable[string, StrID](INITIAL_CACHE_SIZE)
 var stringLookup: StringLookup = initTable[StrID, string](INITIAL_CACHE_SIZE)
 
+proc dumpCache*(): string = $stringLookup
 proc toID*(s: string): StrID =
   if stringCache.contains s:
     return stringCache[s]
@@ -86,12 +90,14 @@ proc toAtom*(word: StrID): Atom = Atom(
 )
 proc toAtom*(atom: Atom): Atom = atom
 
-template add*(a: Atom, items: untyped) =
+proc add*[T](a: var Atom, items: T) =
   a.children.add items
-template len*(a: Atom): untyped =
+proc len*(a: Atom): Natural =
   if a.kind != akList: 1
   else: a.children.len
-template `[]`*(a: Atom, i: untyped): var Atom = a.children[i]
+proc `[]`*(a: var Atom, i: Natural): var Atom = a.children[i]
+proc `[]=`*(a: var Atom, i: Natural, new: Atom) = a.children[i] = new
+proc `[]`*(a: Atom, i: Natural): Atom = a.children[i]
 proc `==`*(a: Atom, s: StrID): bool = a.kind == akWord and a.id == s
 proc `==`*(s: StrID, a: Atom): bool = a == s
 proc `==`*(l, r: Atom): bool =
@@ -248,13 +254,15 @@ proc reduce*(a: var Atom, context: Context) # Ensure an atom is in its minimal s
 proc apply*(a: var Atom, context: Context) # Call a list. Assumes a[0] is pre-reduced
 
 let VoidAtom* = Atom(kind: akNative, native: Native(kind: nkVoid))
+let SinkAtom* = Atom(kind: akNative, native:  Native(kind: nkSink))
+
 proc lookup*(c: Context, a: StrID): var Atom =
   if c.values.contains a:
     return c.values.mgetOrPut(a, VoidAtom)
   elif c.parent != nil:
     return c.parent.lookup(a)
   else:
-    raise newException(ValueError, fmt"Word {a}({a.lookup}) not found.")
+    raise newException(ValueError, fmt"Word {a} not found.")
 
 # Currently somewhat redundant. May stay that way, in fact.
 proc apply*(a: var Atom, context: Context) =
@@ -277,3 +285,4 @@ proc reduce*(a: var Atom, context: Context) =
       a = context.lookup(a.id)
     of akTag:
       quit "TODO: Tag reduction"
+    else: discard

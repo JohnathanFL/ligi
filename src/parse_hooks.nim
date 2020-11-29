@@ -104,7 +104,7 @@ registerHandler [iLBracket], proc(self: Parser): Atom = withoutBlocking:
     ibArray,
     self.parseTypeDesc(trailing = true),
   )
-  result.children.add parseDelimited(iComma, nextIs iRBracket)
+  result.children.add self.parseDelimited(iComma, self => nextIs iRBracket)
   match iRBracket
 
 registerHandler [iLParen], proc(self: Parser): Atom = withoutBlocking:
@@ -113,5 +113,5 @@ registerHandler [iLParen], proc(self: Parser): Atom = withoutBlocking:
     ibTuple,
     self.parseTypeDesc(trailing = true),
   )
-  result.children.add parseDelimited(iComma, nextIs iRParen)
+  result.children.add self.parseDelimited(iComma, self => nextIs iRParen)
   match iRParen
