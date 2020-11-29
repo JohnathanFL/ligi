@@ -97,11 +97,18 @@ proc evalBind(self: var Atom, ctx: Context) =
   # echo "After bind, ctx is", ctx.values
 
 proc evalPrint(self: var Atom, context: Context) =
-  while self.len > 1:
-    reduce self[1], context
-    echo $self[1]
-    self.children.delete(1)
+  for i, child in self.children.mpairs:
+    if i in 0..0: continue
+    reduce child, context
+    echo child
   self = VoidAtom
+
+proc evalAdd(self: var Atom, context: Context) =
+  if self.len notin 2..3: # Either unary `+a` or binary `a + b`
+    raise newException(ValueError, "`+` works only on one or two values.")
+  # TODO: Type conversions. For now, assume binary with strings
+  let resStr = self[1].native.str & self[2].native.str
+  self = Atom(kind: akNative, native: Native(kind: nkString, str: resStr))
 
 
 # Essentially, each mode (interpreter, comptime interpreter, codegen) will have a different base context
@@ -113,6 +120,7 @@ let interpreterCtx = Context(
     iSink: Atom(kind: akNative, native: Native(kind: nkSink)),
     ibTuple: procAtom evalTuple,
     ibBind: procAtom evalBind,
+    iAdd: procAtom evalAdd,
   }
 )
 
