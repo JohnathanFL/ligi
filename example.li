@@ -32,5 +32,7 @@
 -- when x:
 --   is y: 2
 
+let x = 1
+
 print ("Hello", "World")
 

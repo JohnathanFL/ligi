@@ -21,7 +21,8 @@ type Pos* = tuple[line: int, col: int, level: int]
 type
   TokenKind* = enum
     tkEOF,
-    tkWord, tkSigil, tkStr, tkChar, tkLabel,
+    tkWord, tkNumber,
+    tkSigil, tkStr, tkChar, tkLabel,
     tkPunc,
     tkStrop, # A word which may have the characters of a keyword, but may not be interpreted as one
  # (may also be a sigil)
@@ -34,6 +35,8 @@ type
         str*: string
       of tkChar:
         chr*: char
+      of tkNumber:
+        num*: uint
       else: discard
 
 
@@ -94,12 +97,27 @@ template match(what: string) =
   if not tryMatch what:
     err fmt"Expected " & what
 
-proc consumeWord(self: var Lexer): StrID =
-  var str = ""
+# Parse either a number or a word. Signal which in isStrID
+# This is rather ugly, I know, but whatever.
+# `stropped` controls whether it's always a word.
+var str = ""
+proc consumeWord(self: var Lexer, stropped = false): tuple[i: StrID, isStrID: bool] =
+  result.isStrID = stropped
+  str = ""
+  var num = 0.uint
   if self.cur notin WordChars: err "Expected a word char"
   while self.cur in WordChars:
-    str &= self.advance
-  return str.toID
+    let c = self.advance
+    if not c.isDigit:
+      result.isStrID = true
+    else:
+      num *= 10
+      num += c.uint - '0'.uint
+    str &= c
+  if result.isStrID:
+    result.i = str.toID
+  else:
+    result.i = num
 proc consumeSigil(self: var Lexer): StrID =
   var str = ""
   if self.cur notin SigilChars: err "Expected a sigil char"
@@ -178,7 +196,9 @@ proc scan*(self: var Lexer): TupTok =
   elif tryMatch "}": tok tkPunc, iRBrace
   elif tryMatch ",": tok tkPunc, iComma
   elif nextIs WordChars:
-    tok self.consumeWord
+    let (i, isWord) = self.consumeWord
+    if isWord: tok i
+    else: result.tok = Token(kind: tkNumber, num: i.uint)
     # TODO
     # token.prec = token.id.opPrec
   elif nextIs "\\\\": tok self.scanMLStr
@@ -186,7 +206,7 @@ proc scan*(self: var Lexer): TupTok =
   elif nextIs "#":
     consume 1
     if nextIs WordChars:
-      tok tkLabel, self.consumeWord
+      tok tkLabel, self.consumeWord(stropped=true).i
     elif nextIs SigilChars:
       tok tkLabel, self.consumeSigil
     elif nextIs "\"": tok tkLabel, self.scanStr.toID
@@ -196,7 +216,7 @@ proc scan*(self: var Lexer): TupTok =
     if not nextIs WordChars + SigilChars:
       err "A single \\ must be followed by a word or sigil to strop"
     if nextIs WordChars:
-      tok tkStrop, self.consumeWord
+      tok tkStrop, self.consumeWord(stropped=true).i
     else:
       tok tkStrop, self.consumeSigil
   elif nextIs SigilChars:

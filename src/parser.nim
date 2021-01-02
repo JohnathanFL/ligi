@@ -294,6 +294,14 @@ proc parseAccessible*(self: Parser): Atom =
       kind: akWord,
       id: self.advance.id,
     )
+  elif nextIs tkNumber:
+    result = Atom(
+      kind: akNative,
+      native: Native(
+        kind: nkUInt,
+        uinteger: self.advance.num,
+      )
+    )
   elif nextIs {tkStr}:
     result = Atom(
       kind: akNative,

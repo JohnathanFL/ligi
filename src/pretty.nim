@@ -41,6 +41,8 @@ proc pretty(p: var Prettifier, a: Atom) =
           write '"'
           write a.native.str
           write '"'
+        of nkVoid:
+          write "()"
         else: discard
     else: discard
 

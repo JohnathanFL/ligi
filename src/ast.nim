@@ -3,13 +3,13 @@ import tables
 import strformat
 import sequtils
 
+import types
 
 import lexing
 
 type
   ID* = uint64
   FnID* = ID
-  TypeID* = ID
   StaticID* = ID
   StrID* = ID
   StringCache* = Table[string, StrID]
