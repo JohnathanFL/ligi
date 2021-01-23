@@ -226,7 +226,6 @@ pub fn scan(self: *This) !?Token {
         }
         res = .{ .comment = try self.cache.intern(self.advanceN(i)) };
     }
-
     return res;
 }
 

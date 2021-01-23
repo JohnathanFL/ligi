@@ -14,6 +14,8 @@ pub fn build(b: *Builder) void {
     const exe = b.addExecutable("ligi", "src/main.zig");
     exe.setTarget(target);
     exe.setBuildMode(mode);
+    exe.linkLibC();
+    exe.linkSystemLibrary("gc");
     exe.install();
 
     const run_cmd = exe.run();
