@@ -19,7 +19,7 @@ when isMainModule:
     echo "\nCode:"
     pretty main
     # echo dumpCache()
-    reduce(main, interpreterCtx)
+    reduce(main, comptimeEvalCtx)
     stdout.write ">>>"
     # echo main
     pretty main

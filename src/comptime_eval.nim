@@ -96,7 +96,7 @@ proc evalBind(self: var Atom, ctx: Context) =
   self = VoidAtom # Binds return nothing
   # echo "After bind, ctx is", ctx.values
 
-proc evalAdd(self: var Atom, context: Context) =
+proc evalAdd*(self: var Atom, context: Context) =
   if self.len notin 2..3: # Either unary `+a` or binary `a + b`
     raise newException(ValueError, "`+` works only on one or two values.")
   # TODO: Type checks/conversions. For now, assume binary with strings
@@ -105,6 +105,32 @@ proc evalAdd(self: var Atom, context: Context) =
   echo "Adding ", self[1], " and ", self[2]
   let resStr = self[1].native.str & self[2].native.str
   self = Atom(kind: akNative, native: Native(kind: nkString, str: resStr))
+
+# @complog(msg)
+proc evalCompLog*(self: var Atom, context: Context) =
+  if self.len != 2: # Must be a unary op/function call of arity 1
+    raise newException(ValueError, "@complog only takes one input!")
+  echo self[1]
+
+# @as(item, type)
+proc evalAs*(self: var Atom, context: Context) =
+  if self.len != 3:
+    raise newException(ValueError, "@as takes two arguments (item, type)")
+
+proc typeOf*(self: var Atom, context: Context) =
+  case self.kind:
+
+# Helper: Resolve the type of all but the first child atom
+proc invocationTypes*(self: var Atom, context: Context): seq[Atom] =
+
+
+proc overloadProcAtom(pairs: openArray[(seq[Atom], EvalProc)]): Atom =
+  let picker = proc(self: var Atom, context: Context) =
+    var types = invocationTypes(self, context)
+    for (types, p) in pairs:
+
+  
+  return Atom(kind: akNative, native: Native(kind: nkProc, procedure: picker))
 
 # Essentially, each mode (interpreter, comptime interpreter, codegen) will have a different base context
 # that provides the appropriate implementations. That's the idea, anyway.
@@ -115,5 +141,6 @@ let comptimeEvalCtx* = Context(
     ibTuple: procAtom evalTuple,
     ibBind: procAtom evalBind,
     iAdd: procAtom evalAdd,
+    ibCompLog: procAtom evalCompLog,
   }
 )

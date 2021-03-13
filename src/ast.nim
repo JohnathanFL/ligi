@@ -112,7 +112,9 @@ proc list*(args: varargs[Atom, toAtom]): Atom =
     children: @[]
   )
   result.add args
-proc procAtom*(p: proc(self:var Atom, context:Context)): Atom = Atom(
+
+type EvalProc* = proc(self:var Atom, context:Context)
+proc procAtom*(p: EvalProc): Atom = Atom(
   kind: akNative,
   native: Native(
     kind: nkProc,
@@ -221,6 +223,7 @@ makeTags {
   ibFor: "@for", # a for loop
   ibLoop: "@loop", # a loop-de-loop
   ibBind: "@bind", # a bind statement. [1] is the spec, [2.._] are the expressions to bind
+  ibCompLog: "@complog", # Comptime logging
   #
   # ##################
   # # Ext statements #
