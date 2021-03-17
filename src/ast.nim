@@ -12,21 +12,32 @@ type
   FnID* = ID
   StaticID* = ID
   StrID* = ID
+  TypeID* = ID
   StringCache* = Table[string, StrID]
   StringLookup* = Table[StrID, string]
   CompoundKind* = enum ckArray, ckTup, ckBlock
   AtomKind* = enum
     akWord, akTag, akList,
-    akNative,
-
-  NativeKind* = enum
+    # Native kinds
     nkProc, nkInt, nkUInt, nkFloat, nkString, nkChar, nkVoid, nkSink,
-    nkTuple, nkArray,
-  Native* = object
-    # TODO: Change this to have a type field
-    case kind*: NativeKind
-      of nkProc:
-        procedure*: (proc(self: var Atom, context: Context)) # Takes the atom and the atom's current context
+    nkTuple, nkArray, nkObj, nkPattern, nkType, nkBool, nkFn, nkRef,
+  Context* = ref object
+    parent*: Context #?
+    values*: Table[StrID, Atom]
+    items*: seq[Atom] # For tuples and arrays
+  Atom* = object
+    # innerCtx.values contains fields, innerCtx.parent points to the type's Ctx for statics (methods)
+    innerCtx*: Context #?
+    case kind*: AtomKind
+      # Stuff that can exist directly in a text file to parse
+      # (+native stuff for strings)
+      of akWord, akTag:
+        id*: StrID
+      of akList: # wush that you jush shaid? I have a lishp?
+        children*: seq[Atom]
+      # Native stuff
+      of nkProc: # A nim proc
+        procedure*: EvalProc # Takes the atom and the atom's current context
       of nkInt:
         integer*: int
       of nkUInt:
@@ -37,25 +48,25 @@ type
         str*: string
       of nkChar:
         ch*: char
-      of nkTuple, nkArray:
-        items*: seq[Atom]
+      of nkBool:
+        boolean*: bool
+      of nkRef:
+        name*: StrID
+        inCtx*: Context
+      of nkFn:
+        fnCtx*: Context
+        ret*: StrID # ID of the variable in fnCtx that's to be returned
+      of nkType:
+        discard #TODO
+      of nkTuple, nkArray: discard # Already stored in innerCtx
+      of nkObj: discard # Alrady stored in innerCtx
+      of nkPattern:
+        # Any interior patterns (like in `($x, $y)`) 
+        bindName*: StrID
+        bindType*: ref Atom
       of nkVoid: discard
       of nkSink: discard
-      else: discard
-  Context* = ref object
-    parent*: Context #?
-    values*: Table[StrID, Atom]
-  Atom* = object
-    innerCtx*: Context #? # For doing field/method accesses.
-    case kind*: AtomKind
-      # Stuff that can exist directly in a text file to parse
-      # (+native stuff for strings)
-      of akWord, akTag:
-        id*: StrID
-      of akList: # wush that you jush shaid? I have a lishp?
-        children*: seq[Atom]
-      of akNative:
-        native*: Native
+  EvalProc* = proc(self:var Atom, context:Context)
 
 var nextID: StrID = 0.StrID
 const INITIAL_CACHE_SIZE = 1024 # Because programs gots lots of idents
@@ -113,124 +124,10 @@ proc list*(args: varargs[Atom, toAtom]): Atom =
   )
   result.add args
 
-type EvalProc* = proc(self:var Atom, context:Context)
 proc procAtom*(p: EvalProc): Atom = Atom(
-  kind: akNative,
-  native: Native(
-    kind: nkProc,
-    procedure: p
-  )
+  kind: nkProc,
+  procedure: p
 )
-
-
-makeTags {
-  iColon: ":",
-  iComma: ",",
-  iLBrace: "{",
-  iRBrace: "}",
-  iLParen: "(",
-  iRParen: ")",
-  iLBracket: "[",
-  iRBracket: "]",
-  iStoreIn: "->",
-
-  iAssg: "=",
-  iAddAssg: "+=",
-  iSubAssg: "-=",
-  iMulAssg: "*=",
-  iDivAssg: "/=",
-
-  iLambda: "=>",
-
-  iSpaceship: "<=>",
-
-  iAnd: "and",
-  iOr: "or",
-  iXor: "xor",
-
-  iEq: "==",
-  iNeq: "!=",
-  iLt: "<",
-  iGt: ">",
-  iLtEq: "<=",
-  iGtEq: ">=",
-
-  iIn: "in",
-  iNotIn: "notin",
-
-  iAdd: "+",
-  iSub: "-",
-  iMul: "*",
-  iPtr: "*", # One benefit of the StrID setup is it's wonderfully easy to alias keywords/sigils
-  iDiv: "/",
-  iMod: "mod",
-  iExpand: "...",
-
-  iAccess: ".",
-  iAccessPipe: ".>",
-  iOptAccess: ".?",
-  iOptAccessPipe: ".?>",
-
-  iFn: "fn",
-  iMacro: "macro",
-
-  iLet: "let",
-  iVar: "var",
-  iCVar: "cvar",
-  iField: "field",
-  iCase: "case",
-
-  iIf: "if",
-  iElIf: "elif",
-  iWhen: "when",
-  iWhile: "while",
-  iLoop: "loop",
-  iFor: "for",
-
-  iElse: "else",
-  iFinally: "finally",
-  iIs: "is",
-
-  iAssert: "assert",
-  iExpect: "expect",
-  iBreak: "break",
-  iReturn: "return",
-  iDelete: "delete",
-  iContinue: "continue",
-
-  iSink: "_",
-
-
-  # Purely AST ids - ([i]d of [b]uiltin)
-  # Because these are just words, this also means Ligi can be homoiconic
-  #
-  # ###################
-  # # Core statements #
-  # ###################
-  #
-  # For these three, children[1] is always the typedesc. If no desc was present, it's `_`
-  ibBlock: "@block", # a series of statements, with the last one yielding the value
-  ibTuple: "@tuple", # a set of values
-  ibArray: "@array", # a series of values
-  # ibCall: "@()",       # No such thing. Lists are always function calls
-  ibAt: "@at", # an indexing, with [1] being what to index and [2.._] being the arguments
-  ibArm: "@arm", # a normal arm of a control statement. Exact meaning dependant upon which.
-  ibElse: "@else", # the else arm of a statement
-  ibFinally: "@finally", # the finally arm of a statement
-  ibIf: "@if", # an if statement. Each arm is a sequential if/elif. Last two may be @else/@finally
-  ibWhen: "@when", # a when statement.
-  ibWhile: "@while", # a while loop
-  ibFor: "@for", # a for loop
-  ibLoop: "@loop", # a loop-de-loop
-  ibBind: "@bind", # a bind statement. [1] is the spec, [2.._] are the expressions to bind
-  ibCompLog: "@complog", # Comptime logging
-  #
-  # ##################
-  # # Ext statements #
-  # ##################
-  #
-  ibFunc: "@func", # a result-location function or macro definition. [1] is either fn or macro
-}
 
 proc `$`*(self: seq[Atom]): string
 proc `$`*(self: Atom): string
@@ -247,18 +144,18 @@ proc `$`*(self: seq[Atom]): string =
 proc `$`*(self: Atom): string =
   case self.kind:
     of akWord: fmt"{self.id.lookup}"
-    of akNative: $self.native
     of akTag: fmt"#{self.id.lookup}"
     of akList: fmt"({self.children})"
-    else:
-      quit fmt"{self.kind} is TODO"
+    of nkString: '"' & self.str & '"'
+    of nkChar: fmt"'{self.ch}'"
+    else: "!@#"
 
 proc lookup*(c: Context, a: StrID): var Atom # Get the value of a word
 proc reduce*(a: var Atom, context: Context) # Ensure an atom is in its minimal state (i.e a native or similar)
 proc apply*(a: var Atom, context: Context) # Call a list. Assumes a[0] is pre-reduced
 
-let VoidAtom* = Atom(kind: akNative, native: Native(kind: nkVoid))
-let SinkAtom* = Atom(kind: akNative, native:  Native(kind: nkSink))
+let VoidAtom* = Atom(kind: nkVoid)
+let SinkAtom* = Atom(kind: nkSink)
 
 proc lookup*(c: Context, a: StrID): var Atom =
   if c.values.contains a:
@@ -276,23 +173,101 @@ proc bindName*(c: Context, name: StrID, ty: Atom): var Atom =
 
 # Currently somewhat redundant. May stay that way, in fact.
 proc apply*(a: var Atom, context: Context) =
-  if a[0].kind != akNative or a[0].native.kind != nkProc:
-    raise newException(
-      ValueError,
-      fmt"Can currently only apply a [0] of akNative. Found {a}"
-    )
-  a[0].native.procedure(a, context)
+  case a[0].kind:
+    of nkProc:
+      a[0].procedure(a, context)
+    of nkFn:
+
+    else:
+      raise newException(
+        ValueError,
+        fmt"Can currently only apply a [0] of akNative. Found {a}"
+      )
 
 proc reduce*(a: var Atom, context: Context) =
   case a.kind:
-    of akNative: discard # Already reduced
     of akList:
-      # Don't reduce the entire list at once.
-      # This allows for short-circuit eval, if required.
+      # Don't reduce the entire list at once, only enough to know what to call.
+      # This allows for short-circuit eval in the proc, if required.
       reduce(a[0], context)
       apply(a, context)
     of akWord:
       a = context.lookup(a.id)
     of akTag:
       quit "TODO: Tag reduction"
-    else: discard
+    else: discard # A native. already reduced
+
+# We'll have the most common modifiers be baked into the TypeID itself.
+# These will only be modifiers that can only logically be applied once.
+# Thus, `const const T` is the same as `const T`, but `* * T` and `slice slice T` are not.
+#
+# This also means that the evaluators can simply do a `t.isRuntime = true` when typechecking,
+# and don't need to do any sort of lookups in the type tables.
+#
+# For determining which way to interpret them (bit 63 is const vs runtime), use whatever
+# would make sense for the most default type of `void` (0) (`const comptime void`, basically.)
+func bit(n: int): ID = 1.ID shl n.ID
+func bits(ns: varargs[int]): ID =
+  result = 0
+  for n in ns:
+    result = result or (bit n)
+const
+  RuntimeMask*: ID = bit 63
+  MutableMask* = bit 62
+  RefMask* = bit 61
+  # A 3 bit number: (4:decimal, 3:float, 2:int, 1:uint, 0:not a number)
+  # They are purposefully ranked in order of ascending complexity (none, unsigned, 2's comp, etc)
+  # This makes the ID get interpreted as the number of bits if not 0.
+  # Decimal numbers are a future TODO/reserved bit
+  NumMask* = bits(60, 59, 58)
+  FlagShift* = 48 # shl required to turn low 16 bits into the high flag mask
+  FlagMask* = uint16.high.ID shl FlagShift # Reserving the top 16 bits for common modifiers
+  IDMask* = not FlagMask
+
+func checkMask*(t: TypeID, n: ID | int | uint): bool = (t and n.ID) != 0
+func isRuntime*(t: TypeID): bool = t.checkMask RuntimeMask
+func `isRuntime=`*(t: var TypeID, itIs: bool) =
+  if itIs:
+    t = t and RuntimeMask.ID
+  else:
+    t = t and not RuntimeMask.ID
+
+func isComptime*(t: TypeID): bool = not t.isRuntime
+func `isComptime=`*(t: var TypeID, itIs: bool): bool =
+  t.isRuntime = not itIs
+
+
+func isMutable*(t: TypeID): bool = t.checkMask MutableMask
+func `isMutable=`*(t: var TypeID, itIs: bool) =
+  if itIs:
+    t = t and MutableMask.ID
+  else:
+    t = t and not MutableMask.ID
+
+func isConst*(t: TypeID): bool = not t.isMutable
+func `isConst=`*(t: var TypeID, itIs: bool): bool =
+  t.isMutable = not itIs
+
+
+func isNum*(t: TypeID): bool = t.checkMask NumMask
+
+
+func flags*(t: TypeID): ID = t and FlagMask
+
+func id*(t: TypeID): TypeID = t and IDMask
+func `id=`*(t: var TypeID, id: TypeID) =
+  t = (t and FlagMask) or (id and IDMask)
+
+
+type
+  Field* = object
+    name*: string
+    typeOf*: TypeID
+    offset*: uint64 # Offset from the beginning of the parent object in bits
+
+  Type* = object
+    id*: TypeID
+    size*: uint64 # In bits
+    fields*: seq[Field]
+    statics*: Context
+var TypeCache*: Table[TypeID, Type] = initTable[TypeID, Type](0)

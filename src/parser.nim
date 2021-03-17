@@ -1,6 +1,8 @@
 import ast
 import lexing
 
+import common_tags
+
 import strformat, tables, macros, options, sugar, sets, sequtils
 
 template err(msg: string) = quit fmt"{getStackTrace()}{self.pos.line}:{self.pos.col}: " & msg # TODO
@@ -285,9 +287,6 @@ proc parseBlock*(self: Parser): Atom =
       result.children.add self.parseExpr(NormalExpr)
       self.stopped = false
 
-
-
-
 proc parseAccessible*(self: Parser): Atom =
   if nextIs {tkWord, tkStrop}:
     result = Atom(
@@ -296,19 +295,13 @@ proc parseAccessible*(self: Parser): Atom =
     )
   elif nextIs tkNumber:
     result = Atom(
-      kind: akNative,
-      native: Native(
-        kind: nkUInt,
-        uinteger: self.advance.num,
-      )
+      kind: nkUInt,
+      uinteger: self.advance.num,
     )
   elif nextIs {tkStr}:
     result = Atom(
-      kind: akNative,
-      native: Native(
         kind: nkString,
         str: self.advance.str,
-      )
     )
   # For the purposes of unaries, treat as words
   elif nextIs {tkSigil}:

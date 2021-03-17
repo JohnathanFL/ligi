@@ -3,6 +3,7 @@ import tables
 import strformat
 
 import ast
+import common_tags
 
 # TODO: Better error handling
 template err(msg: string) =

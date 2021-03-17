@@ -2,7 +2,7 @@ import system, tables, sugar, strformat
 
 import lazy
 
-import lexing, parser, ast, pretty, parse_hooks
+import lexing, parser, ast, pretty, parse_hooks, common_tags
 
 
 # Eval type, eval each child, replace self with final value
@@ -36,7 +36,7 @@ proc evalTuple(self: var Atom, ctx: Context) =
 
   for c in self.children.mitems:
     reduce c, ctx
-  if ourType.kind != akNative or ourType.native.kind != nkSink:
+  if ourType.kind != nkSink:
     # TODO
     raise newException(
       ValueError,
@@ -44,14 +44,13 @@ proc evalTuple(self: var Atom, ctx: Context) =
     )
   else:
     self = Atom(
-      kind: akNative,
-      native: Native(
-        kind: nkTuple,
+      kind: nkTuple,
+      innerCtx: Context(
         items: move self.children
       )
     )
     # Remove the @tuple and the typedesc
-    for _ in 0..1: self.native.items.delete 0
+    for _ in 0..1: self.innerCtx.items.delete 0
 
 # spec is in [1] as an akWord. For each subsequent atom:
 # - That is an `(= lhs rhs)`, create the binding described in lhs and set it to the reduction of rhs
@@ -103,34 +102,102 @@ proc evalAdd*(self: var Atom, context: Context) =
   for child in self.children.mitems:
     reduce child, context
   echo "Adding ", self[1], " and ", self[2]
-  let resStr = self[1].native.str & self[2].native.str
-  self = Atom(kind: akNative, native: Native(kind: nkString, str: resStr))
+  let resStr = self[1].str & self[2].str
+  self = Atom(kind: nkString, str: resStr)
 
 # @complog(msg)
-proc evalCompLog*(self: var Atom, context: Context) =
-  if self.len != 2: # Must be a unary op/function call of arity 1
-    raise newException(ValueError, "@complog only takes one input!")
-  echo self[1]
+proc evalCompileLog*(self: var Atom, context: Context) =
+  for child in self.children.mitems: reduce child, context
+  # Must be a unary op/function call of arity 1
+  if self.len != 2 or self[1].kind != nkString:
+    raise newException(ValueError, "@complog only takes one string input!")
+  echo self[1].str
+  self = VoidAtom
+
+# @complog(msg)
+proc evalCompileError*(self: var Atom, context: Context) =
+  for child in self.children.mitems: reduce child, context
+  # Must be a unary op/function call of arity 1
+  if self.len != 2 or self[1].kind != nkString:
+    raise newException(ValueError, "@complog only takes one string input!")
+  quit "ERROR: " & self[1].str
+  self = VoidAtom
 
 # @as(item, type)
 proc evalAs*(self: var Atom, context: Context) =
   if self.len != 3:
     raise newException(ValueError, "@as takes two arguments (item, type)")
 
-proc typeOf*(self: var Atom, context: Context) =
-  case self.kind:
+# $(loc:type) or $loc (or $(_:type))
+proc evalDollar*(self: var Atom, context: Context) =
+  if self.len != 1:
+    raise newException(ValueError, "$ takes only one argument")
 
-# Helper: Resolve the type of all but the first child atom
-proc invocationTypes*(self: var Atom, context: Context): seq[Atom] =
+proc evalIf*(self: var Atom, context: Context) =
+  # Structure of an if is (@if (@arm cond body)+ else finally).
+  # cond, else, and finally may be void if not present.
+  # Thus, we have a minimum length of 4 (since there's at least one arm)
+  # Thus, [1..<^2] is also always the list of arms
+  var res: Atom
+  var foundTrue = false
+  for i in 1..<(self.len - 2):
+    reduce self[i][1], context # Check the condition
+    if self[i][1].kind != nkBool:
+      raise newException(ValueError, "Expected a bool for the if arm's condition!")
+    if self[i][1].boolean:
+      reduce self[i][2], context
+      res = self[i][2]
+      foundTrue = true
+      break
+  if foundTrue: # finally
+    reduce self[self.len - 1], context
+  else: # else
+    reduce self[self.len - 2], context
+    res = self[self.len - 1]
 
+proc evalEval*(self: var Atom, context: Context) =
+  reduce self[1], context
+  var main = self[1].str.lex.parse
+  echo "Code:"
+  pretty main
+  echo ""
+  # echo dumpCache()
+  reduce(main, context)
+  echo ""
+  self = main
 
-proc overloadProcAtom(pairs: openArray[(seq[Atom], EvalProc)]): Atom =
-  let picker = proc(self: var Atom, context: Context) =
-    var types = invocationTypes(self, context)
-    for (types, p) in pairs:
+proc evalEmbedFile*(self: var Atom, context: Context) =
+  reduce self[1], context
+  self = Atom(
+    kind: nkString,
+    str: open(self[1].str).readAll()
+  )
 
-  
-  return Atom(kind: akNative, native: Native(kind: nkProc, procedure: picker))
+# make sure all words become (word _) and (x y) are left alone
+proc ensureLocTypeForm*(self: var Atom) =
+  if self.kind == akWord:
+    self = list(self, SinkAtom)
+  elif self.kind == akList: discard
+  else:
+    raise newException(ValueError, "Expected `loc` or `(loc type)` form")
+
+proc evalFn*(self: var Atom, context: Context) =
+  # Structure is (@fn kind args ret)
+  # where `kind` is either `#fn` or `#macro` and args/ret are let and var binds, respectively
+  var res = Atom(kind: nkFn, fnCtx: Context(parent: context))
+  # Need to take all the args and put them into fnArgs
+  for i in 2..<self[2].children.len:
+    ensureLocTypeForm self[2][i]
+    reduce self[2][i][1], context # All args are in (name type) form
+    res.fnCtx.values[self[2][i][0].id] = self[2][i][1]
+  let ret = self[3][2]
+  if ret.kind != akList or ret[0] != iAssg or ret.len != 3:
+    raise newException(ValueError, "Must assign to the function's result location!")
+  # ret is (= loc body) or (= (loc type) body)
+  let retID = if ret[1].kind == akList: ret[1][0].id else: ret[1].id
+  res.ret = retID
+  res.fnCtx.values[retID] = ret
+  self = res
 
 # Essentially, each mode (interpreter, comptime interpreter, codegen) will have a different base context
 # that provides the appropriate implementations. That's the idea, anyway.
@@ -141,6 +208,13 @@ let comptimeEvalCtx* = Context(
     ibTuple: procAtom evalTuple,
     ibBind: procAtom evalBind,
     iAdd: procAtom evalAdd,
-    ibCompLog: procAtom evalCompLog,
+    ibCompileLog: procAtom evalCompileLog,
+    ibCompileError: procAtom evalCompileError,
+    ibIf: procAtom evalIf,
+    iTrue: Atom(kind: nkBool, boolean: true),
+    iFalse: Atom(kind: nkBool, boolean: false),
+    ibEval: procAtom evalEval,
+    ibEmbedFile: procAtom evalEmbedFile,
+    ibFunc: procAtom evalFn,
   }
 )

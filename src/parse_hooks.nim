@@ -2,7 +2,7 @@
 
 import options, sugar, sequtils
 
-import parser, ast
+import parser, ast, common_tags
 
 proc parseBind(self: Parser): Atom =
   result = list(
@@ -50,10 +50,12 @@ registerHandler [iFn, iMacro], parseFn
 # into must have `args` accessible
 # `doBody` controls whether there can be a colon and body
 # If there is a body, it may be an implicit block
-proc parseArm(self: Parser): Atom = withBlocking:
+proc parseArm(self: Parser): Atom =
   result = list(ibArm)
   if not nextIs iColon:
     result.add self.parseExpr(UnblockedExpr - {canColon})
+  else:
+    result.add VoidAtom
   match iColon
   result.add self.parseExpr(MaybeBlockExpr)
 
@@ -64,13 +66,16 @@ proc parseSimpleControl*(self: Parser, ty: StrID, slave = none[StrID]()): Atom =
   discard self.advance # Skip the control's word
   result = list(ty)
   while true:
-    result.children.add list(ibArm, self.parseArm)
+    result.children.add self.parseArm
     if slave.isSome and tryMatch slave.get: continue
     else: break
-  if tryMatch iElse:
-    result.children.add list(ibElse, self.parseArm)
-  if tryMatch iFinally:
-    result.children.add list(ibFinally, self.parseArm)
+  # All simple controls may have an else and a finally, in that order.
+  result.children.add:
+    if tryMatch iElse: self.parseArm
+    else: VoidAtom
+  result.children.add:
+    if tryMatch iFinally: self.parseArm
+    else: VoidAtom
 registerHandler [iIf], self => self.parseSimpleControl(ibIf, some iElIf)
 registerHandler [iWhile], self => self.parseSimpleControl(ibWhile)
 registerHandler [iFor], self => self.parseSimpleControl(ibFor)

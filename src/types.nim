@@ -1,7 +1,10 @@
-import common
-
-type
-  TypeID* = ID
+import ids
+# Predefined TypeIDs:
+  # 0: void
+  # 1-256: unsigned int of n bits
+  # 257-512: signed int of n bits
+  # 513-516: real number of {16,32,64,128} bits
+# High TypeID bits are flags: {isRuntime,isMutable,isRef,isPtr}
 
 # We'll have the most common modifiers be baked into the TypeID itself.
 # These will only be modifiers that can only logically be applied once.
@@ -31,8 +34,6 @@ const
   IDMask* = not FlagMask
 
 func checkMask*(t: TypeID, n: ID | int | uint): bool = (t and n.ID) != 0
-
-
 func isRuntime*(t: TypeID): bool = t.checkMask RuntimeMask
 func `isRuntime=`*(t: var TypeID, itIs: bool) =
   if itIs:

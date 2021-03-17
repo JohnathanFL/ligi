@@ -2,6 +2,8 @@ import streams
 
 import ast
 
+import common_tags
+
 type Prettifier = object
   curDent: int
   stepDent: int
@@ -35,15 +37,12 @@ proc pretty(p: var Prettifier, a: Atom) =
       write ')'
     of akWord:
       write a.id.lookup
-    of akNative:
-      case a.native.kind:
-        of nkString:
-          write '"'
-          write a.native.str
-          write '"'
-        of nkVoid:
-          write "()"
-        else: discard
+    of nkString:
+      write '"'
+      write a.str
+      write '"'
+    of nkVoid:
+      write "()"
     else: discard
 
 proc pretty*(a: Atom) =
