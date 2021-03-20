@@ -15,6 +15,8 @@ pub fn build(b: *Builder) void {
     exe.setTarget(target);
     exe.setBuildMode(mode);
     exe.linkLibC();
+    exe.addSystemIncludeDir("./deps/bdwgc/install/include/");
+    exe.addLibPath("./deps/bdwgc/install/lib/");
     exe.linkSystemLibrary("gc");
     exe.install();
 
