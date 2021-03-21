@@ -25,6 +25,8 @@ next: StrID = 0,
 // ======================================================================================
 // Funcs
 // ======================================================================================
+
+/// alloc is expected to be some garbage collected allocator.
 pub fn init(alloc: *Alloc) StrCache {
     return .{
         .alloc = alloc,
@@ -33,7 +35,7 @@ pub fn init(alloc: *Alloc) StrCache {
     };
 }
 
-pub fn resolve(self: StrCache, id: StrID) Str {
+pub fn resolve(self: *const StrCache, id: StrID) Str {
     return self.id_to_str.get(id).?;
 }
 pub fn intern(self: *StrCache, str: Str) !StrID {
@@ -80,7 +82,22 @@ fn nextID(self: *StrCache) StrID {
     return id;
 }
 
-pub var Cache: StrCache = undefined; // Initialized in main()
+pub var Global: StrCache = undefined; // Initialized in main()
+
+// ======================================================================================
+// C ABI wrappers - intended for calling from Ligi
+// ======================================================================================
+const C = @import("C.zig");
+
+pub fn str_intern(self: *StrCache, str: C.Slice) callconv(.C) StrID {
+    const slice = str.ptr[0..str.len];
+    return self.intern(slice) catch unreachable;
+}
+
+pub fn str_resolve(self: *const StrCache, id: StrID) callconv(.C) C.Slice {
+    const res = self.resolve(id);
+    return .{ .ptr = res, .len = res.len };
+}
 
 // ======================================================================================
 // Tests

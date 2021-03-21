@@ -25,16 +25,43 @@ pub fn initCommons() !void {
     }
 }
 
+pub fn resolve(id: StrID) Str {
+    return cache.resolve(id);
+}
+
+pub fn intern(str: Str) !StrID {
+    return cache.intern(str);
+}
+
+pub fn list(cmd: Atom, children: ?[]const Atom) !Atom {
+    var list = List(Atom).init(alloc);
+    try list.append(cmd);
+    if (children) try list.appendSlice(children.?);
+    return Atom{ .list = list };
+}
+
+pub fn cmdID(cmd: StrID, children: ?[]const Atom) !Atom {
+    var list = List(Atom).init(alloc);
+    try list.append(.{ .word = cmd });
+    if (children) try list.appendSlice(children.?);
+    return Atom{ .list = list };
+}
+
+pub fn word(w: StrID) Atom {
+    return .{ .word = w };
+}
+
 var cache: StrCache = undefined;
 pub var ids_ar: [std.meta.fieldNames(CommonID).len]StrID = undefined;
 
-const CommonID = enum(StrID) {
-    iColon = 0, iComma, iLBrace, iRBrace, iLParen, iRParen, iLBracket, iRBracket, iStoreIn, iAssg, iAddAssg, iSubAssg, iMulAssg, iDivAssg, iLambda, iSpaceship, iAnd, iOr, iXor, iEq, iNeq, iLt, iGt, iLtEq, iGtEq, iIn, iNotIn, iAdd, iSub, iMul, iPtr, iDiv, iMod, iExpand, iAccess, iAccessPipe, iOptAccess, iOptAccessPipe, iFn, iMacro, iLet, iVar, iCVar, iField, iCase, iIf, iElIf, iWhen, iWhile, iLoop, iFor, iElse, iFinally, iIs, iAssert, iExpect, iBreak, iReturn, iDelete, iContinue, iSink, ibBlock, ibTuple, ibArray, ibAt, ibArm, ibElse, ibFinally, ibIf, ibWhen, ibWhile, ibFor, ibLoop, ibBind, ibFunc
-};
+const CommonID = enum(StrID) { iColon = 0, iComma, iLBrace, iRBrace, iLParen, iRParen, iLBracket, iRBracket, iStoreIn, iAssg, iAddAssg, iSubAssg, iMulAssg, iDivAssg, iLambda, iSpaceship, iAnd, iOr, iXor, iEq, iNeq, iLt, iGt, iLtEq, iGtEq, iIn, iNotIn, iAdd, iSub, iMul, iPtr, iDiv, iMod, iExpand, iAccess, iAccessPipe, iOptAccess, iOptAccessPipe, iFn, iMacro, iLet, iVar, iCVar, iField, iCase, iIf, iElIf, iWhen, iWhile, iLoop, iFor, iElse, iFinally, iIs, iAssert, iExpect, iBreak, iReturn, iDelete, iContinue, iSink, ibBlock, ibTuple, ibArray, ibAt, ibArm, ibElse, ibFinally, ibIf, ibWhen, ibWhile, ibFor, ibLoop, ibBind, ibFunc, iSpread, iSemicolon };
 
 pub fn commonIDToStr(id: CommonID) Str {
     return switch (id) {
+        .iSpread => "...",
+
         .iColon => ":",
+        .iSemicolon => ";",
         .iComma => ",",
         .iLBrace => "{",
         .iRBrace => "}",
