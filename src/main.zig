@@ -20,6 +20,7 @@ const ast = @import("ast.zig");
 test "_" {
     _ = @import("StrCache.zig");
     _ = @import("Lexer.zig");
+    _ = @import("Parser.zig");
 }
 
 pub fn main() anyerror!void {

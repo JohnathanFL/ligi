@@ -1,6 +1,8 @@
 const StrCache = @This();
 
 const std = @import("std");
+const List = std.ArrayList;
+const printf = std.debug.warn;
 const Alloc = std.mem.Allocator;
 const ArenaAllocator = std.heap.ArenaAllocator;
 const mem = std.mem;
@@ -17,7 +19,7 @@ pub const Str = []const u8;
 // ======================================================================================
 alloc: *Alloc,
 // All Strs referenced in id_to_str and str_to_id are owned by alloc
-id_to_str: std.AutoHashMap(StrID, Str),
+id_to_str: List(Str),
 str_to_id: std.StringHashMap(StrID),
 // Will always start from 0 and count up 1 at a time. No backsies.
 next: StrID = 0,
@@ -26,17 +28,23 @@ next: StrID = 0,
 // Funcs
 // ======================================================================================
 
+pub fn dump(self: StrCache) void {
+    for (self.id_to_str.items) |item, i| {
+        printf("{}: {s}\n", .{ i, item });
+    }
+}
+
 /// alloc is expected to be some garbage collected allocator.
 pub fn init(alloc: *Alloc) StrCache {
     return .{
         .alloc = alloc,
-        .id_to_str = std.AutoHashMap(StrID, Str).init(alloc),
+        .id_to_str = List(Str).init(alloc),
         .str_to_id = std.StringHashMap(StrID).init(alloc),
     };
 }
 
 pub fn resolve(self: *const StrCache, id: StrID) Str {
-    return self.id_to_str.get(id).?;
+    return self.id_to_str.items[id];
 }
 pub fn intern(self: *StrCache, str: Str) !StrID {
     if (self.str_to_id.get(str)) |id| {
@@ -49,7 +57,7 @@ pub fn intern(self: *StrCache, str: Str) !StrID {
 pub fn insert(self: *StrCache, str: Str) !StrID {
     const id = self.nextID();
     try self.str_to_id.putNoClobber(str, id);
-    try self.id_to_str.putNoClobber(id, str);
+    try self.id_to_str.append(str);
     return id;
 }
 
@@ -81,8 +89,6 @@ fn nextID(self: *StrCache) StrID {
     self.next += 1;
     return id;
 }
-
-pub var Global: StrCache = undefined; // Initialized in main()
 
 // ======================================================================================
 // C ABI wrappers - intended for calling from Ligi

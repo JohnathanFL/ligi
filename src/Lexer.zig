@@ -9,6 +9,10 @@ const ArenaAllocator = std.heap.ArenaAllocator;
 const mem = std.mem;
 const printf = std.debug.warn;
 
+const common = @import("common_ast.zig");
+const CommonID = common.CommonID;
+const resolveCommon = common.resolveCommon;
+
 const isSpace = std.ascii.isSpace;
 const isAlNum = std.ascii.isAlNum;
 
@@ -18,9 +22,12 @@ const StrCache = @import("StrCache.zig");
 const Str = StrCache.Str;
 const StrID = StrCache.StrID;
 
+pub fn TokenDict(comptime V: type) type {
+    return std.HashMap(Token, V, Token.hash, Token.eql, 80);
+}
+
 pub const TokenType = enum {
     word,
-    sigil,
     str,
     punc,
     comment,
@@ -29,12 +36,15 @@ pub const TokenType = enum {
     dedent,
     /// To be used solely to find bad/unset data
     invalid,
+
+    ///Soley at compiletime
+    common,
 };
 
 /// Convenience type for representing comptime knowable tokens
 pub const CToken = union(TokenType) {
+    common: CommonID,
     word: Str,
-    sigil: Str,
     str: Str,
     punc: Str,
     comment: Str,
@@ -43,13 +53,13 @@ pub const CToken = union(TokenType) {
     dedent: void,
     invalid: void,
 
-    pub fn resolve(self: CToken, cache: *StrCache) !Token {
+    pub fn resolve(self: CToken, cache: *StrCache) LexError!Token {
         return switch (self) {
+            .common => |c| .{ .word = resolveCommon(c) },
             .word => |s| .{ .word = try cache.intern(s) },
-            .sigil => |s| .{ .sigil = try cache.intern(s) },
             .str => |s| .{ .str = try cache.intern(s) },
             .punc => |s| .{ .punc = try cache.intern(s) },
-            .comment => |s| .{ .comment = try cache.intern(s) },
+            .comment => |s| .{ .comment = s },
             .newline => .{ .newline = .{} },
             .indent => .{ .indent = .{} },
             .dedent => .{ .dedent = .{} },
@@ -59,20 +69,21 @@ pub const CToken = union(TokenType) {
 };
 pub const Token = union(TokenType) {
     word: StrID,
-    sigil: StrID,
     str: StrID,
     punc: StrID,
-    comment: StrID,
+
+    comment: Str,
 
     newline: void,
     indent: void,
     dedent: void,
 
     invalid: void,
+    common: void,
 
     pub fn id(self: Token) ?StrID {
         return switch (self) {
-            .word, .sigil, .str, .punc, .comment => |i| i,
+            .word, .str, .punc => |i| i,
             else => null,
         };
     }
@@ -89,15 +100,26 @@ pub const Token = union(TokenType) {
     pub fn print(self: Token, cache: *const StrCache) void {
         switch (self) {
             .word => |i| printf("word({}): `{s}`", .{ i, cache.resolve(i) }),
-            .sigil => |i| printf("sigil({}): `{s}`", .{ i, cache.resolve(i) }),
             .str => |i| printf("str({}): `{s}`", .{ i, cache.resolve(i) }),
             .punc => |i| printf("punc({}): `{s}`", .{ i, cache.resolve(i) }),
-            .comment => |i| printf("comment({}): `{s}`", .{ i, cache.resolve(i) }),
+            .comment => |i| printf("comment(`{s}`)", .{i}),
             .newline => printf("newline", .{}),
             .indent => printf("indent", .{}),
             .dedent => printf("dedent", .{}),
             else => printf("INVALID!!!", .{}),
         }
+    }
+
+    pub fn hash(self: Token) u64 {
+        var res = @as(u64, @enumToInt(std.meta.activeTag(self)));
+        if (self.id()) |i| {
+            res ^= i;
+        } else if (self == .comment) {
+            var sum: u64 = 0;
+            for (self.comment) |c| sum +%= c;
+            res ^= sum;
+        }
+        return res;
     }
 };
 
@@ -105,15 +127,17 @@ pub const Token = union(TokenType) {
 pub const CPunc = struct {
     str: Str,
     preempts: bool,
-
+    // TODO: Let rewrites specify a function to rewrite themselves.
     rewrite: ?CToken = null,
+    comments: bool = false,
 
-    pub fn resolve(self: CPunc, cache: *StrCache) !Punc {
+    pub fn resolve(self: CPunc, cache: *StrCache) LexError!Punc {
         return Punc{
             .str = self.str,
             .id = try cache.intern(self.str),
             .preempts = self.preempts,
             .rewrite = if (self.rewrite) |tok| try tok.resolve(cache) else null,
+            .comments = self.comments,
         };
     }
 };
@@ -129,11 +153,19 @@ pub const Punc = struct {
     preempts: bool,
     /// If present, we should resolve instances of this punc to this token instead of a .{.punc = id}
     rewrite: ?Token,
+    /// Does encountering this Punc trigger a line comment?
+    comments: bool = false,
 };
 
 pub const FilePos = struct {
     line: usize = 0,
     col: usize = 0,
+};
+
+pub const LexError = error{
+    OutOfMemory,
+    Unhandlable,
+    RightNotFound,
 };
 
 // ======================================================================================
@@ -151,12 +183,6 @@ indents: List(usize),
 pos: FilePos,
 /// Position of the /end/ of the last non-ws token
 prev_pos: FilePos,
-/// If we encounter this *complete* Token,
-/// we assume the rest of the line is a comment
-/// For C/C++ styled comments where the mere presence of the characters is enough to
-/// trigger a comment, use a `.{ .punc = blah }`. If you want the comment to be
-/// triggered by a /full/ token (e.g `--` but not `---`), then use a .word or .sigil.
-commentor: Token,
 /// List of strs to be counted as punctuation. Will be checked sequentially.
 puncs: []const Punc,
 /// This should technically be the global one, but we'll keep the lexer generic.
@@ -172,7 +198,7 @@ hit_end: bool = false,
 // ======================================================================================
 // Pub Funcs
 // ======================================================================================
-pub fn init(input: Str, puncs: []const Punc, commentor: Token, cache: *StrCache, alloc: *Alloc) Lexer {
+pub fn init(input: Str, puncs: []const Punc, cache: *StrCache, alloc: *Alloc) Lexer {
     return .{
         .cache = cache,
         .indents = List(usize).init(alloc),
@@ -182,7 +208,6 @@ pub fn init(input: Str, puncs: []const Punc, commentor: Token, cache: *StrCache,
         .prev_pos = .{ .col = 999999999 },
         .input = input,
         .puncs = puncs,
-        .commentor = commentor,
         .cur = input[0],
     };
 }
@@ -191,29 +216,31 @@ pub const ScanRes = struct {
     tok: Token,
     /// Was this token "attached" (preceeded by no whitespace) to the previous token?
     attached: bool,
+    pos: FilePos,
 };
-pub fn scan(self: *This) !?ScanRes {
+pub fn scan(self: *This) LexError!?ScanRes {
     const prev_line = self.pos.line;
     // printf("Cur0: `{c}`, ", .{self.cur});
     self.skipWs();
     const attached = self.pos.line == self.prev_pos.line and self.pos.col == self.prev_pos.col;
+    const pos = self.pos;
     // printf("cur1: `{c}`\n", .{self.cur});
     if (self.blocking) {
         if (self.pos.line != prev_line or (self.cur == 0 and !self.hit_end)) {
             // std.debug.warn("Newlined. New col: {}. ", .{self.pos.col});
             self.level = self.pos.col;
             if (self.cur == 0) self.hit_end = true;
-            return ScanRes{ .tok = Token.newline, .attached = false };
+            return ScanRes{ .tok = Token.newline, .attached = false, .pos = pos };
         }
 
         // std.debug.warn("Scanning. Level: {}. Expected level: {}!\n", .{ self.level, self.expectedLevel() });
 
         if (self.level > self.expectedLevel()) {
             try self.indents.append(self.level);
-            return ScanRes{ .tok = Token.indent, .attached = false };
+            return ScanRes{ .tok = Token.indent, .attached = false, .pos = pos };
         } else if (self.level < self.expectedLevel()) {
             _ = self.indents.pop();
-            return ScanRes{ .tok = Token.dedent, .attached = false };
+            return ScanRes{ .tok = Token.dedent, .attached = false, .pos = pos };
         }
     }
 
@@ -229,8 +256,18 @@ pub fn scan(self: *This) !?ScanRes {
 
         if (self.nextIs(punc.str)) {
             was_punc = true;
-            res = if (punc.rewrite) |rewrite| rewrite else .{ .punc = punc.id };
-            _ = self.advanceN(punc.str.len);
+            var should_advance = true;
+            if (punc.comments) {
+                res = .{ .comment = self.scanWhileCur(isNotNewline) };
+                printf("Hit comment: {s}\n", .{res.comment});
+                _ = self.advance(); // Over newline
+                should_advance = false;
+            } else if (punc.rewrite) |rewrite| {
+                res = rewrite;
+            } else {
+                res = .{ .punc = punc.id };
+            }
+            if (should_advance) _ = self.advanceN(punc.str.len);
             break;
         }
     }
@@ -251,7 +288,7 @@ pub fn scan(self: *This) !?ScanRes {
         } else if (isWord(self.cur)) {
             res = .{ .word = try self.cache.intern(self.scanWhileCur(isWord)) };
         } else if (isSigil(self.cur)) {
-            res = .{ .sigil = try self.cache.intern(self.scanWhileCur(isSigil)) };
+            res = .{ .word = try self.cache.intern(self.scanWhileCur(isSigil)) };
         } else {
             printf(
                 "Error at {}:{}: I don't know how to handle the character {c}\n",
@@ -267,25 +304,29 @@ pub fn scan(self: *This) !?ScanRes {
 
     if (res.id() == null) {
         // It doesn't have a string repr. No sense checking anything else
-    } else if (res.neql(self.commentor)) {
+    } else {
         for (self.puncs) |punc| {
             if (punc.preempts) continue;
             if (res.id() != null and res.id().? == punc.id) {
-                res = if (punc.rewrite) |rewrite| rewrite else .{ .punc = punc.id };
+                if (punc.comments) {
+                    res = .{ .comment = self.scanWhileCur(isNotNewline) };
+                }
+                if (punc.rewrite) |rewrite| {
+                    res = rewrite;
+                } else {
+                    res = .{ .punc = punc.id };
+                }
                 break;
             }
         }
-    } else {
-        // It's a comment. Return the line as a comment
-        var i = @as(usize, 0);
-        while (self.nth(i) != '\n') {
-            if (self.nth(i) == 0) break;
-            i += 1;
-        }
-        res = .{ .comment = try self.cache.intern(self.advanceN(i)) };
     }
+
     self.prev_pos = self.pos;
-    return ScanRes{ .tok = res, .attached = attached };
+    return ScanRes{ .tok = res, .attached = attached, .pos = pos };
+}
+
+pub fn isNotNewline(c: u8) bool {
+    return c != '\n';
 }
 
 pub fn isWord(c: u8) bool {
@@ -340,9 +381,10 @@ fn spanFromNOfLen(self: *const This, n: usize, l: usize) Str {
 }
 fn advanceN(self: *This, n: usize) Str {
     const res = self.input[0..clamp(n, 0, self.input.len)];
-    var i = @as(usize, 0);
+    var i: usize = 0;
     while (i < n) {
-        _ = self.advance();
+        const over = self.advance();
+        // printf("While advancing {}, advanced over `{c}`\n", .{ n, over });
         i += 1;
     }
     return res;
@@ -379,13 +421,13 @@ fn skipWs(self: *This) void {
 }
 /// Scans a bordered string where left and right are the same.
 /// See: `scanBorderedBy`
-fn scanSurroundedBy(self: *This, surrounding: Str) !?Str {
+fn scanSurroundedBy(self: *This, surrounding: Str) LexError!?Str {
     return self.scanBorderedBy(surrounding, surrounding);
 }
 /// Scan a string that starts with `left` and ends with `right`. If `left` matches, then
 /// it is an error for `right` not to match before the end of the input.
 /// If `left` doesn't match, then returns null.
-fn scanBorderedBy(self: *This, left: Str, right: Str) !?Str {
+fn scanBorderedBy(self: *This, left: Str, right: Str) LexError!?Str {
     var res = try self.scanBorderedByAny(&[_]Str{left}, &[_]Str{right});
     if (res) |r| {
         return r.str;
@@ -394,7 +436,7 @@ fn scanBorderedBy(self: *This, left: Str, right: Str) !?Str {
 }
 /// Leaves the rights in the input.
 const BorderedStr = struct { str: Str, right: usize };
-fn scanBorderedByAny(self: *This, lefts: []const Str, rights: []const Str) !?BorderedStr {
+fn scanBorderedByAny(self: *This, lefts: []const Str, rights: []const Str) LexError!?BorderedStr {
     if (self.nextIsAny(lefts)) |i| {
         _ = self.advanceN(lefts[i].len);
     } else return null;
@@ -427,6 +469,20 @@ fn expectedLevel(self: This) usize {
     if (self.indents.items.len == 0) return 0;
     return self.indents.items[self.indents.items.len - 1];
 }
+pub const COMMON_CPUNCS = [_]CPunc{
+    .{ .str = ",", .preempts = true },
+    .{ .str = ":", .preempts = false },
+    .{ .str = "(", .preempts = true },
+    .{ .str = ")", .preempts = true },
+    .{ .str = ";", .preempts = true },
+    .{ .str = "..=", .preempts = true, .rewrite = .{ .word = "..=" } },
+    .{ .str = "..", .preempts = true, .rewrite = .{ .word = ".." } },
+    .{ .str = ".", .preempts = true, .rewrite = .{ .word = "." } },
+    .{ .str = "!.", .preempts = true, .rewrite = .{ .word = "!." } },
+    .{ .str = "?.", .preempts = true, .rewrite = .{ .word = "?." } },
+    .{ .str = "#", .preempts = true },
+    .{ .str = "--", .preempts = true, .comments = true },
+};
 
 test "Lexing" {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -448,15 +504,15 @@ test "Lexing" {
     const cexpecteds = [_]CScanRes{
         .{ .tok = .{ .word = "Test" }, .attached = false },
         .{ .tok = .{ .word = "123" }, .attached = false },
-        .{ .tok = .{ .sigil = "." }, .attached = false },
+        .{ .tok = .{ .word = "." }, .attached = false },
         .{ .tok = .{ .punc = "," }, .attached = false },
-        .{ .tok = .{ .sigil = ".." }, .attached = false },
-        .{ .tok = .{ .sigil = "!" }, .attached = false },
-        .{ .tok = .{ .sigil = "!@" }, .attached = false },
+        .{ .tok = .{ .word = ".." }, .attached = false },
+        .{ .tok = .{ .word = "!" }, .attached = false },
+        .{ .tok = .{ .word = "!@" }, .attached = false },
         .{ .tok = .{ .punc = "#" }, .attached = true },
-        .{ .tok = .{ .sigil = "!!" }, .attached = true },
+        .{ .tok = .{ .word = "!!" }, .attached = true },
         .{ .tok = .{ .punc = ":" }, .attached = false },
-        .{ .tok = .{ .sigil = "::" }, .attached = false },
+        .{ .tok = .{ .word = "::" }, .attached = false },
         .{ .tok = .{ .str = "Hello, world!" }, .attached = false },
         .{ .tok = .{ .str = "Hello, world" }, .attached = false },
         .{ .tok = .{ .str = " Testy" }, .attached = false },
@@ -464,15 +520,15 @@ test "Lexing" {
         .{ .tok = .{ .word = "foo" }, .attached = false },
         .{ .tok = .{ .newline = .{} } },
         .{ .tok = .{ .indent = .{} } },
-        .{ .tok = .{ .sigil = "?." }, .attached = false },
+        .{ .tok = .{ .word = "?." }, .attached = false },
         .{ .tok = .{ .word = "bar" }, .attached = true },
         .{ .tok = .{ .newline = .{} } },
         .{ .tok = .{ .indent = .{} } },
-        .{ .tok = .{ .sigil = "!." }, .attached = false },
+        .{ .tok = .{ .word = "!." }, .attached = false },
         .{ .tok = .{ .word = "baz" }, .attached = true },
         .{ .tok = .{ .newline = .{} } },
         .{ .tok = .{ .dedent = .{} } },
-        .{ .tok = .{ .sigil = "." }, .attached = false },
+        .{ .tok = .{ .word = "." }, .attached = false },
         .{ .tok = .{ .word = "car" }, .attached = true },
         .{ .tok = .{ .newline = .{} } },
         .{ .tok = .{ .indent = .{} } },
@@ -490,35 +546,22 @@ test "Lexing" {
     for (cexpecteds) |cexpected, i|
         expecteds[i] = .{ .tok = try cexpected.tok.resolve(&cache), .attached = cexpected.attached };
 
-    const cpuncs = [_]CPunc{
-        .{ .str = ",", .preempts = true },
-        .{ .str = ":", .preempts = false },
-        .{ .str = "(", .preempts = true },
-        .{ .str = ")", .preempts = true },
-        .{ .str = ";", .preempts = true },
-        .{ .str = "--", .preempts = true },
-        .{ .str = "..=", .preempts = true, .rewrite = .{ .sigil = "..=" } },
-        .{ .str = "..", .preempts = true, .rewrite = .{ .sigil = ".." } },
-        .{ .str = ".", .preempts = true, .rewrite = .{ .sigil = "." } },
-        .{ .str = "!.", .preempts = true, .rewrite = .{ .sigil = "!." } },
-        .{ .str = "?.", .preempts = true, .rewrite = .{ .sigil = "?." } },
-        .{ .str = "#", .preempts = true },
-    };
-    var puncs: [cpuncs.len]Punc = undefined;
-    for (cpuncs) |cpunc, i|
+    var puncs: [COMMON_CPUNCS.len]Punc = undefined;
+    for (COMMON_CPUNCS) |cpunc, i|
         puncs[i] = try cpunc.resolve(&cache);
 
     const commentor = Token{ .punc = try cache.intern("--") };
 
-    var lexer = Lexer.init(input, puncs[0..], commentor, &cache, cache.alloc);
+    var lexer = Lexer.init(input, puncs[0..], &cache, cache.alloc);
 
     printf("\n", .{});
     var i: usize = 0;
     while (try lexer.scan()) |res| {
         const tok = res.tok;
-        tok.print(&cache);
-        printf(" (attached: {})\n", .{res.attached});
+        // tok.print(&cache);
+        // printf(" (attached: {})\n", .{res.attached});
         if (tok.neql(expecteds[i].tok)) {
+            printf("#{}:\n", .{i});
             printf("Found: ", .{});
             tok.print(&cache);
             printf("\nExpected: ", .{});
@@ -543,4 +586,11 @@ test "Lexing" {
         printf("Only scanned {} of them before hitting the end!\n", .{i});
         return error.NotEnoughTokens;
     }
+}
+
+test "Token equality" {
+    const tokLhs = Token{ .newline = .{} };
+    const tokRhs = Token{ .newline = .{} };
+
+    assert(tokLhs.eql(tokRhs));
 }

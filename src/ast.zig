@@ -11,8 +11,9 @@ const assert = std.debug.assert;
 
 const StrCache = @import("StrCache.zig");
 const Str = StrCache.Str;
-const StrID = StrCache.StrID;
-const FnID = StrID;
+pub const StrID = StrCache.StrID;
+pub const TypeID = StrCache.StrID;
+pub const FnID = StrID;
 
 // All allocations in the AST are expected to be either garbage collected or intended to
 // outlive the AST object it's in.
@@ -31,7 +32,8 @@ pub const Atom = union(enum) {
     /// list[0] always exists and is the command
     tag: StrID,
     /// list[0] is always the command (though it may be another list to eval first)
-    /// This should be the only thing in Atom which owns memory.
+    /// This should be the only thing in Atom which owns memory. Thus, with the exception of
+    /// the case of .list, Atoms can be compared with std.meta.eql.
     list: List(Atom),
 
     // ========================================================================
@@ -50,6 +52,41 @@ pub const Atom = union(enum) {
 
     proc: EvalFn,
 
+    fn indentMe(indent: usize) void {
+        var i: usize = 0;
+        while (i <= indent) {
+            printf("  ", .{});
+            i += 1;
+        }
+    }
+
+    pub fn print(self: Atom, cache: *StrCache, indent: usize) void {
+        switch (self) {
+            .word => |w| printf("{s}", .{cache.resolve(w)}),
+            .tag => |t| printf("#{s}", .{cache.resolve(t)}),
+            .list => |l| {
+                const is_block = l.items[0] == .word and l.items[0].word == commons.resolveCommon(.ibBlock);
+                printf("( ", .{});
+                for (l.items) |item| {
+                    if (is_block) {
+                        printf("\n", .{});
+                        indentMe(indent);
+                    }
+                    item.print(cache, indent + 1);
+                    printf(" ", .{});
+                }
+                printf(")", .{});
+            },
+            .err => |e| printf("@@err`{s}`@@", .{cache.resolve(e)}),
+            .int => |i| printf("{}", .{i}),
+            .real => |r| printf("{}", .{r}),
+            .str => |s| printf("{}{}{}", .{ '"', s, '"' }),
+            .func => |id| printf("@@func`{}`@@", .{id}),
+            .ty => |id| printf("@@ty`{}`@@`", .{id}),
+            .proc => |p| printf("@@proc`{}`@@`", .{p}),
+        }
+    }
+
     pub fn copy(self: Atom) !Atom {
         switch (self) {
             .list => |old| {
@@ -58,6 +95,18 @@ pub const Atom = union(enum) {
                 return Atom{ .list = new };
             },
             else => return self,
+        }
+    }
+
+    pub fn eql(lhs: Atom, rhs: Atom) bool {
+        if (@tagName(lhs) != @tagName(rhs)) return false;
+        switch (self) {
+            .list => |l| {
+                if (l.items.len != rhs.list.items.len) return false;
+                for (l) |item, i| if (!item.eql(rhs.list.items[i])) return false;
+                return true;
+            },
+            else => return std.mem.eql(Atom, lhs, rhs),
         }
     }
 };

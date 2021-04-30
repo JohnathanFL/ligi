@@ -1,4 +1,5 @@
 const std = @import("std");
+const printf = std.debug.warn;
 const mem = std.mem;
 const Allocator = std.mem.Allocator;
 
@@ -41,6 +42,9 @@ fn boehmRealloc(
     if (new_len <= full_len) {
         return mem.alignAllocLen(full_len, new_len, len_align);
     }
+
+    // printf("\n\nOOM - align({}) new_len({}) len_align({})\n", .{ buf_align, new_len, len_align });
+
     return error.OutOfMemory;
 }
 
