@@ -3,11 +3,13 @@ pub const Parser = @This();
 const std = @import("std");
 const printf = std.debug.warn;
 const Alloc = std.mem.Allocator;
+const List = std.ArrayList;
 
 const StrCache = @import("StrCache.zig");
 const StrID = StrCache.StrID;
 
 const Lexer = @import("Lexer.zig");
+const ScanRes = Lexer.ScanRes;
 const Token = Lexer.Token;
 const CToken = Lexer.CToken;
 const ast = @import("ast.zig");
@@ -19,7 +21,7 @@ const TokenDict = Lexer.TokenDict;
 // ╔═══════════════════════════════════════════════════════════════════════════╗
 // ║Accompanying Types                                                         ║
 // ╚═══════════════════════════════════════════════════════════════════════════╝
-pub const ParseHook = fn (*Parser) ?Atom;
+pub const ParseHook = fn (*Parser) ParseError!?Atom;
 
 pub const PrecKind = enum { binary, access, assg };
 pub const CPrec = struct { tok: CToken, prec: PrecKind = .binary };
@@ -94,32 +96,42 @@ pub const ParseError = error{
     RightNotFound,
 };
 
+pub const TokInfo = struct {
+    tok: Token,
+    pos: FilePos,
+    attached: bool,
+    prec: Prec,
+};
+
 // ╔═══════════════════════════════════════════════════════════════════════════╗
 // ║Fields                                                                     ║
 // ╚═══════════════════════════════════════════════════════════════════════════╝
-lexer: *Lexer,
-cur: [3]?Lexer.ScanRes = .{ null, null },
 cache: *StrCache,
+lexer: *Lexer,
 
-hooks: TokenDict(ParseHook),
-precs: TokenDict(Prec),
-
-/// Set if something unambiguously ended the current expression.
+toks: List(TokInfo),
+/// The level we expect to be at. Will be routinely pushed back by functions, with the new one
+/// being popped back on with a `defer`.
+ref_level: usize,
+/// Set if something unambiguously ended the current expression level.
 /// Parsers like tuples/blocks/etc should unset this flag before moving to the
 /// next value in the chain.
-/// For example, control structures should usually set this.
+/// For example, control structures should usually set this, as they have no concrete end token.
 ended: bool = false,
+
+/// Parsed just below the unary level. Allows for things like `if`, `{}`, `fn`, `$`, etc.
+hooks: TokenDict(ParseHook),
+precs: TokenDict(Prec),
 
 // ╔═══════════════════════════════════════════════════════════════════════════╗
 // ║Interface                                                                  ║
 // ╚═══════════════════════════════════════════════════════════════════════════╝
 
-/// Must be `.advance`d twice before use.
 pub fn init(lexer: *Lexer, alloc: *Alloc) Parser {
     return .{
         .lexer = lexer,
         .cache = lexer.cache,
-        .cur = .{ null, null, null },
+        .cur = List(Token).init(alloc),
         .hooks = TokenDict(ParseHook).init(alloc),
         .precs = TokenDict(Prec).init(alloc),
     };
@@ -129,11 +141,23 @@ pub fn advanceN(self: *Parser, n: usize) ParseError!void {
     while (i < n) _ = try self.advance();
 }
 
+pub fn nth(self: *Parser, n: usize) !?Token {
+    var res: ?Token = null;
+    while (n >= self.cur.items.len) {
+        const next = try self.lexer.scan();
+        if (next) |item| {
+            try self.cur.items.append(item);
+        } else break;
+    }
+    if (self.cur.items.len > n) {
+        res = self.cur.items[n];
+    }
+    if()
+
+    return res;
+}
+
 pub fn advance(self: *Parser) ParseError!?Token {
-    const res = self.cur[0];
-    self.cur[0] = self.cur[1];
-    self.cur[1] = self.cur[2];
-    self.cur[2] = try self.lexer.scan();
     while (self.cur[2] != null and (self.cur[2].?.tok == .comment or (self.cur[2].?.tok == .newline and self.cur[1].?.tok == .newline))) {
         self.cur[2] = try self.lexer.scan();
     }
@@ -259,7 +283,7 @@ pub fn parseHookable(self: *Parser) ParseError!Atom {
     var res: ?Atom = null;
     if (self.cur[0] != null) {
         if (self.hooks.get(self.cur[0].?.tok)) |hook| {
-            res = hook(self);
+            res = try hook(self);
         }
     }
     if (res == null) res = try self.parseParticle();
@@ -274,6 +298,7 @@ pub fn parseHookable(self: *Parser) ParseError!Atom {
 //  .where: x => x > 10
 //  .order_by: x => x, #Desc
 
+// TODO: WIP
 // Parse any series of calls and accesses. At the very end can be either an access block or a `:` call.
 pub fn parseTrailers(self: *Parser, res: *Atom) ParseError!void {
     const any_access = Matchable{ .any_access = .{} };
@@ -288,8 +313,18 @@ pub fn parseTrailers(self: *Parser, res: *Atom) ParseError!void {
         }
     }
 
-    if (self.peek(.{ .common = .{ .punc = .iSemicolon } })) {
-        res.* = try common.list(res.*, &.{try self.parseExpr()});
+    if (try self.tryMatch(.{ .common = .{ .punc = .iColon } }) != null) {
+        if (try self.tryMatch(.{ .seq_of = &.{
+            .{ .token = .{ .newline = .{} } },
+            .{ .token = .{ .indent = .{} } },
+        } }) != null) {
+            // TODO: Make this properly append the block as an argument if this was appended to a call
+            res.* = try common.list(res.*, &.{try self.parseStmtSeq()});
+            _ = try self.match(.{ .seq_of = &.{
+                .{ .token = .{ .newline = .{} } },
+                .{ .token = .{ .dedent = .{} } },
+            } });
+        } else res.* = try common.list(res.*, &.{try self.parseExpr()});
         self.ended = true;
     } else if (self.peekBlockStartingWith(any_access)) {
         try self.advanceN(2); // enter the block

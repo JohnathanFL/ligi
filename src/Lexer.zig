@@ -31,9 +31,6 @@ pub const TokenType = enum {
     str,
     punc,
     comment,
-    newline,
-    indent,
-    dedent,
     /// To be used solely to find bad/unset data
     invalid,
 
@@ -48,9 +45,6 @@ pub const CToken = union(TokenType) {
     str: Str,
     punc: Str,
     comment: Str,
-    newline: void,
-    indent: void,
-    dedent: void,
     invalid: void,
 
     pub fn resolve(self: CToken, cache: *StrCache) LexError!Token {
@@ -60,9 +54,6 @@ pub const CToken = union(TokenType) {
             .str => |s| .{ .str = try cache.intern(s) },
             .punc => |s| .{ .punc = try cache.intern(s) },
             .comment => |s| .{ .comment = s },
-            .newline => .{ .newline = .{} },
-            .indent => .{ .indent = .{} },
-            .dedent => .{ .dedent = .{} },
             .invalid => .{ .invalid = .{} },
         };
     }
@@ -73,10 +64,6 @@ pub const Token = union(TokenType) {
     punc: StrID,
 
     comment: Str,
-
-    newline: void,
-    indent: void,
-    dedent: void,
 
     invalid: void,
     common: void,
@@ -103,9 +90,6 @@ pub const Token = union(TokenType) {
             .str => |i| printf("str({}): `{s}`", .{ i, cache.resolve(i) }),
             .punc => |i| printf("punc({}): `{s}`", .{ i, cache.resolve(i) }),
             .comment => |i| printf("comment(`{s}`)", .{i}),
-            .newline => printf("newline", .{}),
-            .indent => printf("indent", .{}),
-            .dedent => printf("dedent", .{}),
             else => printf("INVALID!!!", .{}),
         }
     }
@@ -160,6 +144,8 @@ pub const Punc = struct {
 pub const FilePos = struct {
     line: usize = 0,
     col: usize = 0,
+    /// The col of the first non-whitespace character in this file.
+    level: usize = 0,
 };
 
 pub const LexError = error{
@@ -168,17 +154,18 @@ pub const LexError = error{
     RightNotFound,
 };
 
-// ======================================================================================
-// Fields
-// ======================================================================================
-/// If true, then we emit .newline and .indent.
-/// A dedent will *always* be emitted if a .indent has been emitted previously, it's just that
-/// disabling blocking will delay that until it's re-enabled again.
-blocking: bool = true,
-/// Column of the first char on the line
-level: usize = 0,
-/// levels we've stopped at so far
-indents: List(usize),
+pub const ScanRes = struct {
+    tok: Token,
+    /// Was this token "attached" (preceeded by no whitespace) to the previous token?
+    /// Note this means that it is impossible for two words or two sigils to be "attached" to one another directly,
+    /// along with certain other combinations like 2 `:` puncs (which would be a `::` sigil).
+    attached: bool,
+    pos: FilePos,
+};
+
+// ╔═══════════════════════════════════════════════════════════════════════════╗
+// ║Fields                                                                     ║
+// ╚═══════════════════════════════════════════════════════════════════════════╝
 /// Position inside the file
 pos: FilePos,
 /// Position of the /end/ of the last non-ws token
@@ -192,12 +179,10 @@ cache: *StrCache,
 input: Str,
 /// Either input[0] if input.len > 0 or 0 if it's not.
 cur: u8,
-/// Used as a flag so we always return a newline after hitting the end and before returning null or any final dedents
-hit_end: bool = false,
 
-// ======================================================================================
-// Pub Funcs
-// ======================================================================================
+// ╔═══════════════════════════════════════════════════════════════════════════╗
+// ║Pub Funcs                                                                  ║
+// ╚═══════════════════════════════════════════════════════════════════════════╝
 pub fn init(input: Str, puncs: []const Punc, cache: *StrCache, alloc: *Alloc) Lexer {
     return .{
         .cache = cache,
@@ -212,12 +197,6 @@ pub fn init(input: Str, puncs: []const Punc, cache: *StrCache, alloc: *Alloc) Le
     };
 }
 
-pub const ScanRes = struct {
-    tok: Token,
-    /// Was this token "attached" (preceeded by no whitespace) to the previous token?
-    attached: bool,
-    pos: FilePos,
-};
 pub fn scan(self: *This) LexError!?ScanRes {
     const prev_line = self.pos.line;
     // printf("Cur0: `{c}`, ", .{self.cur});
