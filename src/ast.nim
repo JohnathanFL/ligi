@@ -19,8 +19,8 @@ type
   AtomKind* = enum
     akWord, akTag, akList,
     # Native kinds
-    nkProc, nkInt, nkUInt, nkFloat, nkString, nkChar, nkVoid, nkSink,
-    nkTuple, nkArray, nkObj, nkPattern, nkType, nkBool, nkFn, nkRef,
+    nkProc, nkInt, nkFloat, nkDecimal, nkString, nkChar, nkVoid, nkSink,
+    nkObj, nkPattern, nkType, nkBool, nkFn, nkRef,
   Context* = ref object
     parent*: Context #?
     values*: Table[StrID, Atom]
@@ -39,9 +39,7 @@ type
       of nkProc: # A nim proc
         procedure*: EvalProc # Takes the atom and the atom's current context
       of nkInt:
-        integer*: int
-      of nkUInt:
-        uinteger*: uint
+        integer*: uint
       of nkFloat:
         floating*: float
       of nkString:
@@ -50,20 +48,6 @@ type
         ch*: char
       of nkBool:
         boolean*: bool
-      of nkRef:
-        name*: StrID
-        inCtx*: Context
-      of nkFn:
-        fnCtx*: Context
-        ret*: StrID # ID of the variable in fnCtx that's to be returned
-      of nkType:
-        discard #TODO
-      of nkTuple, nkArray: discard # Already stored in innerCtx
-      of nkObj: discard # Alrady stored in innerCtx
-      of nkPattern:
-        # Any interior patterns (like in `($x, $y)`) 
-        bindName*: StrID
-        bindType*: ref Atom
       of nkVoid: discard
       of nkSink: discard
   EvalProc* = proc(self:var Atom, context:Context)
@@ -176,8 +160,6 @@ proc apply*(a: var Atom, context: Context) =
   case a[0].kind:
     of nkProc:
       a[0].procedure(a, context)
-    of nkFn:
-
     else:
       raise newException(
         ValueError,

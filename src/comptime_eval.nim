@@ -1,4 +1,4 @@
-import system, tables, sugar, strformat
+import system, tables, sugar, strformat, streams
 
 import lazy
 
@@ -38,10 +38,7 @@ proc evalTuple(self: var Atom, ctx: Context) =
     reduce c, ctx
   if ourType.kind != nkSink:
     # TODO
-    raise newException(
-      ValueError,
-      fmt"Tuple conversions not yet implemented!"
-    )
+    raise newException( ValueError, "Tuple and general type conversions not yet implemented!" )
   else:
     self = Atom(
       kind: nkTuple,
@@ -199,6 +196,20 @@ proc evalFn*(self: var Atom, context: Context) =
   res.fnCtx.values[retID] = ret
   self = res
 
+# @repr(x) => str
+proc evalRepr*(self: var Atom, context: Context) =
+  var p = Prettifier(
+    curDent: 0,
+    stepDent: 2,
+  )
+  self[0] = toAtom ibTuple
+  self.children.insert(SinkAtom, 1)
+  for i in 2..<self.children.len:
+    reduce self[i], context
+    p.output = newStringStream ""
+    p.pretty(self.children[i])
+    self[i] = Atom(kind: nkString, str: p.output.StringStream.data)
+
 # Essentially, each mode (interpreter, comptime interpreter, codegen) will have a different base context
 # that provides the appropriate implementations. That's the idea, anyway.
 let comptimeEvalCtx* = Context(
@@ -216,5 +227,6 @@ let comptimeEvalCtx* = Context(
     ibEval: procAtom evalEval,
     ibEmbedFile: procAtom evalEmbedFile,
     ibFunc: procAtom evalFn,
+    ibRepr: procAtom evalRepr,
   }
 )

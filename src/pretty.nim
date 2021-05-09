@@ -1,26 +1,25 @@
-import streams
+import streams, strformat
 
 import ast
 
 import common_tags
 
-type Prettifier = object
-  curDent: int
-  stepDent: int
+type Prettifier* = object
+  curDent*: int
+  stepDent*: int
+  output*: Stream
 
-template write(a: untyped) =
-  stdout.write a
-
-proc indent(p: var Prettifier) =
-  p.curDent += p.stepDent
-proc dedent(p: var Prettifier) =
-  p.curDent -= p.stepDent
-proc writeDent(p: Prettifier) =
-  write '\n'
-  for i in 0..p.curDent:
-    write ' '
-
-proc pretty(p: var Prettifier, a: Atom) =
+proc pretty*(p: var Prettifier, a: Atom) =
+  template write(a: untyped) =
+    p.output.write a
+  template indent(p: var Prettifier) =
+    p.curDent += p.stepDent
+  template dedent(p: var Prettifier) =
+    p.curDent -= p.stepDent
+  template writeDent(p: Prettifier) =
+    write '\n'
+    for i in 0..p.curDent:
+      write ' '
   case a.kind:
     of akList:
       var isBlock = a[0] == ibBlock
@@ -43,12 +42,26 @@ proc pretty(p: var Prettifier, a: Atom) =
       write '"'
     of nkVoid:
       write "()"
-    else: discard
+    of nkUInt:
+      write a.uinteger
+    of nkTuple:
+      write "(@@tuple@@ "
+      for i, c in a.innerCtx.items.pairs:
+        p.pretty c
+        if i < a.innerCtx.items.len - 1: write ' '
+      write ')'
+    of nkFn:
+      write "(@@fn@@ "
+
+      write ')'
+    else:
+      write fmt"FOUND UNKNOWN KIND {a.kind}"
 
 proc pretty*(a: Atom) =
   var prettifier = Prettifier(
     curDent: 0,
     stepDent: 2,
+    output: newFileStream stdout,
   )
   prettifier.pretty a
 

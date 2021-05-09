@@ -91,10 +91,11 @@ makeTags {
   #
   # For these three, children[1] is always the typedesc. If no desc was present, it's `_`
   ibBlock: "@block", # a series of statements, with the last one yielding the value
-  ibTuple: "@tuple", # a set of values
-  ibArray: "@array", # a series of values
+  ibTuple: "@tuple", # a series of values, each of which may have its own type
+  ibObj: "@obj",     # a set of values that conforms to a known type
+  ibArray: "@array", # a series of values, all of the same type
   # ibCall: "@()",       # No such thing. Lists are always function calls
-  ibAt: "@at", # an indexing, with [1] being what to index and [2.._] being the arguments
+  ibAt: "@at", # an indexing (`[]`), with [1] being what to index and [2.._] being the arguments
   ibArm: "@arm", # a normal arm of a control statement. Exact meaning dependant upon which.
   ibIf: "@if", # an if statement. Each arm is a sequential if/elif. Last two may be @else/@finally
   ibWhen: "@when", # a when statement.
@@ -106,6 +107,7 @@ makeTags {
   ibCompileError: "@compileError", # Comptime error
   ibEval: "@eval", # Evaluate a string of ligi
   ibEmbedFile: "@embedFile", # Embed a file as a string
+  ibRepr: "@repr", # Get a tuple of strings representing each argument's AST
 
   #
   # ##################
