@@ -33,7 +33,6 @@ pub const TokenType = enum {
     comment,
     /// To be used solely to find bad/unset data
     invalid,
-
     ///Soley at compiletime
     common,
 };
@@ -186,8 +185,6 @@ cur: u8,
 pub fn init(input: Str, puncs: []const Punc, cache: *StrCache, alloc: *Alloc) Lexer {
     return .{
         .cache = cache,
-        .indents = List(usize).init(alloc),
-        .level = 0,
         .pos = .{},
         // We set this to a (practically) unreachable column so we don't see the first one as attached.
         .prev_pos = .{ .col = 999999999 },
@@ -204,23 +201,9 @@ pub fn scan(self: *This) LexError!?ScanRes {
     const attached = self.pos.line == self.prev_pos.line and self.pos.col == self.prev_pos.col;
     const pos = self.pos;
     // printf("cur1: `{c}`\n", .{self.cur});
-    if (self.blocking) {
-        if (self.pos.line != prev_line or (self.cur == 0 and !self.hit_end)) {
-            // std.debug.warn("Newlined. New col: {}. ", .{self.pos.col});
-            self.level = self.pos.col;
-            if (self.cur == 0) self.hit_end = true;
-            return ScanRes{ .tok = Token.newline, .attached = false, .pos = pos };
-        }
-
-        // std.debug.warn("Scanning. Level: {}. Expected level: {}!\n", .{ self.level, self.expectedLevel() });
-
-        if (self.level > self.expectedLevel()) {
-            try self.indents.append(self.level);
-            return ScanRes{ .tok = Token.indent, .attached = false, .pos = pos };
-        } else if (self.level < self.expectedLevel()) {
-            _ = self.indents.pop();
-            return ScanRes{ .tok = Token.dedent, .attached = false, .pos = pos };
-        }
+    if (self.pos.line != prev_line or self.cur == 0) {
+        // std.debug.warn("Newlined. New col: {}. ", .{self.pos.col});
+        self.pos.level = self.pos.col;
     }
 
     if (self.cur == 0) return null;
@@ -495,26 +478,26 @@ test "Lexing" {
         .{ .tok = .{ .str = "Hello, world!" }, .attached = false },
         .{ .tok = .{ .str = "Hello, world" }, .attached = false },
         .{ .tok = .{ .str = " Testy" }, .attached = false },
-        .{ .tok = .{ .newline = .{} } },
+        // .{ .tok = .{ .newline = .{} } },
         .{ .tok = .{ .word = "foo" }, .attached = false },
-        .{ .tok = .{ .newline = .{} } },
-        .{ .tok = .{ .indent = .{} } },
+        // .{ .tok = .{ .newline = .{} } },
+        // .{ .tok = .{ .indent = .{} } },
         .{ .tok = .{ .word = "?." }, .attached = false },
         .{ .tok = .{ .word = "bar" }, .attached = true },
-        .{ .tok = .{ .newline = .{} } },
-        .{ .tok = .{ .indent = .{} } },
+        // .{ .tok = .{ .newline = .{} } },
+        // .{ .tok = .{ .indent = .{} } },
         .{ .tok = .{ .word = "!." }, .attached = false },
         .{ .tok = .{ .word = "baz" }, .attached = true },
-        .{ .tok = .{ .newline = .{} } },
-        .{ .tok = .{ .dedent = .{} } },
+        // .{ .tok = .{ .newline = .{} } },
+        // .{ .tok = .{ .dedent = .{} } },
         .{ .tok = .{ .word = "." }, .attached = false },
         .{ .tok = .{ .word = "car" }, .attached = true },
-        .{ .tok = .{ .newline = .{} } },
-        .{ .tok = .{ .indent = .{} } },
+        // .{ .tok = .{ .newline = .{} } },
+        // .{ .tok = .{ .indent = .{} } },
         .{ .tok = .{ .word = "hah" }, .attached = false },
-        .{ .tok = .{ .newline = .{} } },
-        .{ .tok = .{ .dedent = .{} } },
-        .{ .tok = .{ .dedent = .{} } },
+        // .{ .tok = .{ .newline = .{} } },
+        // .{ .tok = .{ .dedent = .{} } },
+        // .{ .tok = .{ .dedent = .{} } },
     };
     const Expected = struct {
         tok: Token,
@@ -568,8 +551,8 @@ test "Lexing" {
 }
 
 test "Token equality" {
-    const tokLhs = Token{ .newline = .{} };
-    const tokRhs = Token{ .newline = .{} };
+    // const tokLhs = Token{ .newline = .{} };
+    // const tokRhs = Token{ .newline = .{} };
 
-    assert(tokLhs.eql(tokRhs));
+    // assert(tokLhs.eql(tokRhs));
 }

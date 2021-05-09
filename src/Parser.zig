@@ -9,6 +9,7 @@ const StrCache = @import("StrCache.zig");
 const StrID = StrCache.StrID;
 
 const Lexer = @import("Lexer.zig");
+const FilePos = Lexer.FilePos;
 const ScanRes = Lexer.ScanRes;
 const Token = Lexer.Token;
 const CToken = Lexer.CToken;
@@ -23,9 +24,10 @@ const TokenDict = Lexer.TokenDict;
 // ╚═══════════════════════════════════════════════════════════════════════════╝
 pub const ParseHook = fn (*Parser) ParseError!?Atom;
 
-pub const PrecKind = enum { binary, access, assg };
+pub const PrecKind = enum { none, binary, access, assg };
 pub const CPrec = struct { tok: CToken, prec: PrecKind = .binary };
 pub const Prec = union(PrecKind) {
+    none: void,
     binary: usize,
     access: void,
     assg: void,
@@ -101,6 +103,15 @@ pub const TokInfo = struct {
     pos: FilePos,
     attached: bool,
     prec: Prec,
+
+    pub fn from(s: ScanRes, p: *Parser) TokInfo {
+        return .{
+            .tok = s.tok,
+            .pos = s.pos,
+            .attached = s.attached,
+            .prec = p.precOf(s.tok, s.attached),
+        };
+    }
 };
 
 // ╔═══════════════════════════════════════════════════════════════════════════╗
@@ -129,9 +140,10 @@ precs: TokenDict(Prec),
 
 pub fn init(lexer: *Lexer, alloc: *Alloc) Parser {
     return .{
+        .ref_level = 0,
         .lexer = lexer,
         .cache = lexer.cache,
-        .cur = List(Token).init(alloc),
+        .toks = List(TokInfo).init(alloc),
         .hooks = TokenDict(ParseHook).init(alloc),
         .precs = TokenDict(Prec).init(alloc),
     };
@@ -141,7 +153,8 @@ pub fn advanceN(self: *Parser, n: usize) ParseError!void {
     while (i < n) _ = try self.advance();
 }
 
-pub fn nth(self: *Parser, n: usize) !?Token {
+/// Peek at the nth token without actually consuming anything.
+pub fn nth(self: *Parser, n: usize) !?TokInfo {
     var res: ?Token = null;
     while (n >= self.cur.items.len) {
         const next = try self.lexer.scan();
@@ -152,32 +165,24 @@ pub fn nth(self: *Parser, n: usize) !?Token {
     if (self.cur.items.len > n) {
         res = self.cur.items[n];
     }
-    if()
 
     return res;
 }
 
-pub fn advance(self: *Parser) ParseError!?Token {
-    while (self.cur[2] != null and (self.cur[2].?.tok == .comment or (self.cur[2].?.tok == .newline and self.cur[1].?.tok == .newline))) {
-        self.cur[2] = try self.lexer.scan();
+/// Actual advancing will happen when we next call nth(...)
+pub fn advance(self: *Parser) ParseError!?TokInfo {
+    var res: ?TokInfo = null;
+    if (self.toks.items.len > 0) {
+        res = self.toks.orderedRemove(0);
     }
-
-    if (self.cur[0] != null and self.cur[0].?.tok == .newline) {
-        self.ended = true;
-    }
-
-    // printf("Advanced to {}, over {}\n", .{ self.cur[0], res });
-
-    if (res) |r| {
-        return r.tok;
-    } else return null;
+    return res;
 }
 
-pub fn peek(self: *Parser, matchable: Matchable) bool {
+pub fn peek(self: *Parser, matchable: Matchable) !bool {
     if (self.ended) {
         return false;
     }
-    return self.cur[0] != null and matchable.eql(self.cur[0].?.tok, self);
+    return try self.nth(0) != null and matchable.eql(try self.nth(0).?.tok, self);
 }
 
 pub fn peekAny(self: *Parser, matchables: []const Matchable) bool {
@@ -187,9 +192,10 @@ pub fn peekAny(self: *Parser, matchables: []const Matchable) bool {
     return false;
 }
 
+/// Are these exact options going to happen in order?
 pub fn peekAll(self: *Parser, matchables: []const Matchable) bool {
     for (matchables) |matchable, i| {
-        if (self.cur[i] == null or !matchable.eql(self.cur[i].?.tok, self)) return false;
+        if (try self.nth(i) == null or !matchable.eql(try self.nth(i).?.tok, self)) return false;
     }
     return true;
 }
@@ -235,7 +241,7 @@ pub fn match(self: *Parser, matchable: Matchable) ParseError!Token {
 pub fn matchAny(self: *Parser, matchables: []const Matchable) ParseError!Token {
     if (try self.tryMatchAny(matchables)) |m| return m;
     self.cache.dump();
-    printf("\nExpected any of {any}, found {any}\n\n", .{ matchables, self.cur[0] });
+    printf("\nExpected any of {any}, found {any}\n\n", .{ matchables, try self.nth(0) });
     return error.Unmatched;
 }
 
@@ -265,7 +271,7 @@ pub fn parseUnary(self: *Parser) ParseError!Atom {
     // printf("\nParsing unary\n", .{});
     var res = try self.parseHookable();
     const should_unary = all(&.{
-        self.cur[0] != null,
+        try self.nth(0) != null,
         !self.ended,
         !self.peekAny(STOPPERS[0..]),
         !self.peek(.{ .any_binary = .{} }),
@@ -407,6 +413,12 @@ pub fn all(conds: []const bool) bool {
         if (!cond) return false;
     }
     return true;
+}
+
+pub fn precOf(self: Parser, tok: Token, attached: bool) Prec {
+    if (self.precs.tryGetValue(tok)) |prec| return prec;
+
+    return .{ .none = .{} };
 }
 
 // ╔═══════════════════════════════════════════════════════════════════════════╗
